@@ -22,7 +22,7 @@ function compile_and_run {
     local test_program=$1
 
     # Compile the file.
-    ./target/release/bfc sample_programs/$test_program
+    ./target/release/jcompiler sample_programs/$test_program
     if [[ $? -ne 0 ]]; then
         echo "Compilation failed!"
         failed=1

@@ -6,7 +6,7 @@
 // TODO: enable this warning and cleanup.
 #![allow(option_unwrap_used)]
 
-//! bfc is a highly optimising compiler for BF.
+//! jcompiler is a compiler for the J programming language.
 
 extern crate ansi_term;
 extern crate getopts;
@@ -270,7 +270,7 @@ fn main() {
 
     opts.optflag("j", "jlang", "lex/parse jlang");
     opts.optflag("h", "help", "print usage");
-    opts.optflag("v", "version", "print bfc version");
+    opts.optflag("v", "version", "print jcompiler version");
     opts.optflag("", "dump-llvm", "print LLVM IR generated");
     opts.optflag("", "dump-ir", "print BF IR generated");
 
@@ -279,7 +279,7 @@ fn main() {
     opts.optopt(
         "",
         "passes",
-        "limit bfc optimisations to those specified",
+        "limit jcompiler optimisations to those specified",
         "PASS-SPECIFICATION",
     );
     opts.optopt(
@@ -313,7 +313,7 @@ fn main() {
     }
 
     if matches.opt_present("v") {
-        println!("bfc {}", VERSION);
+        println!("jcompiler {}", VERSION);
         return;
     }
 
