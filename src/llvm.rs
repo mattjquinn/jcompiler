@@ -701,6 +701,50 @@ pub fn compile_to_module(
     let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
 
     unsafe {
+        let globals = vec!['%', 'd'];
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+
+        let mut llvm_outputs = vec![];
+        for value in &globals {
+            llvm_outputs.push(int8(*value as c_ulonglong));
+        }
+
+        let output_buf_type = LLVMArrayType(int8_type(), llvm_outputs.len() as c_uint);
+        let llvm_outputs_arr = LLVMConstArray(
+            int8_type(),
+            llvm_outputs.as_mut_ptr(),
+            llvm_outputs.len() as c_uint,
+        );
+
+        let int_printfmt_str = LLVMAddGlobal(
+            module.module,
+            output_buf_type,
+            module.new_string_ptr("int_printfmt_str"),
+        );
+        LLVMSetInitializer(int_printfmt_str, llvm_outputs_arr);
+        LLVMSetGlobalConstant(int_printfmt_str, LLVM_TRUE);
+
+        let stdout_fd = int32(1);
+        let llvm_num_outputs = int32(globals.len() as c_ulonglong);
+
+        let int_printfmt_str_ptr = LLVMBuildPointerCast(
+            builder.builder,
+            int_printfmt_str,
+            int8_ptr_type(),
+            module.new_string_ptr("int_printfmt_str_ptr"),
+        );
+
+//        add_function_call(
+//            &mut module,
+//            bb,
+//            "write",
+//            &mut [stdout_fd, int_printfmt_str_ptr, llvm_num_outputs],
+//            "",
+//        );
+    }
+
+    unsafe {
 //        let llvm_cells = add_cells_init(&initial_state.cells, &mut module, init_bb);
 //        let llvm_cell_index =
 //            add_cell_index_init(initial_state.cell_ptr, init_bb, &mut module);
@@ -717,6 +761,18 @@ pub fn compile_to_module(
 //        for instr in instrs {
 //            bb = compile_instr(instr, start_instr, &mut module, main_fn, bb, ctx.clone());
 //        }
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+
+        let reg_ptr = LLVMBuildAlloca(
+            builder.builder,
+            int32_type(),
+            module.new_string_ptr("reg"),
+        );
+
+        let reg_ptr_init = int32(0 as c_ulonglong);
+
+        LLVMBuildStore(builder.builder, reg_ptr_init, reg_ptr);
 
 //        add_cells_cleanup(&mut module, bb, llvm_cells);
 
