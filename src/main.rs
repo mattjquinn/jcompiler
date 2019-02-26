@@ -17,6 +17,9 @@ extern crate rand;
 extern crate tempfile;
 extern crate regex;
 extern crate matches;
+extern crate pest;
+#[macro_use]
+extern crate pest_derive;
 
 use diagnostics::{Info, Level};
 use getopts::{Matches, Options};
@@ -25,13 +28,13 @@ use std::fs::File;
 use std::io::prelude::Read;
 use std::path::Path;
 use tempfile::NamedTempFile;
+use std::fs;
 
 mod bfir;
 mod diagnostics;
 mod execution;
 mod llvm;
 mod shell;
-mod lexer;
 mod parser;
 
 #[cfg(test)]
@@ -110,34 +113,20 @@ fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
 fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
     let path = &matches.free[0];
 
-    let src = match slurp(path) {
-        Ok(src) => src,
-        Err(info) => {
-            return Err(format!("{}", info));
-        }
-    };
+    let jsrc = fs::read_to_string(path)
+        .expect("cannot open source of provided J program");
 
-    let tokens = lexer::tokenize(&src);
-    for tok in &tokens {
-        println!("{:?}", tok)
-    }
-
-    let instrs = match parser::parse(&tokens) {
+    let ast = match parser::parse(&jsrc[..]) {
         Ok(instrs) => instrs,
         Err(parse_error) => {
-            let info = Info {
-                level: Level::Error,
-                filename: path.to_owned(),
-                message: parse_error.message,
-                position: Some(parse_error.position),
-                source: Some(src),
-            };
-            return Err(format!("{}", info));
+            panic!("{}", parse_error);
         }
     };
-    for instr in instrs {
-        println!("{:?}", instr);
+    for astnode in ast {
+        println!("{:?}", astnode);
     }
+
+    // MQUINN: Learn more about LLVM IR here: http://releases.llvm.org/2.6/docs/tutorial/JITTutorial1.html
 
     Ok(())
 }
