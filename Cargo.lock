@@ -27,23 +27,6 @@ version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "bfc"
-version = "1.7.0"
-dependencies = [
- "ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "getopts 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "itertools 0.4.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "llvm-sys 70.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "matches 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "pest 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pest_derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "quickcheck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "regex 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tempfile 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -101,6 +84,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "itertools"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "jcompiler"
+version = "1.7.0"
+dependencies = [
+ "ansi_term 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "getopts 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.4.18 (registry+https://github.com/rust-lang/crates.io-index)",
+ "llvm-sys 70.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "matches 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pest_derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quickcheck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tempfile 2.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "kernel32-sys"

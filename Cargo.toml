@@ -1,10 +1,10 @@
 [package]
-name = "bfc"
+name = "jcompiler"
 version = "1.7.0"
-authors = ["Wilfred Hughes <me@wilfred.me.uk>"]
-homepage = "https://github.com/Wilfred/bfc"
-repository = "https://github.com/Wilfred/bfc"
-description = "An industrial-grade brainfuck compiler"
+authors = ["Matt Quinn <matt@mattjquinn.com>"]
+homepage = "https://github.com/mattjquinn/jcompiler"
+repository = "https://github.com/mattjquinn/jcompiler"
+description = "a compiler for the J programming language"
 readme = "README.md"
 license = "GPL-2.0"
 
