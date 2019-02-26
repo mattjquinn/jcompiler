@@ -6,8 +6,6 @@ use std::num::Wrapping;
 
 use bfir::{AstNode, Cell};
 
-use bounds::highest_cell_index;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionState<'a> {
     pub start_instr: Option<&'a AstNode>,
@@ -17,10 +15,10 @@ pub struct ExecutionState<'a> {
 }
 
 impl<'a> ExecutionState<'a> {
-    pub fn initial(instrs: &[AstNode]) -> Self {
+    pub fn initial() -> Self {
         ExecutionState {
             start_instr: None,
-            cells: vec![Wrapping(0); highest_cell_index(instrs) + 1],
+            cells: vec![Wrapping(0); 99999],
             cell_ptr: 0,
             outputs: vec![],
         }
