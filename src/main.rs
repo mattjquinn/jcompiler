@@ -117,7 +117,9 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
     };
 
     let tokens = lexer::tokenize(&src);
-    println!("Tokens: {:?}", tokens);
+    for tok in tokens {
+        println!("{:?}", tok)
+    }
     Ok(())
 }
 

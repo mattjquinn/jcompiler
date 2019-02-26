@@ -8,9 +8,9 @@ pub use self::Token::{
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Token {
-    Newline,
-    Number(u32),
-    Operator(String)
+    Newline {lineidx: usize, startidx: usize, endidx: usize},
+    Number {lineidx: usize, startidx: usize, endidx: usize, value: u32},
+    Operator {lineidx: usize, startidx: usize, endidx: usize, value: String},
 }
 
 //< lexer-tokenize
@@ -18,27 +18,51 @@ pub fn tokenize(input: &str) -> Vec<Token> {
 
     let mut tokens = Vec::new();
 
-    let token_re = Regex::new(concat!(
-        r"(?P<number>\d+\.?\d*)|",
-        r"(?P<newline>\n)|",
-        r"(?P<operator>[\+*%-])")).unwrap();
+    let num_re = Regex::new(r"^(?P<number>\d+)").unwrap();
+    let op_re = Regex::new(r"^(?P<operator>[\+*%-])").unwrap();
+    let ws_re = Regex::new(r"^(?P<ws>[ \t]+)").unwrap();
+    let newline_re = Regex::new(r"^(?P<ws>\n+)").unwrap();
 
-    for cap in token_re.captures_iter(input) {
-        let token = if cap.name("number").is_some() {
-            match cap.name("number").unwrap().as_str().parse() {
-                Ok(number) => Number(number),
-                Err(_) => panic!("Lexer failed trying to parse number")
-            }
-        } else if cap.name("newline").is_some() {
-            Newline
-        } else if cap.name("operator").is_some() {
-            Operator(cap.name("operator").unwrap().as_str().to_string())
-        } else {
-           panic!("Lexer expected valid token.");
-        };
-
-        tokens.push(token)
+    let mut src = input.clone();
+    let mut lineidx = 0;
+    let mut offsetidx= 0;
+    while src.len() > 0 {
+       let (endidx, tok) =
+           if let Some(cap) = num_re.captures(src) {
+               match cap.name("number").unwrap().as_str().parse() {
+                   Ok(number) => (cap.get(0).unwrap().end(), Some(Number {
+                       startidx: offsetidx + cap.get(0).unwrap().start(),
+                       endidx: offsetidx + cap.get(0).unwrap().end(),
+                       value: number,
+                       lineidx: lineidx,
+                   })),
+                   Err(_) => panic!("Lexer failed trying to parse number")
+               }
+           } else if let Some(cap) = ws_re.captures(src) {
+               // Whitespace is simply discarded.
+               (cap.get(0).unwrap().end(), None)
+           } else if let Some(cap) = op_re.captures(src) {
+               (cap.get(0).unwrap().end(), Some(Operator {
+                   lineidx: lineidx,
+                   startidx: offsetidx + cap.get(0).unwrap().start(),
+                   endidx: offsetidx + cap.get(0).unwrap().end(),
+                   value: cap.name("operator").unwrap().as_str().to_string()
+               }))
+           } else if let Some(cap) = newline_re.captures(src) {
+               let (eidx, tok) = (cap.get(0).unwrap().end(), Some(Newline {
+                   lineidx: lineidx,
+                   startidx: offsetidx + cap.get(0).unwrap().start(),
+                   endidx: offsetidx + cap.get(0).unwrap().end(),
+               }));
+               lineidx += 1;
+               offsetidx = 0;
+               (eidx, tok)
+           } else {
+               panic!("Unexpected token(s) in stream: {}; so far: {:?}", src, tokens);
+           };
+       src = &src[endidx..];
+       offsetidx += endidx;
+       if tok.is_some() { tokens.push(tok.unwrap()); }
     }
-
     tokens
 }
