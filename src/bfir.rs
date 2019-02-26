@@ -5,7 +5,6 @@
 //! It also provides functions for generating ASTs from source code,
 //! producing good error messages on malformed inputs.
 
-use std::collections::HashMap;
 use std::fmt;
 use std::num::Wrapping;
 
@@ -84,18 +83,7 @@ pub enum AstNode {
     Loop {
         body: Vec<AstNode>,
         position: Option<Position>,
-    },
-    // These instruction have no direct equivalent in BF, but we
-    // generate them during optimisation.
-    Set {
-        amount: Cell,
-        offset: isize,
-        position: Option<Position>,
-    },
-    MultiplyMove {
-        changes: HashMap<isize, Cell>,
-        position: Option<Position>,
-    },
+    }
 }
 
 fn fmt_with_indent(instr: &AstNode, indent: i32, f: &mut fmt::Formatter) {
@@ -126,18 +114,6 @@ impl fmt::Display for AstNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt_with_indent(self, 0, f);
         Ok(())
-    }
-}
-
-pub fn get_position(instr: &AstNode) -> Option<Position> {
-    match *instr {
-        Increment { position, .. } => position,
-        PointerIncrement { position, .. } => position,
-        Read { position } => position,
-        Write { position } => position,
-        Loop { position, .. } => position,
-        Set { position, .. } => position,
-        MultiplyMove { position, .. } => position,
     }
 }
 

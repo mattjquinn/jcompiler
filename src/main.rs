@@ -16,7 +16,6 @@ extern crate quickcheck;
 extern crate rand;
 extern crate tempfile;
 
-#[macro_use]
 extern crate matches;
 
 use diagnostics::{Info, Level};
@@ -32,7 +31,6 @@ mod bounds;
 mod diagnostics;
 mod execution;
 mod llvm;
-mod peephole;
 mod shell;
 
 #[cfg(test)]
@@ -120,7 +118,7 @@ fn compile_file(matches: &Matches) -> Result<(), String> {
         }
     };
 
-    let mut instrs = match bfir::parse(&src) {
+    let instrs = match bfir::parse(&src) {
         Ok(instrs) => instrs,
         Err(parse_error) => {
             let info = Info {
@@ -133,24 +131,6 @@ fn compile_file(matches: &Matches) -> Result<(), String> {
             return Err(format!("{}", info));
         }
     };
-
-    let opt_level = matches.opt_str("opt").unwrap_or_else(|| String::from("2"));
-    if opt_level != "0" {
-        let pass_specification = matches.opt_str("passes");
-        let (opt_instrs, warnings) = peephole::optimize(instrs, &pass_specification);
-        instrs = opt_instrs;
-
-        for warning in warnings {
-            let info = Info {
-                level: Level::Warning,
-                filename: path.to_owned(),
-                message: warning.message,
-                position: warning.position,
-                source: Some(src.clone()),
-            };
-            eprintln!("{}", info);
-        }
-    }
 
     if matches.opt_present("dump-ir") {
         for instr in &instrs {
