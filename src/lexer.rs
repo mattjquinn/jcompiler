@@ -7,10 +7,11 @@ pub use self::Token::{
 };
 
 #[derive(PartialEq, Clone, Debug)]
+// TODO: Use diagnostics::Position here instead of repeating line,start,end
 pub enum Token {
-    Newline {lineidx: usize, startidx: usize, endidx: usize},
-    Number {lineidx: usize, startidx: usize, endidx: usize, value: u32},
-    Operator {lineidx: usize, startidx: usize, endidx: usize, value: String},
+    Newline {line: usize, start: usize, end: usize},
+    Number {line: usize, start: usize, end: usize, value: u32},
+    Operator {line: usize, start: usize, end: usize, value: String},
 }
 
 //< lexer-tokenize
@@ -24,17 +25,17 @@ pub fn tokenize(input: &str) -> Vec<Token> {
     let newline_re = Regex::new(r"^(?P<ws>\n+)").unwrap();
 
     let mut src = input.clone();
-    let mut lineidx = 0;
-    let mut offsetidx= 0;
+    let mut line = 0;
+    let mut offset= 0;
     while src.len() > 0 {
-       let (endidx, tok) =
+       let (end, tok) =
            if let Some(cap) = num_re.captures(src) {
                match cap.name("number").unwrap().as_str().parse() {
                    Ok(number) => (cap.get(0).unwrap().end(), Some(Number {
-                       startidx: offsetidx + cap.get(0).unwrap().start(),
-                       endidx: offsetidx + cap.get(0).unwrap().end(),
+                       start: offset + cap.get(0).unwrap().start(),
+                       end: offset + cap.get(0).unwrap().end(),
                        value: number,
-                       lineidx: lineidx,
+                       line: line,
                    })),
                    Err(_) => panic!("Lexer failed trying to parse number")
                }
@@ -43,25 +44,25 @@ pub fn tokenize(input: &str) -> Vec<Token> {
                (cap.get(0).unwrap().end(), None)
            } else if let Some(cap) = op_re.captures(src) {
                (cap.get(0).unwrap().end(), Some(Operator {
-                   lineidx: lineidx,
-                   startidx: offsetidx + cap.get(0).unwrap().start(),
-                   endidx: offsetidx + cap.get(0).unwrap().end(),
+                   line: line,
+                   start: offset + cap.get(0).unwrap().start(),
+                   end: offset + cap.get(0).unwrap().end(),
                    value: cap.name("operator").unwrap().as_str().to_string()
                }))
            } else if let Some(cap) = newline_re.captures(src) {
                let (eidx, tok) = (cap.get(0).unwrap().end(), Some(Newline {
-                   lineidx: lineidx,
-                   startidx: offsetidx + cap.get(0).unwrap().start(),
-                   endidx: offsetidx + cap.get(0).unwrap().end(),
+                   line: line,
+                   start: offset + cap.get(0).unwrap().start(),
+                   end: offset + cap.get(0).unwrap().end(),
                }));
-               lineidx += 1;
-               offsetidx = 0;
+               line += 1;
+               offset = 0;
                (eidx, tok)
            } else {
                panic!("Unexpected token(s) in stream: {}; so far: {:?}", src, tokens);
            };
-       src = &src[endidx..];
-       offsetidx += endidx;
+       src = &src[end..];
+       offset += end;
        if tok.is_some() { tokens.push(tok.unwrap()); }
     }
     tokens

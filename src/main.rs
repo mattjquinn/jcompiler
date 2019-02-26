@@ -32,6 +32,7 @@ mod execution;
 mod llvm;
 mod shell;
 mod lexer;
+mod parser;
 
 #[cfg(test)]
 mod llvm_tests;
@@ -117,9 +118,27 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
     };
 
     let tokens = lexer::tokenize(&src);
-    for tok in tokens {
+    for tok in &tokens {
         println!("{:?}", tok)
     }
+
+    let instrs = match parser::parse(&tokens) {
+        Ok(instrs) => instrs,
+        Err(parse_error) => {
+            let info = Info {
+                level: Level::Error,
+                filename: path.to_owned(),
+                message: parse_error.message,
+                position: Some(parse_error.position),
+                source: Some(src),
+            };
+            return Err(format!("{}", info));
+        }
+    };
+    for instr in instrs {
+        println!("{:?}", instr);
+    }
+
     Ok(())
 }
 
