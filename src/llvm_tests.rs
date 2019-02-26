@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::num::Wrapping;
 
 use bfir::AstNode::*;
-use bfir::Position;
+use diagnostics::Position;
 use execution::ExecutionState;
 use itertools::EitherOrBoth::Both;
 use itertools::Itertools;
