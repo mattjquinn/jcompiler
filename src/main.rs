@@ -15,7 +15,7 @@ extern crate llvm_sys;
 extern crate quickcheck;
 extern crate rand;
 extern crate tempfile;
-
+extern crate regex;
 extern crate matches;
 
 use diagnostics::{Info, Level};
@@ -31,6 +31,7 @@ mod diagnostics;
 mod execution;
 mod llvm;
 mod shell;
+mod lexer;
 
 #[cfg(test)]
 mod llvm_tests;
@@ -105,9 +106,24 @@ fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
     }
 }
 
+fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
+    let path = &matches.free[0];
+
+    let src = match slurp(path) {
+        Ok(src) => src,
+        Err(info) => {
+            return Err(format!("{}", info));
+        }
+    };
+
+    let tokens = lexer::tokenize(&src);
+    println!("Tokens: {:?}", tokens);
+    Ok(())
+}
+
 // TODO: return a Vec<Info> that may contain warnings or errors,
 // instead of printing in lots of different place shere.
-fn compile_file(matches: &Matches) -> Result<(), String> {
+fn compile_bf_file(matches: &Matches) -> Result<(), String> {
     let path = &matches.free[0];
 
     let src = match slurp(path) {
@@ -219,6 +235,7 @@ fn main() {
 
     let mut opts = Options::new();
 
+    opts.optflag("j", "jlang", "lex/parse jlang");
     opts.optflag("h", "help", "print usage");
     opts.optflag("v", "version", "print bfc version");
     opts.optflag("", "dump-llvm", "print LLVM IR generated");
@@ -272,11 +289,21 @@ fn main() {
         std::process::exit(1);
     }
 
-    match compile_file(&matches) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(2);
-        }
+    if matches.opt_present("j") {
+        match compile_jlang_file(&matches) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(2);
+            }
+        };
+    } else {
+        match compile_bf_file(&matches) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("{}", e);
+                std::process::exit(2);
+            }
+        };
     }
 }
