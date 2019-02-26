@@ -6,7 +6,7 @@ use diagnostics::Position;
 use bfir::ExecutionState;
 use itertools::EitherOrBoth::Both;
 use itertools::Itertools;
-use llvm::compile_to_module;
+use bfllvm::compile_to_module;
 
 /// Assert that two CString values are equal. If they're not, print
 /// the strings nicely (e.g. '\n' as an actual newline).
