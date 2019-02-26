@@ -35,6 +35,7 @@ mod diagnostics;
 mod bfllvm;
 mod shell;
 mod parser;
+mod llvm;
 
 #[cfg(test)]
 mod bfllvm_tests;
@@ -69,7 +70,7 @@ fn slurp(path: &str) -> Result<String, Info> {
     }
 }
 
-/// Convert "foo.bf" to "foo".
+/// Convert "foo.ijs" to "foo".
 fn executable_name(bf_path: &str) -> String {
     let bf_file_name = Path::new(bf_path).file_name().unwrap().to_str().unwrap();
 
@@ -121,11 +122,34 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
             panic!("{}", parse_error);
         }
     };
-    for astnode in ast {
+    for astnode in &ast {
         println!("{:?}", astnode);
     }
 
-    // MQUINN: Learn more about LLVM IR here: http://releases.llvm.org/2.6/docs/tutorial/JITTutorial1.html
+    let target_triple = matches.opt_str("target");
+    let mut llvm_module = llvm::compile_to_module(path, target_triple.clone(), &ast);
+
+    let llvm_ir_cstr = llvm_module.to_cstring();
+    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
+    println!("{}", llvm_ir);
+
+    // TODO: Enable optimization: llvm::optimise_ir(&mut llvm_module, llvm_opt);
+
+    // Compile the LLVM IR to a temporary object file.
+    let object_file = try!(convert_io_error(NamedTempFile::new()));
+    let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
+    println!("Writing object file to {}", obj_file_path);
+    llvm::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
+
+    let output_name = executable_name(path);
+    println!("Outputting executable to {}", output_name);
+    link_object_file(
+        &obj_file_path,
+        &output_name,
+        target_triple
+    ).unwrap();
+
+    // TODO: Enable stripping: strip_executable(&output_name).unwrap();
 
     Ok(())
 }
