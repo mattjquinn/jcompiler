@@ -1,3 +1,4 @@
+#![warn(trivial_numeric_casts)]
 //! bfir defines an AST for BF. This datastructure represents the
 //! original BF source code with position data so we can find the
 //! source lines from a portion of AST.
@@ -10,6 +11,25 @@ use std::num::Wrapping;
 
 use self::AstNode::*;
 use diagnostics::Position;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionState<'a> {
+    pub start_instr: Option<&'a AstNode>,
+    pub cells: Vec<Cell>,
+    pub cell_ptr: isize,
+    pub outputs: Vec<i8>,
+}
+
+impl<'a> ExecutionState<'a> {
+    pub fn initial() -> Self {
+        ExecutionState {
+            start_instr: None,
+            cells: vec![Wrapping(0); 99999],
+            cell_ptr: 0,
+            outputs: vec![],
+        }
+    }
+}
 
 /// A cell is the fundamental BF datatype that we work with. BF
 /// requires this to be at least one byte, we provide a cell of

@@ -18,7 +18,7 @@ use std::num::Wrapping;
 use bfir::AstNode::*;
 use bfir::{AstNode, Cell};
 
-use execution::ExecutionState;
+use bfir::ExecutionState;
 
 const LLVM_FALSE: LLVMBool = 0;
 const LLVM_TRUE: LLVMBool = 1;

@@ -32,7 +32,6 @@ use std::fs;
 
 mod bfir;
 mod diagnostics;
-mod execution;
 mod llvm;
 mod shell;
 mod parser;
@@ -165,7 +164,7 @@ fn compile_bf_file(matches: &Matches) -> Result<(), String> {
     }
 
     let state = {
-        let mut init_state = execution::ExecutionState::initial();
+        let mut init_state = bfir::ExecutionState::initial();
         // TODO: this will crash on the empty program.
         init_state.start_instr = Some(&instrs[0]);
         init_state

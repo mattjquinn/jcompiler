@@ -3,7 +3,7 @@ use std::num::Wrapping;
 
 use bfir::AstNode::*;
 use diagnostics::Position;
-use execution::ExecutionState;
+use bfir::ExecutionState;
 use itertools::EitherOrBoth::Both;
 use itertools::Itertools;
 use llvm::compile_to_module;
