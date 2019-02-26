@@ -37,10 +37,6 @@ mod shell;
 
 #[cfg(test)]
 mod llvm_tests;
-#[cfg(test)]
-mod peephole_tests;
-#[cfg(test)]
-mod soundness_tests;
 
 /// Read the contents of the file at path, and return a string of its
 /// contents. Return a diagnostic if we can't open or read the file.
@@ -163,25 +159,12 @@ fn compile_file(matches: &Matches) -> Result<(), String> {
         return Ok(());
     }
 
-    let (state, execution_warning) = if opt_level == "2" {
-        execution::execute(&instrs, execution::MAX_STEPS)
-    } else {
+    let state = {
         let mut init_state = execution::ExecutionState::initial(&instrs[..]);
         // TODO: this will crash on the empty program.
         init_state.start_instr = Some(&instrs[0]);
-        (init_state, None)
+        init_state
     };
-
-    if let Some(execution_warning) = execution_warning {
-        let info = Info {
-            level: Level::Warning,
-            filename: path.to_owned(),
-            message: execution_warning.message,
-            position: execution_warning.position,
-            source: Some(src),
-        };
-        eprintln!("{}", info);
-    }
 
     let target_triple = matches.opt_str("target");
     let mut llvm_module = llvm::compile_to_module(path, target_triple.clone(), &instrs, &state);
@@ -242,7 +225,7 @@ fn link_object_file(
         vec![object_file_path, "-o", &executable_path[..]]
     };
 
-    shell::run_shell_command("clang", &clang_args[..])
+    shell::run_shell_command("clang-7", &clang_args[..])
 }
 
 fn strip_executable(executable_path: &str) -> Result<(), String> {
