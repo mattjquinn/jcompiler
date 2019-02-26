@@ -27,7 +27,6 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 
 mod bfir;
-mod bounds;
 mod diagnostics;
 mod execution;
 mod llvm;
@@ -140,7 +139,7 @@ fn compile_file(matches: &Matches) -> Result<(), String> {
     }
 
     let state = {
-        let mut init_state = execution::ExecutionState::initial(&instrs[..]);
+        let mut init_state = execution::ExecutionState::initial();
         // TODO: this will crash on the empty program.
         init_state.start_instr = Some(&instrs[0]);
         init_state
