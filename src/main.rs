@@ -32,12 +32,12 @@ use std::fs;
 
 mod bfir;
 mod diagnostics;
-mod llvm;
+mod bfllvm;
 mod shell;
 mod parser;
 
 #[cfg(test)]
-mod llvm_tests;
+mod bfllvm_tests;
 
 /// Read the contents of the file at path, and return a string of its
 /// contents. Return a diagnostic if we can't open or read the file.
@@ -171,7 +171,7 @@ fn compile_bf_file(matches: &Matches) -> Result<(), String> {
     };
 
     let target_triple = matches.opt_str("target");
-    let mut llvm_module = llvm::compile_to_module(path, target_triple.clone(), &instrs, &state);
+    let mut llvm_module = bfllvm::compile_to_module(path, target_triple.clone(), &instrs, &state);
 
     if matches.opt_present("dump-llvm") {
         let llvm_ir_cstr = llvm_module.to_cstring();
@@ -189,12 +189,12 @@ fn compile_bf_file(matches: &Matches) -> Result<(), String> {
         llvm_opt = 3;
     }
 
-    llvm::optimise_ir(&mut llvm_module, llvm_opt);
+    bfllvm::optimise_ir(&mut llvm_module, llvm_opt);
 
     // Compile the LLVM IR to a temporary object file.
     let object_file = try!(convert_io_error(NamedTempFile::new()));
     let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
-    try!(llvm::write_object_file(&mut llvm_module, &obj_file_path));
+    try!(bfllvm::write_object_file(&mut llvm_module, &obj_file_path));
 
     let output_name = executable_name(path);
     try!(link_object_file(
@@ -265,7 +265,7 @@ fn main() {
         "yes|no",
     );
 
-    let default_triple_cstring = llvm::get_default_target_triple();
+    let default_triple_cstring = bfllvm::get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
 
     opts.optopt(
