@@ -1,0 +1,10 @@
+program = _{ SOI ~ stmt* ~ EOI }
+
+stmt = _{ expr ~ "\n"}
+expr = _{ exprBinAdd | exprNum }
+exprBinAdd = { number ~ "+" ~ number }
+exprNum = { number }
+
+number = { ASCII_DIGIT+ }
+
+WHITESPACE = _{ " " | "\t" }
