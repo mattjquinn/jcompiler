@@ -2,10 +2,8 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = _{   exprBinOp
-          | exprNum }
-exprBinOp = { number ~ binOp ~ number }
-exprNum = { number }
+expr = { term ~ (binOp ~ term)* }
+term = _{ number | "(" ~ expr ~ ")" }
 
 binOp = { "+" | "*" }
 number = { ASCII_DIGIT+ }
