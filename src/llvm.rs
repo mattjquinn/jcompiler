@@ -59,6 +59,8 @@ pub fn compile_to_module(
                            compile_number_expr(n, &mut module, bb),
                        parser::AstNode::BinAdd{lhs, rhs} =>
                            compile_binadd_expr(lhs, rhs, &mut module, bb),
+                       parser::AstNode::BinMul{lhs, rhs} =>
+                           compile_binmul_expr(lhs, rhs, &mut module, bb),
                        _ => panic!("Not ready to compile expr: {:?}", astnode)
                    };
                    let mut args = vec![printfmt_str, out_load];
@@ -118,6 +120,28 @@ fn compile_binadd_expr(
             avar,
             bvar,
             module.new_string_ptr("sum"),
+        )
+    }
+}
+
+fn compile_binmul_expr(
+    a : u32,
+    b : u32,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    let avar = compile_number_expr(a, module, bb);
+    let bvar = compile_number_expr(b, module, bb);
+
+    unsafe {
+        LLVMBuildMul(
+            builder.builder,
+            avar,
+            bvar,
+            module.new_string_ptr("prod"),
         )
     }
 }

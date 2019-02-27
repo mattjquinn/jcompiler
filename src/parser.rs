@@ -13,6 +13,7 @@ pub enum AstNode {
     Print(Box<AstNode>),
     Number(u32),
     BinAdd {lhs: u32, rhs: u32},
+    BinMul {lhs: u32, rhs: u32},
 }
 
 impl fmt::Display for AstNode {
@@ -37,13 +38,18 @@ pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
                 let num = pair.into_inner().next().unwrap().as_str();
                 ast.push(Print(Box::new(Number(num.parse().unwrap()))));
             },
-            Rule::exprBinAdd => {
+            Rule::exprBinOp => {
                 let mut inner_terms = pair.into_inner();
                 let lhs : u32 = inner_terms.next().unwrap().as_str().trim()
                     .parse().unwrap();
+                let op = inner_terms.next().unwrap().as_str().trim();
                 let rhs : u32 = inner_terms.next().unwrap().as_str().trim()
                     .parse().unwrap();
-                ast.push(Print(Box::new(BinAdd{lhs, rhs})));
+                match op {
+                    "+" => ast.push(Print(Box::new(BinAdd{lhs, rhs}))),
+                    "*" => ast.push(Print(Box::new(BinMul{lhs, rhs}))),
+                    _ => panic!("Parsed unexpected binary op: {}", op)
+                }
             },
             _ => {},
         }
