@@ -57,10 +57,10 @@ pub fn compile_to_module(
                    let out_load = match **expr {
                        parser::AstNode::Number(n) =>
                            compile_number_expr(n, &mut module, bb),
-                       parser::AstNode::BinAdd{lhs, rhs} =>
-                           compile_binadd_expr(lhs, rhs, &mut module, bb),
-                       parser::AstNode::BinMul{lhs, rhs} =>
-                           compile_binmul_expr(lhs, rhs, &mut module, bb),
+//                       parser::AstNode::BinAdd{lhs, rhs} =>
+//                           compile_binadd_expr(lhs, rhs, &mut module, bb),
+//                       parser::AstNode::BinMul{lhs, rhs} =>
+//                           compile_binmul_expr(lhs, rhs, &mut module, bb),
                        _ => panic!("Not ready to compile expr: {:?}", astnode)
                    };
                    let mut args = vec![printfmt_str, out_load];
