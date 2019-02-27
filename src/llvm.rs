@@ -29,6 +29,7 @@ pub fn compile_to_module(
     module_name: &str,
     target_triple: Option<String>,
     ast: &[parser::AstNode]) -> Module {
+
     let mut module = create_module(module_name, target_triple);
     let main_fn = add_main_fn(&mut module);
 
@@ -40,52 +41,59 @@ pub fn compile_to_module(
 
         let printfmt_str = LLVMBuildGlobalString(
             builder.builder,
-            module.new_string_ptr("Output: %d\n"),
+            module.new_string_ptr("%d\n"),
             module.new_string_ptr("printfmt_str")
         );
 
-//        let llvm_cells = add_cells_init(&initial_state.cells, &mut module, init_bb);
-//        let llvm_cell_index =
-//            add_cell_index_init(initial_state.cell_ptr, init_bb, &mut module);
-//
-//        let ctx = CompileContext {
-//            cells: llvm_cells,
-//            cell_index_ptr: llvm_cell_index,
-//            main_fn,
-//        };
-//
-//        // This is the point we want to start execution from.
+        // This is the point we want to start execution from.
         bb = set_entry_point_after(&mut module, main_fn, bb);
-//
-//        for instr in instrs {
-//            bb = compile_instr(instr, start_instr, &mut module, main_fn, bb, ctx.clone());
-//        }
+
         let builder = Builder::new();
         builder.position_at_end(bb);
 
-        let reg = LLVMBuildAlloca(
-            builder.builder,
-            int32_type(),
-            module.new_string_ptr("reg"),
-        );
-
-        let reg_ptr_init = int32(888 as c_ulonglong);
-        LLVMBuildStore(builder.builder, reg_ptr_init, reg);
-
-        let reg_load = LLVMBuildLoad(
-            builder.builder,
-            reg,
-            module.new_string_ptr("reg_load"),
-        );
-
-        let mut args = vec![printfmt_str, reg_load];
-        add_function_call(&mut module, bb, "printf", &mut args,"");
-
-//        add_cells_cleanup(&mut module, bb, llvm_cells);
+        for astnode in ast {
+            match astnode {
+               parser::AstNode::Print(expr) => {
+                   let out_load = match **expr {
+                       parser::AstNode::Number(n) => compile_number_expr(n, &mut module, bb),
+                       _ => panic!("Not ready to compile expr: {:?}", astnode)
+                   };
+                   let mut args = vec![printfmt_str, out_load];
+                   add_function_call(&mut module, bb, "printf", &mut args,"");
+               },
+                _ => panic!("Not ready to copmile top-level AST node: {:?}", astnode)
+            }
+        }
 
         add_main_cleanup(bb);
 
         module
+    }
+}
+
+fn compile_number_expr(
+    n : u32,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        let n_alloc = LLVMBuildAlloca(
+            builder.builder,
+            int32_type(),
+            module.new_string_ptr("n"),
+        );
+
+        let n_init= int32(n as c_ulonglong);
+        LLVMBuildStore(builder.builder, n_init, n_alloc);
+
+        LLVMBuildLoad(
+            builder.builder,
+            n_alloc,
+            module.new_string_ptr("n_load"),
+        )
     }
 }
 

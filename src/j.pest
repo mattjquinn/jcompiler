@@ -1,6 +1,7 @@
-program = _{ SOI ~ stmt* ~ EOI }
+program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
-stmt = _{ expr ~ "\n"}
+stmt = _{ expr }
+
 expr = _{ exprBinAdd | exprNum }
 exprBinAdd = { number ~ "+" ~ number }
 exprNum = { number }
