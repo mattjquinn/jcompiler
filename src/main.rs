@@ -131,9 +131,12 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
 
     let llvm_ir_cstr = llvm_module.to_cstring();
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-    println!("{}", llvm_ir);
+    println!("Unoptimized:\n{}", llvm_ir);
 
-    // TODO: Enable optimization: llvm::optimise_ir(&mut llvm_module, llvm_opt);
+//    llvm::optimise_ir(&mut llvm_module, 3);
+//    let llvm_ir_cstr = llvm_module.to_cstring();
+//    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
+//    println!("Optimized:\n{}", llvm_ir);
 
     // Compile the LLVM IR to a temporary object file.
     let object_file = try!(convert_io_error(NamedTempFile::new()));

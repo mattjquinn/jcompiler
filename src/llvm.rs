@@ -25,6 +25,70 @@ use parser;
 const LLVM_FALSE: LLVMBool = 0;
 const LLVM_TRUE: LLVMBool = 1;
 
+pub fn compile_to_module(
+    module_name: &str,
+    target_triple: Option<String>,
+    ast: &[parser::AstNode]) -> Module {
+    let mut module = create_module(module_name, target_triple);
+    let main_fn = add_main_fn(&mut module);
+
+    let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
+
+    unsafe {
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+
+        let printfmt_str = LLVMBuildGlobalString(
+            builder.builder,
+            module.new_string_ptr("Output: %d\n"),
+            module.new_string_ptr("printfmt_str")
+        );
+
+//        let llvm_cells = add_cells_init(&initial_state.cells, &mut module, init_bb);
+//        let llvm_cell_index =
+//            add_cell_index_init(initial_state.cell_ptr, init_bb, &mut module);
+//
+//        let ctx = CompileContext {
+//            cells: llvm_cells,
+//            cell_index_ptr: llvm_cell_index,
+//            main_fn,
+//        };
+//
+//        // This is the point we want to start execution from.
+        bb = set_entry_point_after(&mut module, main_fn, bb);
+//
+//        for instr in instrs {
+//            bb = compile_instr(instr, start_instr, &mut module, main_fn, bb, ctx.clone());
+//        }
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+
+        let reg = LLVMBuildAlloca(
+            builder.builder,
+            int32_type(),
+            module.new_string_ptr("reg"),
+        );
+
+        let reg_ptr_init = int32(888 as c_ulonglong);
+        LLVMBuildStore(builder.builder, reg_ptr_init, reg);
+
+        let reg_load = LLVMBuildLoad(
+            builder.builder,
+            reg,
+            module.new_string_ptr("reg_load"),
+        );
+
+        let mut args = vec![printfmt_str, reg_load];
+        add_function_call(&mut module, bb, "printf", &mut args,"");
+
+//        add_cells_cleanup(&mut module, bb, llvm_cells);
+
+        add_main_cleanup(bb);
+
+        module
+    }
+}
+
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.
 pub struct Module {
@@ -68,7 +132,6 @@ impl Module {
 
 impl Drop for Module {
     fn drop(&mut self) {
-        // Rust requires that drop() is a safe function.
         unsafe {
             LLVMDisposeModule(self.module);
         }
@@ -100,7 +163,6 @@ impl Builder {
 
 impl Drop for Builder {
     fn drop(&mut self) {
-        // Rust requires that drop() is a safe function.
         unsafe {
             LLVMDisposeBuilder(self.builder);
         }
@@ -699,69 +761,6 @@ unsafe fn set_entry_point_after(
     after_init_bb
 }
 
-pub fn compile_to_module(
-    module_name: &str,
-    target_triple: Option<String>,
-    ast: &[parser::AstNode]) -> Module {
-    let mut module = create_module(module_name, target_triple);
-    let main_fn = add_main_fn(&mut module);
-
-    let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
-
-    unsafe {
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-
-        let printfmt_str = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("Output: %d\n"),
-            module.new_string_ptr("printfmt_str")
-        );
-
-//        let llvm_cells = add_cells_init(&initial_state.cells, &mut module, init_bb);
-//        let llvm_cell_index =
-//            add_cell_index_init(initial_state.cell_ptr, init_bb, &mut module);
-//
-//        let ctx = CompileContext {
-//            cells: llvm_cells,
-//            cell_index_ptr: llvm_cell_index,
-//            main_fn,
-//        };
-//
-//        // This is the point we want to start execution from.
-        bb = set_entry_point_after(&mut module, main_fn, bb);
-//
-//        for instr in instrs {
-//            bb = compile_instr(instr, start_instr, &mut module, main_fn, bb, ctx.clone());
-//        }
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-
-        let reg = LLVMBuildAlloca(
-            builder.builder,
-            int32_type(),
-            module.new_string_ptr("reg"),
-        );
-
-        let reg_ptr_init = int32(888 as c_ulonglong);
-        LLVMBuildStore(builder.builder, reg_ptr_init, reg);
-
-        let reg_load = LLVMBuildLoad(
-            builder.builder,
-            reg,
-            module.new_string_ptr("reg_load"),
-        );
-
-        let mut args = vec![printfmt_str, reg_load];
-        add_function_call(&mut module, bb, "printf", &mut args,"");
-
-//        add_cells_cleanup(&mut module, bb, llvm_cells);
-
-        add_main_cleanup(bb);
-
-        module
-    }
-}
 
 pub fn optimise_ir(module: &mut Module, llvm_opt: i64) {
     // TODO: add a verifier pass too.
