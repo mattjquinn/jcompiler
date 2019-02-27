@@ -310,7 +310,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     // TODO: add a function to the LLVM C API that gives us the
     // data layout from the target machine.
 
-    // MQUINN DISABLED: add_c_declarations(&mut module);
+    add_c_declarations(&mut module);
     module
 }
 
@@ -734,14 +734,6 @@ pub fn compile_to_module(
             int8_ptr_type(),
             module.new_string_ptr("int_printfmt_str_ptr"),
         );
-
-//        add_function_call(
-//            &mut module,
-//            bb,
-//            "write",
-//            &mut [stdout_fd, int_printfmt_str_ptr, llvm_num_outputs],
-//            "",
-//        );
     }
 
     unsafe {
@@ -773,6 +765,9 @@ pub fn compile_to_module(
         let reg_ptr_init = int32(0 as c_ulonglong);
 
         LLVMBuildStore(builder.builder, reg_ptr_init, reg_ptr);
+
+        let mut putchar_args = vec![int32(66)];
+        add_function_call(&mut module, bb, "putchar", &mut putchar_args, "");
 
 //        add_cells_cleanup(&mut module, bb, llvm_cells);
 
