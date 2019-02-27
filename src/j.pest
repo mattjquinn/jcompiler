@@ -2,10 +2,12 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = _{ exprBinAdd | exprNum }
-exprBinAdd = { number ~ "+" ~ number }
+expr = _{   exprBinOp
+          | exprNum }
+exprBinOp = { number ~ binOp ~ number }
 exprNum = { number }
 
+binOp = { "+" | "*" }
 number = { ASCII_DIGIT+ }
 
 WHITESPACE = _{ " " | "\t" }
