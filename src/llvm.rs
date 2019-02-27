@@ -187,6 +187,14 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "putchar", &mut [int32_type()], int32_type());
 
     add_function(module, "getchar", &mut [], int32_type());
+
+    add_function(
+        module,
+        "printf",
+        &mut [int8_ptr_type(), /* varargs; simply give extra args at call time. */],
+        int32_type(),
+    );
+
 }
 
 unsafe fn add_function_call(
@@ -701,42 +709,15 @@ pub fn compile_to_module(
     let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
 
     unsafe {
-        let globals = vec!['%', 'd'];
         let builder = Builder::new();
         builder.position_at_end(bb);
 
-        let mut llvm_outputs = vec![];
-        for value in &globals {
-            llvm_outputs.push(int8(*value as c_ulonglong));
-        }
-
-        let output_buf_type = LLVMArrayType(int8_type(), llvm_outputs.len() as c_uint);
-        let llvm_outputs_arr = LLVMConstArray(
-            int8_type(),
-            llvm_outputs.as_mut_ptr(),
-            llvm_outputs.len() as c_uint,
-        );
-
-        let int_printfmt_str = LLVMAddGlobal(
-            module.module,
-            output_buf_type,
-            module.new_string_ptr("int_printfmt_str"),
-        );
-        LLVMSetInitializer(int_printfmt_str, llvm_outputs_arr);
-        LLVMSetGlobalConstant(int_printfmt_str, LLVM_TRUE);
-
-        let stdout_fd = int32(1);
-        let llvm_num_outputs = int32(globals.len() as c_ulonglong);
-
-        let int_printfmt_str_ptr = LLVMBuildPointerCast(
+        let printfmt_str = LLVMBuildGlobalString(
             builder.builder,
-            int_printfmt_str,
-            int8_ptr_type(),
-            module.new_string_ptr("int_printfmt_str_ptr"),
+            module.new_string_ptr("Output: %d\n"),
+            module.new_string_ptr("printfmt_str")
         );
-    }
 
-    unsafe {
 //        let llvm_cells = add_cells_init(&initial_state.cells, &mut module, init_bb);
 //        let llvm_cell_index =
 //            add_cell_index_init(initial_state.cell_ptr, init_bb, &mut module);
@@ -756,18 +737,23 @@ pub fn compile_to_module(
         let builder = Builder::new();
         builder.position_at_end(bb);
 
-        let reg_ptr = LLVMBuildAlloca(
+        let reg = LLVMBuildAlloca(
             builder.builder,
             int32_type(),
             module.new_string_ptr("reg"),
         );
 
-        let reg_ptr_init = int32(0 as c_ulonglong);
+        let reg_ptr_init = int32(888 as c_ulonglong);
+        LLVMBuildStore(builder.builder, reg_ptr_init, reg);
 
-        LLVMBuildStore(builder.builder, reg_ptr_init, reg_ptr);
+        let reg_load = LLVMBuildLoad(
+            builder.builder,
+            reg,
+            module.new_string_ptr("reg_load"),
+        );
 
-        let mut putchar_args = vec![int32(66)];
-        add_function_call(&mut module, bb, "putchar", &mut putchar_args, "");
+        let mut args = vec![printfmt_str, reg_load];
+        add_function_call(&mut module, bb, "printf", &mut args,"");
 
 //        add_cells_cleanup(&mut module, bb, llvm_cells);
 
