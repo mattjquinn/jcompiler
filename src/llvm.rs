@@ -55,7 +55,10 @@ pub fn compile_to_module(
             match astnode {
                parser::AstNode::Print(expr) => {
                    let out_load = match **expr {
-                       parser::AstNode::Number(n) => compile_number_expr(n, &mut module, bb),
+                       parser::AstNode::Number(n) =>
+                           compile_number_expr(n, &mut module, bb),
+                       parser::AstNode::BinAdd{lhs, rhs} =>
+                           compile_binadd_expr(lhs, rhs, &mut module, bb),
                        _ => panic!("Not ready to compile expr: {:?}", astnode)
                    };
                    let mut args = vec![printfmt_str, out_load];
@@ -93,6 +96,28 @@ fn compile_number_expr(
             builder.builder,
             n_alloc,
             module.new_string_ptr("n_load"),
+        )
+    }
+}
+
+fn compile_binadd_expr(
+    a : u32,
+    b : u32,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    let avar = compile_number_expr(a, module, bb);
+    let bvar = compile_number_expr(b, module, bb);
+
+    unsafe {
+        LLVMBuildAdd(
+            builder.builder,
+            avar,
+            bvar,
+            module.new_string_ptr("sum"),
         )
     }
 }
