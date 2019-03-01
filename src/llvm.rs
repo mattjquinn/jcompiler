@@ -54,15 +54,7 @@ pub fn compile_to_module(
         for astnode in ast {
             match astnode {
                parser::AstNode::Print(expr) => {
-                   let out_load = match **expr {
-                       parser::AstNode::Number(n) =>
-                           compile_number_expr(n, &mut module, bb),
-//                       parser::AstNode::BinAdd{lhs, rhs} =>
-//                           compile_binadd_expr(lhs, rhs, &mut module, bb),
-//                       parser::AstNode::BinMul{lhs, rhs} =>
-//                           compile_binmul_expr(lhs, rhs, &mut module, bb),
-                       _ => panic!("Not ready to compile expr: {:?}", astnode)
-                   };
+                   let out_load = compile_expr(expr, &mut module, bb);
                    let mut args = vec![printfmt_str, out_load];
                    add_function_call(&mut module, bb, "printf", &mut args,"");
                },
@@ -73,6 +65,22 @@ pub fn compile_to_module(
         add_main_cleanup(bb);
 
         module
+    }
+}
+
+fn compile_expr(
+    expr : &parser::AstNode,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    match *expr {
+        parser::AstNode::Number(n) =>
+            compile_number_expr(n, module, bb),
+//                       parser::AstNode::BinAdd{lhs, rhs} =>
+//                           compile_binadd_expr(lhs, rhs, &mut module, bb),
+//                       parser::AstNode::BinMul{lhs, rhs} =>
+//                           compile_binmul_expr(lhs, rhs, &mut module, bb),
+        _ => panic!("Not ready to compile expr: {:?}", expr)
     }
 }
 
