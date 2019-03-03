@@ -76,10 +76,10 @@ fn compile_expr(
     match *expr {
         parser::AstNode::Number(n) =>
             compile_number_expr(n, module, bb),
-//                       parser::AstNode::BinAdd{lhs, rhs} =>
-//                           compile_binadd_expr(lhs, rhs, &mut module, bb),
-//                       parser::AstNode::BinMul{lhs, rhs} =>
-//                           compile_binmul_expr(lhs, rhs, &mut module, bb),
+        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
+            compile_binadd_expr(&lhs, &rhs, module, bb),
+        parser::AstNode::BinMul{ref lhs, ref rhs} =>
+            compile_binmul_expr(&lhs, &rhs, module, bb),
         _ => panic!("Not ready to compile expr: {:?}", expr)
     }
 }
@@ -111,44 +111,44 @@ fn compile_number_expr(
 }
 
 fn compile_binadd_expr(
-    a : u32,
-    b : u32,
+    a : &parser::AstNode,
+    b : &parser::AstNode,
     module: &mut Module,
     bb: LLVMBasicBlockRef) -> LLVMValueRef {
 
     let builder = Builder::new();
     builder.position_at_end(bb);
 
-    let avar = compile_number_expr(a, module, bb);
-    let bvar = compile_number_expr(b, module, bb);
+    let aexp = compile_expr(a, module, bb);
+    let bexp = compile_expr(b, module, bb);
 
     unsafe {
         LLVMBuildAdd(
             builder.builder,
-            avar,
-            bvar,
+            aexp,
+            bexp,
             module.new_string_ptr("sum"),
         )
     }
 }
 
 fn compile_binmul_expr(
-    a : u32,
-    b : u32,
+    a : &parser::AstNode,
+    b : &parser::AstNode,
     module: &mut Module,
     bb: LLVMBasicBlockRef) -> LLVMValueRef {
 
     let builder = Builder::new();
     builder.position_at_end(bb);
 
-    let avar = compile_number_expr(a, module, bb);
-    let bvar = compile_number_expr(b, module, bb);
+    let aexp = compile_expr(a, module, bb);
+    let bexp = compile_expr(b, module, bb);
 
     unsafe {
         LLVMBuildMul(
             builder.builder,
-            avar,
-            bvar,
+            aexp,
+            bexp,
             module.new_string_ptr("prod"),
         )
     }
