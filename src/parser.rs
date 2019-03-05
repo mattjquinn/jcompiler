@@ -1,6 +1,7 @@
 use std::fmt;
 use self::AstNode::*;
 use pest::error::Error;
+use itertools::Itertools;
 
 use pest::Parser;
 
@@ -14,6 +15,7 @@ pub enum AstNode {
     Number(u32),
     BinAdd {lhs: Box<AstNode>, rhs: Box<AstNode>},
     BinMul {lhs: Box<AstNode>, rhs: Box<AstNode>},
+    Terms(Vec<AstNode>),
 }
 
 impl fmt::Display for AstNode {
@@ -36,7 +38,7 @@ pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
         match pair.as_rule() {
             Rule::expr => {
                 ast.push(Print(Box::new(
-                    build_ast_from_expr(pair.into_inner()))));
+                    build_ast_from_expr(pair.into_inner().next().unwrap()))));
             },
             rule => {}
         }
@@ -45,46 +47,56 @@ pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
     Ok(ast)
 }
 
-fn build_ast_from_expr(mut pairs : pest::iterators::Pairs<Rule>) -> AstNode {
+fn build_ast_from_expr(mut pair : pest::iterators::Pair<Rule>) -> AstNode {
     // IMPORTANT: Binary operations are right-associative in J, i.e.:
     // 3 * 2 + 1  is evaluated as 3 * (2 + 1)
 
-    match pairs.next().unwrap().as_rule() {
+    match pair.as_rule() {
         mexpr @ Rule::monadicExpr =>
-           println!("MONAD Rule:    {:?}", mexpr),
+           panic!("TODO: Build monadic expr:    {:?}", mexpr),
         dexpr @ Rule::dyadicExpr =>
-            println!("DYAD Rule:    {:?}", dexpr),
-        texpr @ Rule::terms =>
-            println!("TERMS Rule:    {:?}", texpr),
+            panic!("TODO: Build dyadic expr:    {:?}", dexpr),
+            // OLD CODE:
+            //    let lhspair = pairs.next().unwrap();
+            //    let lhs = match lhspair.as_rule() {
+            //        Rule::number => AstNode::Number(lhspair.as_str().trim().parse().unwrap()),
+            //        Rule::expr => build_ast_from_expr(lhspair.into_inner()),
+            //        _ => panic!("Unexpected LHS inside expr: {}", lhspair)
+            //    };
+            //
+            //    if let Some(op) = pairs.next() {
+            //        let opstr = match op.as_rule() {
+            //            Rule::dyadicVerb => op.as_str().trim(),
+            //            _ => panic!("Expected dyadic verb inside expr, got: {}", op.as_str())
+            //        };
+            //        let rhspair = pairs.next().unwrap();
+            //        let rhs = match rhspair.as_rule() {
+            //            Rule::number => AstNode::Number(rhspair.as_str().trim().parse().unwrap()),
+            //            Rule::expr => build_ast_from_expr(rhspair.into_inner()),
+            //            _ => panic!("Unexpected RHS inside expr: {}", rhspair)
+            //        };
+            //        match opstr {
+            //            "+" => AstNode::BinAdd{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+            //            "*" => AstNode::BinMul{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+            //            _ => panic!("Unexpected binary op: {}", opstr)
+            //        }
+            //    } else {
+            //        lhs
+            //    }
+        Rule::terms =>
+            Terms(pair.into_inner()
+                .map(|p| build_ast_from_term(p)).collect_vec()),
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr)
-    };
+    }
+}
 
-    Number(4)
+fn build_ast_from_term(mut pair : pest::iterators::Pair<Rule>) -> AstNode {
 
-//    let lhspair = pairs.next().unwrap();
-//    let lhs = match lhspair.as_rule() {
-//        Rule::number => AstNode::Number(lhspair.as_str().trim().parse().unwrap()),
-//        Rule::expr => build_ast_from_expr(lhspair.into_inner()),
-//        _ => panic!("Unexpected LHS inside expr: {}", lhspair)
-//    };
-//
-//    if let Some(op) = pairs.next() {
-//        let opstr = match op.as_rule() {
-//            Rule::dyadicVerb => op.as_str().trim(),
-//            _ => panic!("Expected dyadic verb inside expr, got: {}", op.as_str())
-//        };
-//        let rhspair = pairs.next().unwrap();
-//        let rhs = match rhspair.as_rule() {
-//            Rule::number => AstNode::Number(rhspair.as_str().trim().parse().unwrap()),
-//            Rule::expr => build_ast_from_expr(rhspair.into_inner()),
-//            _ => panic!("Unexpected RHS inside expr: {}", rhspair)
-//        };
-//        match opstr {
-//            "+" => AstNode::BinAdd{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-//            "*" => AstNode::BinMul{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-//            _ => panic!("Unexpected binary op: {}", opstr)
-//        }
-//    } else {
-//        lhs
-//    }
+    match pair.as_rule() {
+        Rule::number =>
+            AstNode::Number(pair.as_str().trim().parse().unwrap()),
+        Rule::expr =>
+            build_ast_from_expr(pair),
+        unknown_term => panic!("Unexpected term: {:?}", unknown_term)
+    }
 }
