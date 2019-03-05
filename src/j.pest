@@ -2,10 +2,13 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = { term ~ (binOp ~ term)* }
+expr = { monadicExpr | dyadicExpr | term }
+monadicExpr = _{ monadicVerb ~ term }
+dyadicExpr = _{ term ~ (dyadicVerb ~ term)+ }
 term = _{ number | "(" ~ expr ~ ")" }
 
-binOp = { "+" | "*" }
+monadicVerb = { ">:" }
+dyadicVerb = { "+" | "*" }
 number = { ASCII_DIGIT+ }
 
 WHITESPACE = _{ " " | "\t" }

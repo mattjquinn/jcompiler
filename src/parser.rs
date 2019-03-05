@@ -77,8 +77,8 @@ fn build_ast_from_expr(mut pairs : pest::iterators::Pairs<Rule>) -> AstNode {
 
     if let Some(op) = pairs.next() {
         let opstr = match op.as_rule() {
-            Rule::binOp => op.as_str().trim(),
-            _ => panic!("Expected binary operation inside expr, got: {}", op.as_str())
+            Rule::dyadicVerb => op.as_str().trim(),
+            _ => panic!("Expected dyadic verb inside expr, got: {}", op.as_str())
         };
         let rhspair = pairs.next().unwrap();
         let rhs = match rhspair.as_rule() {
