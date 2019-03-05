@@ -37,22 +37,7 @@ pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
             Rule::expr => {
                 ast.push(Print(Box::new(
                     build_ast_from_expr(pair.into_inner()))));
-//                let num = pair.into_inner().next().unwrap().as_str();
-//                ast.push(Print(Box::new(Number(num.parse().unwrap()))));
             },
-//            Rule::exprBinOp => {
-//                let mut inner_terms = pair.into_inner();
-//                let lhs : u32 = inner_terms.next().unwrap().as_str().trim()
-//                    .parse().unwrap();
-//                let op = inner_terms.next().unwrap().as_str().trim();
-//                let rhs : u32 = inner_terms.next().unwrap().as_str().trim()
-//                    .parse().unwrap();
-//                match op {
-//                    "+" => ast.push(Print(Box::new(BinAdd{lhs, rhs}))),
-//                    "*" => ast.push(Print(Box::new(BinMul{lhs, rhs}))),
-//                    _ => panic!("Parsed unexpected binary op: {}", op)
-//                }
-//            },
             rule => {}
         }
     }
@@ -64,34 +49,42 @@ fn build_ast_from_expr(mut pairs : pest::iterators::Pairs<Rule>) -> AstNode {
     // IMPORTANT: Binary operations are right-associative in J, i.e.:
     // 3 * 2 + 1  is evaluated as 3 * (2 + 1)
 
-    // TODO: If LHS is expr, recurse. If LHS is number, create Number node.
-    // TODO: If RHS is present, recurse. Join together under AstNode.
-    // TODO: Change AstNode to Box<AstNode> for binary operations.
-
-    let lhspair = pairs.next().unwrap();
-    let lhs = match lhspair.as_rule() {
-        Rule::number => AstNode::Number(lhspair.as_str().trim().parse().unwrap()),
-        Rule::expr => build_ast_from_expr(lhspair.into_inner()),
-        _ => panic!("Unexpected LHS inside expr: {}", lhspair)
+    match pairs.next().unwrap().as_rule() {
+        mexpr @ Rule::monadicExpr =>
+           println!("MONAD Rule:    {:?}", mexpr),
+        dexpr @ Rule::dyadicExpr =>
+            println!("DYAD Rule:    {:?}", dexpr),
+        texpr @ Rule::terms =>
+            println!("TERMS Rule:    {:?}", texpr),
+        unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr)
     };
 
-    if let Some(op) = pairs.next() {
-        let opstr = match op.as_rule() {
-            Rule::dyadicVerb => op.as_str().trim(),
-            _ => panic!("Expected dyadic verb inside expr, got: {}", op.as_str())
-        };
-        let rhspair = pairs.next().unwrap();
-        let rhs = match rhspair.as_rule() {
-            Rule::number => AstNode::Number(rhspair.as_str().trim().parse().unwrap()),
-            Rule::expr => build_ast_from_expr(rhspair.into_inner()),
-            _ => panic!("Unexpected RHS inside expr: {}", rhspair)
-        };
-        match opstr {
-            "+" => AstNode::BinAdd{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-            "*" => AstNode::BinMul{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-            _ => panic!("Unexpected binary op: {}", opstr)
-        }
-    } else {
-        lhs
-    }
+    Number(4)
+
+//    let lhspair = pairs.next().unwrap();
+//    let lhs = match lhspair.as_rule() {
+//        Rule::number => AstNode::Number(lhspair.as_str().trim().parse().unwrap()),
+//        Rule::expr => build_ast_from_expr(lhspair.into_inner()),
+//        _ => panic!("Unexpected LHS inside expr: {}", lhspair)
+//    };
+//
+//    if let Some(op) = pairs.next() {
+//        let opstr = match op.as_rule() {
+//            Rule::dyadicVerb => op.as_str().trim(),
+//            _ => panic!("Expected dyadic verb inside expr, got: {}", op.as_str())
+//        };
+//        let rhspair = pairs.next().unwrap();
+//        let rhs = match rhspair.as_rule() {
+//            Rule::number => AstNode::Number(rhspair.as_str().trim().parse().unwrap()),
+//            Rule::expr => build_ast_from_expr(rhspair.into_inner()),
+//            _ => panic!("Unexpected RHS inside expr: {}", rhspair)
+//        };
+//        match opstr {
+//            "+" => AstNode::BinAdd{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+//            "*" => AstNode::BinMul{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+//            _ => panic!("Unexpected binary op: {}", opstr)
+//        }
+//    } else {
+//        lhs
+//    }
 }
