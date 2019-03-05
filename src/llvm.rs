@@ -36,14 +36,8 @@ pub fn compile_to_module(
     let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
 
     unsafe {
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-
-        let printfmt_str = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("%d\n"),
-            module.new_string_ptr("printfmt_str")
-        );
+        let global_builder = Builder::new();
+        global_builder.position_at_end(bb);
 
         // This is the point we want to start execution from.
         bb = set_entry_point_after(&mut module, main_fn, bb);
@@ -54,9 +48,10 @@ pub fn compile_to_module(
         for astnode in ast {
             match astnode {
                parser::AstNode::Print(expr) => {
-                   let out_load = compile_expr(expr, &mut module, bb);
-                   let mut args = vec![printfmt_str, out_load];
-                   add_function_call(&mut module, bb, "printf", &mut args,"");
+                   let mut outputs = compile_expr(expr, &mut module, bb);
+                   let printfmt_str = compile_global_printfmt_str(outputs.len(), &mut module, &builder);
+                   outputs.insert(0, printfmt_str);
+                   add_function_call(&mut module, bb, "printf", &mut outputs,"");
                },
                 _ => panic!("Not ready to copmile top-level AST node: {:?}", astnode)
             }
@@ -71,15 +66,18 @@ pub fn compile_to_module(
 fn compile_expr(
     expr : &parser::AstNode,
     module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+    bb: LLVMBasicBlockRef) -> Vec<LLVMValueRef> {
 
     match *expr {
         parser::AstNode::Number(n) =>
-            compile_number_expr(n, module, bb),
-        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
-            compile_binadd_expr(&lhs, &rhs, module, bb),
-        parser::AstNode::BinMul{ref lhs, ref rhs} =>
-            compile_binmul_expr(&lhs, &rhs, module, bb),
+            vec![compile_number_expr(n, module, bb)],
+//        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
+//            compile_binadd_expr(&lhs, &rhs, module, bb),
+//        parser::AstNode::BinMul{ref lhs, ref rhs} =>
+//            compile_binmul_expr(&lhs, &rhs, module, bb),
+        parser::AstNode::Terms(ref terms) => {
+            terms.iter().flat_map(|t| compile_expr(t, module, bb)).collect_vec()
+        }
         _ => panic!("Not ready to compile expr: {:?}", expr)
     }
 }
@@ -110,49 +108,67 @@ fn compile_number_expr(
     }
 }
 
-fn compile_binadd_expr(
-    a : &parser::AstNode,
-    b : &parser::AstNode,
+fn compile_global_printfmt_str(
+    num_args: usize,
     module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+    builder: &Builder) -> LLVMValueRef {
 
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let aexp = compile_expr(a, module, bb);
-    let bexp = compile_expr(b, module, bb);
+    let str = (0..num_args).map(|_| "%d ").collect::<String>();
+    let str = format!("{}\n", &str[..str.len()-1]);
 
     unsafe {
-        LLVMBuildAdd(
+        // TODO: Memoize these to prevent creation of identical format strings.
+        LLVMBuildGlobalString(
             builder.builder,
-            aexp,
-            bexp,
-            module.new_string_ptr("sum"),
+            module.new_string_ptr(&str[..]),
+            module.new_string_ptr(&format!("printfmt_{}_int_args", num_args)[..])
         )
     }
 }
 
-fn compile_binmul_expr(
-    a : &parser::AstNode,
-    b : &parser::AstNode,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let aexp = compile_expr(a, module, bb);
-    let bexp = compile_expr(b, module, bb);
-
-    unsafe {
-        LLVMBuildMul(
-            builder.builder,
-            aexp,
-            bexp,
-            module.new_string_ptr("prod"),
-        )
-    }
-}
+//fn compile_binadd_expr(
+//    a : &parser::AstNode,
+//    b : &parser::AstNode,
+//    module: &mut Module,
+//    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+//
+//    let builder = Builder::new();
+//    builder.position_at_end(bb);
+//
+//    let aexp = compile_expr(a, module, bb);
+//    let bexp = compile_expr(b, module, bb);
+//
+//    unsafe {
+//        LLVMBuildAdd(
+//            builder.builder,
+//            aexp,
+//            bexp,
+//            module.new_string_ptr("sum"),
+//        )
+//    }
+//}
+//
+//fn compile_binmul_expr(
+//    a : &parser::AstNode,
+//    b : &parser::AstNode,
+//    module: &mut Module,
+//    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+//
+//    let builder = Builder::new();
+//    builder.position_at_end(bb);
+//
+//    let aexp = compile_expr(a, module, bb);
+//    let bexp = compile_expr(b, module, bb);
+//
+//    unsafe {
+//        LLVMBuildMul(
+//            builder.builder,
+//            aexp,
+//            bexp,
+//            module.new_string_ptr("prod"),
+//        )
+//    }
+//}
 
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.
