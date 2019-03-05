@@ -2,13 +2,15 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = { monadicExpr | dyadicExpr | term }
-monadicExpr = _{ monadicVerb ~ term }
-dyadicExpr = _{ term ~ (dyadicVerb ~ term)+ }
+expr = { monadicExpr | dyadicExpr | terms }
+monadicExpr = { monadicVerb ~ terms }
+dyadicExpr = { terms ~ (dyadicVerb ~ terms)+ }
+terms = { term+ }
 term = _{ number | "(" ~ expr ~ ")" }
 
-monadicVerb = { ">:" }
+monadicVerb = { ">:" | "*:" }
 dyadicVerb = { "+" | "*" }
 number = { ASCII_DIGIT+ }
 
 WHITESPACE = _{ " " | "\t" }
+COMMENT = _{ "NB." ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
