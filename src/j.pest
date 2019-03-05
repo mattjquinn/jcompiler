@@ -10,7 +10,9 @@ term = _{ number | "(" ~ expr ~ ")" }
 
 monadicVerb = { ">:" | "*:" }
 dyadicVerb = { "+" | "*" }
-number = { ASCII_DIGIT+ }
+
+// @ means "atomic": no implicit whitespace allowed.
+number = @{ ASCII_DIGIT+ }
 
 WHITESPACE = _{ " " | "\t" }
 COMMENT = _{ "NB." ~ (!"\n" ~ ANY)* ~ ("\n" | EOI) }
