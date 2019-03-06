@@ -77,7 +77,13 @@ fn compile_expr(
 //            compile_binmul_expr(&lhs, &rhs, module, bb),
         parser::AstNode::Terms(ref terms) => {
             terms.iter().flat_map(|t| compile_expr(t, module, bb)).collect_vec()
-        }
+        },
+        parser::AstNode::Increment(ref terms) => {
+            panic!("TODO: Support monadic increment.");
+            // TODO: Pass an increment value to "compile_expr" such that all
+            // terms are incremented by 1. (don't forget concept of "rank").
+            // The outputted LLVMValueRefs should be the incremented values.
+        },
         _ => panic!("Not ready to compile expr: {:?}", expr)
     }
 }

@@ -16,6 +16,7 @@ pub enum AstNode {
     BinAdd {lhs: Box<AstNode>, rhs: Box<AstNode>},
     BinMul {lhs: Box<AstNode>, rhs: Box<AstNode>},
     Terms(Vec<AstNode>),
+    Increment(Vec<AstNode>),
 }
 
 impl fmt::Display for AstNode {
@@ -28,7 +29,7 @@ impl fmt::Display for AstNode {
 pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
     let mut ast = vec![];
 
-    let mut pairs = JParser::parse(Rule::program, source)?;
+    let pairs = JParser::parse(Rule::program, source)?;
     for pair in pairs {
         // A pair is a combination of the rule which matched and a span of input
 //        println!("Rule:    {:?}", pair.as_rule());
@@ -40,20 +41,27 @@ pub fn parse(source : &str) -> Result<Vec<AstNode>, Error<Rule>> {
                 ast.push(Print(Box::new(
                     build_ast_from_expr(pair.into_inner().next().unwrap()))));
             },
-            rule => {}
+            _ => {}
         }
     }
 
     Ok(ast)
 }
 
-fn build_ast_from_expr(mut pair : pest::iterators::Pair<Rule>) -> AstNode {
+fn build_ast_from_expr(pair : pest::iterators::Pair<Rule>) -> AstNode {
     // IMPORTANT: Binary operations are right-associative in J, i.e.:
     // 3 * 2 + 1  is evaluated as 3 * (2 + 1)
 
     match pair.as_rule() {
-        mexpr @ Rule::monadicExpr =>
-           panic!("TODO: Build monadic expr:    {:?}", mexpr),
+        Rule::monadicExpr => {
+            let mut pair = pair.into_inner();
+            let verb = pair.next().unwrap().as_str();
+            let terms = pair.next().unwrap();
+            match verb {
+                ">:" => Increment(build_ast_from_terms(terms)),
+                _ => panic!("Unsupported monadic verb in expr: {}", verb)
+            }
+        },
         dexpr @ Rule::dyadicExpr =>
             panic!("TODO: Build dyadic expr:    {:?}", dexpr),
             // OLD CODE:
@@ -83,14 +91,16 @@ fn build_ast_from_expr(mut pair : pest::iterators::Pair<Rule>) -> AstNode {
             //    } else {
             //        lhs
             //    }
-        Rule::terms =>
-            Terms(pair.into_inner()
-                .map(|p| build_ast_from_term(p)).collect_vec()),
+        Rule::terms => Terms(build_ast_from_terms(pair)),
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr)
     }
 }
+fn build_ast_from_terms(pair : pest::iterators::Pair<Rule>) -> Vec<AstNode> {
+    pair.into_inner()
+        .map(|p| build_ast_from_term(p)).collect_vec()
+}
 
-fn build_ast_from_term(mut pair : pest::iterators::Pair<Rule>) -> AstNode {
+fn build_ast_from_term(pair : pest::iterators::Pair<Rule>) -> AstNode {
 
     match pair.as_rule() {
         Rule::number =>
