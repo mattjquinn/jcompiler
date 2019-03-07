@@ -1,74 +1,22 @@
-#![warn(trivial_numeric_casts)]
-// option_unwrap_used is specific to clippy. However, we don't want to
-// add clippy to the build requirements, so we build without it and
-// ignore any warnings about rustc not recognising clippy's lints.
-#![allow(unknown_lints)]
-// TODO: enable this warning and cleanup.
-#![allow(option_unwrap_used)]
-
 //! jcompiler is a compiler for the J programming language.
 
 extern crate ansi_term;
 extern crate getopts;
 extern crate itertools;
+extern crate jcompilerlib;
 extern crate llvm_sys;
+extern crate matches;
 extern crate quickcheck;
 extern crate rand;
-extern crate tempfile;
 extern crate regex;
-extern crate matches;
-extern crate pest;
-#[macro_use]
-extern crate pest_derive;
+extern crate tempfile;
 
-use diagnostics::{Info, Level};
 use getopts::{Matches, Options};
+use jcompilerlib::{llvm, parser, shell};
 use std::env;
-use std::fs::File;
-use std::io::prelude::Read;
+use std::fs;
 use std::path::Path;
 use tempfile::NamedTempFile;
-use std::fs;
-
-mod bfir;
-mod diagnostics;
-mod bfllvm;
-mod shell;
-mod parser;
-mod llvm;
-
-#[cfg(test)]
-mod bfllvm_tests;
-
-/// Read the contents of the file at path, and return a string of its
-/// contents. Return a diagnostic if we can't open or read the file.
-fn slurp(path: &str) -> Result<String, Info> {
-    let mut file = match File::open(path) {
-        Ok(file) => file,
-        Err(message) => {
-            return Err(Info {
-                level: Level::Error,
-                filename: path.to_owned(),
-                message: format!("{}", message),
-                position: None,
-                source: None,
-            });
-        }
-    };
-
-    let mut contents = String::new();
-
-    match file.read_to_string(&mut contents) {
-        Ok(_) => Ok(contents),
-        Err(message) => Err(Info {
-            level: Level::Error,
-            filename: path.to_owned(),
-            message: format!("{}", message),
-            position: None,
-            source: None,
-        }),
-    }
-}
 
 /// Convert "foo.ijs" to "foo".
 fn executable_name(bf_path: &str) -> String {
@@ -113,8 +61,7 @@ fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
 fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
     let path = &matches.free[0];
 
-    let jsrc = fs::read_to_string(path)
-        .expect("cannot open source of provided J program");
+    let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
     let ast = match parser::parse(&jsrc[..]) {
         Ok(instrs) => instrs,
@@ -133,10 +80,10 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
     println!("Unoptimized:\n{}", llvm_ir);
 
-//    llvm::optimise_ir(&mut llvm_module, 3);
-//    let llvm_ir_cstr = llvm_module.to_cstring();
-//    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-//    println!("Optimized:\n{}", llvm_ir);
+    //    llvm::optimise_ir(&mut llvm_module, 3);
+    //    let llvm_ir_cstr = llvm_module.to_cstring();
+    //    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
+    //    println!("Optimized:\n{}", llvm_ir);
 
     // Compile the LLVM IR to a temporary object file.
     let object_file = try!(convert_io_error(NamedTempFile::new()));
@@ -146,94 +93,17 @@ fn compile_jlang_file(matches: &Matches) -> Result<(), String> {
 
     let output_name = executable_name(path);
     println!("Outputting executable to {}", output_name);
-    link_object_file(
-        &obj_file_path,
-        &output_name,
-        target_triple
-    ).unwrap();
+    link_object_file(&obj_file_path, &output_name, target_triple).unwrap();
 
-    // TODO: Enable stripping: strip_executable(&output_name).unwrap();
-
-    Ok(())
-}
-
-// TODO: return a Vec<Info> that may contain warnings or errors,
-// instead of printing in lots of different place shere.
-fn compile_bf_file(matches: &Matches) -> Result<(), String> {
-    let path = &matches.free[0];
-
-    let src = match slurp(path) {
-        Ok(src) => src,
-        Err(info) => {
-            return Err(format!("{}", info));
-        }
-    };
-
-    let instrs = match bfir::parse(&src) {
-        Ok(instrs) => instrs,
-        Err(parse_error) => {
-            let info = Info {
-                level: Level::Error,
-                filename: path.to_owned(),
-                message: parse_error.message,
-                position: Some(parse_error.position),
-                source: Some(src),
-            };
-            return Err(format!("{}", info));
-        }
-    };
-
-    if matches.opt_present("dump-ir") {
-        for instr in &instrs {
-            println!("{}", instr);
-        }
-        return Ok(());
-    }
-
-    let state = {
-        let mut init_state = bfir::ExecutionState::initial();
-        // TODO: this will crash on the empty program.
-        init_state.start_instr = Some(&instrs[0]);
-        init_state
-    };
-
-    let target_triple = matches.opt_str("target");
-    let mut llvm_module = bfllvm::compile_to_module(path, target_triple.clone(), &instrs, &state);
-
-    if matches.opt_present("dump-llvm") {
-        let llvm_ir_cstr = llvm_module.to_cstring();
-        let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-        println!("{}", llvm_ir);
-        return Ok(());
-    }
-
-    let llvm_opt_raw = matches
-        .opt_str("llvm-opt")
-        .unwrap_or_else(|| "3".to_owned());
-    let mut llvm_opt = llvm_opt_raw.parse::<i64>().unwrap_or(3);
-    if llvm_opt < 0 || llvm_opt > 3 {
-        // TODO: warn on unrecognised input.
-        llvm_opt = 3;
-    }
-
-    bfllvm::optimise_ir(&mut llvm_module, llvm_opt);
-
-    // Compile the LLVM IR to a temporary object file.
-    let object_file = try!(convert_io_error(NamedTempFile::new()));
-    let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
-    try!(bfllvm::write_object_file(&mut llvm_module, &obj_file_path));
-
-    let output_name = executable_name(path);
-    try!(link_object_file(
-        &obj_file_path,
-        &output_name,
-        target_triple
-    ));
-
-    let strip_opt = matches.opt_str("strip").unwrap_or_else(|| "yes".to_owned());
-    if strip_opt == "yes" {
-        try!(strip_executable(&output_name))
-    }
+    // TODO: Enable executable stripping.
+    //    fn strip_executable(executable_path: &str) -> Result<(), String> {
+    //        let strip_args = ["-s", &executable_path[..]];
+    //        shell::run_shell_command("strip", &strip_args[..])
+    //    }
+    //    let strip_opt = matches.opt_str("strip").unwrap_or_else(|| "yes".to_owned());
+    //    if strip_opt == "yes" {
+    //        try!(strip_executable(&output_name))
+    //    }
 
     Ok(())
 }
@@ -257,11 +127,6 @@ fn link_object_file(
     };
 
     shell::run_shell_command("clang-7", &clang_args[..])
-}
-
-fn strip_executable(executable_path: &str) -> Result<(), String> {
-    let strip_args = ["-s", &executable_path[..]];
-    shell::run_shell_command("strip", &strip_args[..])
 }
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -292,7 +157,7 @@ fn main() {
         "yes|no",
     );
 
-    let default_triple_cstring = bfllvm::get_default_target_triple();
+    let default_triple_cstring = llvm::get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
 
     opts.optopt(
@@ -327,14 +192,6 @@ fn main() {
 
     if matches.opt_present("j") {
         match compile_jlang_file(&matches) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(2);
-            }
-        };
-    } else {
-        match compile_bf_file(&matches) {
             Ok(_) => {}
             Err(e) => {
                 eprintln!("{}", e);

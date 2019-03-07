@@ -1,24 +1,15 @@
-//! The LLVM module handles converting a BF AST to LLVM IR.
-
 use itertools::Itertools;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
-use llvm_sys::{LLVMBuilder, LLVMIntPredicate, LLVMModule};
+use llvm_sys::{LLVMBuilder, LLVMModule};
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_uint, c_ulonglong};
 use std::ptr::null_mut;
 use std::str;
-
-use std::num::Wrapping;
-
-use bfir::AstNode::*;
-use bfir::{AstNode, Cell};
-
-use bfir::ExecutionState;
 
 use parser;
 
@@ -28,8 +19,8 @@ const LLVM_TRUE: LLVMBool = 1;
 pub fn compile_to_module(
     module_name: &str,
     target_triple: Option<String>,
-    ast: &[parser::AstNode]) -> Module {
-
+    ast: &[parser::AstNode],
+) -> Module {
     let mut module = create_module(module_name, target_triple);
     let main_fn = add_main_fn(&mut module);
 
@@ -47,13 +38,14 @@ pub fn compile_to_module(
 
         for astnode in ast {
             match astnode {
-               parser::AstNode::Print(expr) => {
-                   let mut outputs = compile_expr(expr, &mut module, bb);
-                   let printfmt_str = compile_global_printfmt_str(outputs.len(), &mut module, &builder);
-                   outputs.insert(0, printfmt_str);
-                   add_function_call(&mut module, bb, "printf", &mut outputs,"");
-               },
-                _ => panic!("Not ready to copmile top-level AST node: {:?}", astnode)
+                parser::AstNode::Print(expr) => {
+                    let mut outputs = compile_expr(expr, &mut module, bb);
+                    let printfmt_str =
+                        compile_global_printfmt_str(outputs.len(), &mut module, &builder);
+                    outputs.insert(0, printfmt_str);
+                    add_function_call(&mut module, bb, "printf", &mut outputs, "");
+                }
+                _ => panic!("Not ready to copmile top-level AST node: {:?}", astnode),
             }
         }
 
@@ -64,62 +56,53 @@ pub fn compile_to_module(
 }
 
 fn compile_expr(
-    expr : &parser::AstNode,
+    expr: &parser::AstNode,
     module: &mut Module,
-    bb: LLVMBasicBlockRef) -> Vec<LLVMValueRef> {
-
+    bb: LLVMBasicBlockRef,
+) -> Vec<LLVMValueRef> {
     match *expr {
-        parser::AstNode::Number(n) =>
-            vec![compile_number_expr(n, module, bb)],
-//        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
-//            compile_binadd_expr(&lhs, &rhs, module, bb),
-//        parser::AstNode::BinMul{ref lhs, ref rhs} =>
-//            compile_binmul_expr(&lhs, &rhs, module, bb),
-        parser::AstNode::Terms(ref terms) => {
-            terms.iter().flat_map(|t| compile_expr(t, module, bb)).collect_vec()
-        },
+        parser::AstNode::Number(n) => vec![compile_number_expr(n, module, bb)],
+        //        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
+        //            compile_binadd_expr(&lhs, &rhs, module, bb),
+        //        parser::AstNode::BinMul{ref lhs, ref rhs} =>
+        //            compile_binmul_expr(&lhs, &rhs, module, bb),
+        parser::AstNode::Terms(ref terms) => terms
+            .iter()
+            .flat_map(|t| compile_expr(t, module, bb))
+            .collect_vec(),
         parser::AstNode::Increment(ref terms) => {
-            let exprs = terms.iter().flat_map(
-                |e|compile_expr(e, module, bb)).collect_vec();
-            exprs.into_iter().map(
-                    |t| compile_increment(t, module, bb)
-            ).collect_vec()
-        },
-        _ => panic!("Not ready to compile expr: {:?}", expr)
+            let exprs = terms
+                .iter()
+                .flat_map(|e| compile_expr(e, module, bb))
+                .collect_vec();
+            exprs
+                .into_iter()
+                .map(|t| compile_increment(t, module, bb))
+                .collect_vec()
+        }
+        _ => panic!("Not ready to compile expr: {:?}", expr),
     }
 }
 
-fn compile_number_expr(
-    n : u32,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
+fn compile_number_expr(n: u32, module: &mut Module, bb: LLVMBasicBlockRef) -> LLVMValueRef {
     let builder = Builder::new();
     builder.position_at_end(bb);
 
     unsafe {
-        let n_alloc = LLVMBuildAlloca(
-            builder.builder,
-            int32_type(),
-            module.new_string_ptr("n"),
-        );
+        let n_alloc = LLVMBuildAlloca(builder.builder, int32_type(), module.new_string_ptr("n"));
 
-        let n_init= int32(n as c_ulonglong);
+        let n_init = int32(n as c_ulonglong);
         LLVMBuildStore(builder.builder, n_init, n_alloc);
 
-        LLVMBuildLoad(
-            builder.builder,
-            n_alloc,
-            module.new_string_ptr("n_load"),
-        )
+        LLVMBuildLoad(builder.builder, n_alloc, module.new_string_ptr("n_load"))
     }
 }
 
 fn compile_increment(
     term: LLVMValueRef,
     module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
+    bb: LLVMBasicBlockRef,
+) -> LLVMValueRef {
     let builder = Builder::new();
     builder.position_at_end(bb);
 
@@ -136,17 +119,17 @@ fn compile_increment(
 fn compile_global_printfmt_str(
     num_args: usize,
     module: &mut Module,
-    builder: &Builder) -> LLVMValueRef {
-
+    builder: &Builder,
+) -> LLVMValueRef {
     let str = (0..num_args).map(|_| "%d ").collect::<String>();
-    let str = format!("{}\n", &str[..str.len()-1]);
+    let str = format!("{}\n", &str[..str.len() - 1]);
 
     unsafe {
         // TODO: Memoize these to prevent creation of identical format strings.
         LLVMBuildGlobalString(
             builder.builder,
             module.new_string_ptr(&str[..]),
-            module.new_string_ptr(&format!("printfmt_{}_int_args", num_args)[..])
+            module.new_string_ptr(&format!("printfmt_{}_int_args", num_args)[..]),
         )
     }
 }
@@ -359,10 +342,11 @@ fn add_c_declarations(module: &mut Module) {
     add_function(
         module,
         "printf",
-        &mut [int8_ptr_type(), /* varargs; simply give extra args at call time. */],
+        &mut [
+            int8_ptr_type(), /* varargs; simply give extra args at call time. */
+        ],
         int32_type(),
     );
-
 }
 
 unsafe fn add_function_call(
@@ -384,79 +368,6 @@ unsafe fn add_function_call(
         args.len() as c_uint,
         module.new_string_ptr(name),
     )
-}
-
-/// Given a vector of cells [1, 1, 0, 0, 0, ...] return a vector
-/// [(1, 2), (0, 3), ...].
-fn run_length_encode<T>(cells: &[T]) -> Vec<(T, usize)>
-where
-    T: Eq + Copy,
-{
-    cells
-        .iter()
-        .map(|val| (*val, 1))
-        .coalesce(|(prev_val, prev_count), (val, count)| {
-            if prev_val == val {
-                Ok((val, prev_count + count))
-            } else {
-                Err(((prev_val, prev_count), (val, count)))
-            }
-        })
-        .collect()
-}
-
-fn add_cells_init(
-    init_values: &[Wrapping<i8>],
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-) -> LLVMValueRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        // char* cells = malloc(num_cells);
-        let num_cells = int32(init_values.len() as c_ulonglong);
-        let mut malloc_args = vec![num_cells];
-        let cells_ptr = add_function_call(module, bb, "malloc", &mut malloc_args, "cells");
-
-        let one = int32(1);
-        let false_ = LLVMConstInt(int1_type(), 1, LLVM_FALSE);
-
-        let mut offset = 0;
-        for (cell_val, cell_count) in run_length_encode(init_values) {
-            let llvm_cell_val = int8(cell_val.0 as c_ulonglong);
-            let llvm_cell_count = int32(cell_count as c_ulonglong);
-
-            // TODO: factor out a build_gep function.
-            let mut offset_vec = vec![int32(offset as c_ulonglong)];
-            let offset_cell_ptr = LLVMBuildGEP(
-                builder.builder,
-                cells_ptr,
-                offset_vec.as_mut_ptr(),
-                offset_vec.len() as u32,
-                module.new_string_ptr("offset_cell_ptr"),
-            );
-
-            let mut memset_args =
-                vec![offset_cell_ptr, llvm_cell_val, llvm_cell_count, one, false_];
-            add_function_call(module, bb, "llvm.memset.p0i8.i32", &mut memset_args, "");
-
-            offset += cell_count;
-        }
-
-        cells_ptr
-    }
-}
-
-fn add_cells_cleanup(module: &mut Module, bb: LLVMBasicBlockRef, cells: LLVMValueRef) {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        // free(cells);
-        let mut free_args = vec![cells];
-        add_function_call(module, bb, "free", &mut free_args, "");
-    }
 }
 
 fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
@@ -516,29 +427,6 @@ fn add_initial_bbs(
     }
 }
 
-// TODO: name our pointers cell_base and
-// cell_offset_ptr.
-/// Initialise the value that contains the current cell index.
-unsafe fn add_cell_index_init(
-    init_value: isize,
-    bb: LLVMBasicBlockRef,
-    module: &mut Module,
-) -> LLVMValueRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    // int cell_index = 0;
-    let cell_index_ptr = LLVMBuildAlloca(
-        builder.builder,
-        int32_type(),
-        module.new_string_ptr("cell_index_ptr"),
-    );
-    let cell_ptr_init = int32(init_value as c_ulonglong);
-    LLVMBuildStore(builder.builder, cell_ptr_init, cell_index_ptr);
-
-    cell_index_ptr
-}
-
 /// Add prologue to main function.
 unsafe fn add_main_cleanup(bb: LLVMBasicBlockRef) {
     let builder = Builder::new();
@@ -547,259 +435,6 @@ unsafe fn add_main_cleanup(bb: LLVMBasicBlockRef) {
     let zero = int32(0);
     LLVMBuildRet(builder.builder, zero);
 }
-
-/// Add LLVM IR instructions for accessing the current cell, and
-/// return a reference to the current cell, and to a current cell pointer.
-unsafe fn add_current_cell_access(
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-    cells: LLVMValueRef,
-    cell_index_ptr: LLVMValueRef,
-) -> (LLVMValueRef, LLVMValueRef) {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let cell_index = LLVMBuildLoad(
-        builder.builder,
-        cell_index_ptr,
-        module.new_string_ptr("cell_index"),
-    );
-
-    let mut indices = vec![cell_index];
-    let current_cell_ptr = LLVMBuildGEP(
-        builder.builder,
-        cells,
-        indices.as_mut_ptr(),
-        indices.len() as u32,
-        module.new_string_ptr("current_cell_ptr"),
-    );
-    let current_cell = LLVMBuildLoad(
-        builder.builder,
-        current_cell_ptr,
-        module.new_string_ptr("cell_value"),
-    );
-
-    (current_cell, current_cell_ptr)
-}
-
-//unsafe fn compile_increment(
-//    amount: Cell,
-//    offset: isize,
-//    module: &mut Module,
-//    bb: LLVMBasicBlockRef,
-//    ctx: CompileContext,
-//) -> LLVMBasicBlockRef {
-//    let builder = Builder::new();
-//    builder.position_at_end(bb);
-//
-//    let cell_index = LLVMBuildLoad(
-//        builder.builder,
-//        ctx.cell_index_ptr,
-//        module.new_string_ptr("cell_index"),
-//    );
-//
-//    let offset_cell_index = LLVMBuildAdd(
-//        builder.builder,
-//        cell_index,
-//        int32(offset as c_ulonglong),
-//        module.new_string_ptr("offset_cell_index"),
-//    );
-//
-//    let mut indices = vec![offset_cell_index];
-//    let current_cell_ptr = LLVMBuildGEP(
-//        builder.builder,
-//        ctx.cells,
-//        indices.as_mut_ptr(),
-//        indices.len() as c_uint,
-//        module.new_string_ptr("current_cell_ptr"),
-//    );
-//
-//    let cell_val = LLVMBuildLoad(
-//        builder.builder,
-//        current_cell_ptr,
-//        module.new_string_ptr("cell_value"),
-//    );
-//
-//    let increment_amount = int8(amount.0 as c_ulonglong);
-//    let new_cell_val = LLVMBuildAdd(
-//        builder.builder,
-//        cell_val,
-//        increment_amount,
-//        module.new_string_ptr("new_cell_value"),
-//    );
-//
-//    LLVMBuildStore(builder.builder, new_cell_val, current_cell_ptr);
-//    bb
-//}
-
-unsafe fn compile_ptr_increment(
-    amount: isize,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-    ctx: CompileContext,
-) -> LLVMBasicBlockRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let cell_index = LLVMBuildLoad(
-        builder.builder,
-        ctx.cell_index_ptr,
-        module.new_string_ptr("cell_index"),
-    );
-
-    let new_cell_index = LLVMBuildAdd(
-        builder.builder,
-        cell_index,
-        int32(amount as c_ulonglong),
-        module.new_string_ptr("new_cell_index"),
-    );
-
-    LLVMBuildStore(builder.builder, new_cell_index, ctx.cell_index_ptr);
-    bb
-}
-
-unsafe fn compile_read(
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-    ctx: CompileContext,
-) -> LLVMBasicBlockRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let cell_index = LLVMBuildLoad(
-        builder.builder,
-        ctx.cell_index_ptr,
-        module.new_string_ptr("cell_index"),
-    );
-
-    let mut indices = vec![cell_index];
-    let current_cell_ptr = LLVMBuildGEP(
-        builder.builder,
-        ctx.cells,
-        indices.as_mut_ptr(),
-        indices.len() as u32,
-        module.new_string_ptr("current_cell_ptr"),
-    );
-
-    let mut getchar_args = vec![];
-    let input_char = add_function_call(module, bb, "getchar", &mut getchar_args, "input_char");
-    let input_byte = LLVMBuildTrunc(
-        builder.builder,
-        input_char,
-        int8_type(),
-        module.new_string_ptr("input_byte"),
-    );
-
-    LLVMBuildStore(builder.builder, input_byte, current_cell_ptr);
-    bb
-}
-
-unsafe fn compile_write(
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-    ctx: CompileContext,
-) -> LLVMBasicBlockRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    let cell_val = add_current_cell_access(module, bb, ctx.cells, ctx.cell_index_ptr).0;
-    let cell_val_as_char = LLVMBuildSExt(
-        builder.builder,
-        cell_val,
-        int32_type(),
-        module.new_string_ptr("cell_val_as_char"),
-    );
-
-    let mut putchar_args = vec![cell_val_as_char];
-    add_function_call(module, bb, "putchar", &mut putchar_args, "");
-    bb
-}
-
-fn ptr_equal<T>(a: *const T, b: *const T) -> bool {
-    a == b
-}
-
-//unsafe fn compile_loop(
-//    loop_body: &[AstNode],
-//    start_instr: &AstNode,
-//    module: &mut Module,
-//    main_fn: LLVMValueRef,
-//    bb: LLVMBasicBlockRef,
-//    ctx: CompileContext,
-//) -> LLVMBasicBlockRef {
-//    let builder = Builder::new();
-//
-//    // First, we branch into the loop header from the previous basic
-//    // block.
-//    let loop_header_bb = LLVMAppendBasicBlock(ctx.main_fn, module.new_string_ptr("loop_header"));
-//    builder.position_at_end(bb);
-//    LLVMBuildBr(builder.builder, loop_header_bb);
-//
-//    let mut loop_body_bb = LLVMAppendBasicBlock(ctx.main_fn, module.new_string_ptr("loop_body"));
-//    let loop_after = LLVMAppendBasicBlock(ctx.main_fn, module.new_string_ptr("loop_after"));
-//
-//    // loop_header:
-//    //   %cell_value = ...
-//    //   %cell_value_is_zero = icmp ...
-//    //   br %cell_value_is_zero, %loop_after, %loop_body
-//    builder.position_at_end(loop_header_bb);
-//
-//    let cell_val =
-//        add_current_cell_access(module, &mut *loop_header_bb, ctx.cells, ctx.cell_index_ptr).0;
-//
-//    let zero = int8(0);
-//    let cell_val_is_zero = LLVMBuildICmp(
-//        builder.builder,
-//        LLVMIntPredicate::LLVMIntEQ,
-//        zero,
-//        cell_val,
-//        module.new_string_ptr("cell_value_is_zero"),
-//    );
-//    LLVMBuildCondBr(builder.builder, cell_val_is_zero, loop_after, loop_body_bb);
-//
-//    // Recursively compile instructions in the loop body.
-//    for instr in loop_body {
-//        if ptr_equal(instr, start_instr) {
-//            // This is the point we want to start execution from.
-//            loop_body_bb = set_entry_point_after(module, main_fn, loop_body_bb);
-//        }
-//
-//        loop_body_bb = compile_instr(
-//            instr,
-//            start_instr,
-//            module,
-//            main_fn,
-//            loop_body_bb,
-//            ctx.clone(),
-//        );
-//    }
-//
-//    // When the loop is finished, jump back to the beginning of the
-//    // loop.
-//    builder.position_at_end(loop_body_bb);
-//    LLVMBuildBr(builder.builder, loop_header_bb);
-//
-//    &mut *loop_after
-//}
-
-/// Append LLVM IR instructions to bb acording to the BF instruction
-/// passed in.
-//unsafe fn compile_instr(
-//    instr: &AstNode,
-//    start_instr: &AstNode,
-//    module: &mut Module,
-//    main_fn: LLVMValueRef,
-//    bb: LLVMBasicBlockRef,
-//    ctx: CompileContext,
-//) -> LLVMBasicBlockRef {
-//    match *instr {
-//        Increment { amount, offset, .. } => compile_increment(amount, offset, module, bb, ctx),
-//        PointerIncrement { amount, .. } => compile_ptr_increment(amount, module, bb, ctx),
-//        Read { .. } => compile_read(module, bb, ctx),
-//        Write { .. } => compile_write(module, bb, ctx),
-//        Loop { ref body, .. } => compile_loop(body, start_instr, module, main_fn, bb, ctx),
-//    }
-//}
 
 fn compile_static_outputs(module: &mut Module, bb: LLVMBasicBlockRef, outputs: &[i8]) {
     unsafe {
@@ -866,7 +501,6 @@ unsafe fn set_entry_point_after(
 
     after_init_bb
 }
-
 
 pub fn optimise_ir(module: &mut Module, llvm_opt: i64) {
     // TODO: add a verifier pass too.
