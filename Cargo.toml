@@ -1,12 +1,16 @@
 [package]
 name = "jcompiler"
-version = "1.7.0"
+version = "1.0.0"
 authors = ["Matt Quinn <matt@mattjquinn.com>"]
 homepage = "https://github.com/mattjquinn/jcompiler"
 repository = "https://github.com/mattjquinn/jcompiler"
 description = "a compiler for the J programming language"
 readme = "README.md"
 license = "GPL-2.0"
+
+[lib]
+name = "jcompilerlib"
+path = "src/lib/mod.rs"
 
 [dependencies]
 llvm-sys = "70"

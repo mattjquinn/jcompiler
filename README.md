@@ -28,3 +28,11 @@ $ target/release/jcompiler j_examples/test.ijs --target=x86_64-pc-linux-gnu
 ```
 $ cargo test
 ```
+
+### TODO
+* Replace `integration_tests.sh` with integration tests alongside `src` per Rust book.
+* Rewrite `.travis.yml` to build, test, and run `integration_tests.sh`.
+* Improve parser/compiler error messages (especially using `ansi_term` crate).
+* Thoroughly document library code using inline rustdoc comments.
+* Add `cargo clippy` to Travis build (see GitHub README.md for clippy).
+* Builds should fail if `rustfmt` finds unformatted source file (see README.md for `rustfmt`).
