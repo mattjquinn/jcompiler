@@ -30,7 +30,7 @@ $ cargo test
 ```
 
 ### TODO
-* Replace `integration_tests.sh` with integration tests alongside `src` per Rust book.
+* Replace `integration_tests.sh` with `src/tests/compiler_tests.rs`.
 * Rewrite `.travis.yml` to build, test, and run `integration_tests.sh`.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments.
