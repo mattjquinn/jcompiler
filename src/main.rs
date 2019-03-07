@@ -19,8 +19,8 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 
 /// Convert "foo.ijs" to "foo".
-fn executable_name(bf_path: &str) -> String {
-    let bf_file_name = Path::new(bf_path).file_name().unwrap().to_str().unwrap();
+fn executable_name(ijs_path: &str) -> String {
+    let bf_file_name = Path::new(ijs_path).file_name().unwrap().to_str().unwrap();
 
     let mut name_parts: Vec<_> = bf_file_name.split('.').collect();
     let parts_len = name_parts.len();
@@ -29,21 +29,6 @@ fn executable_name(bf_path: &str) -> String {
     }
 
     name_parts.join(".")
-}
-
-#[test]
-fn executable_name_bf() {
-    assert_eq!(executable_name("foo.bf"), "foo");
-}
-
-#[test]
-fn executable_name_b() {
-    assert_eq!(executable_name("foo_bar.b"), "foo_bar");
-}
-
-#[test]
-fn executable_name_relative_path() {
-    assert_eq!(executable_name("bar/baz.bf"), "baz");
 }
 
 fn print_usage(bin_name: &str, opts: Options) {
@@ -199,4 +184,14 @@ fn main() {
             }
         };
     }
+}
+
+#[test]
+fn executable_name_test() {
+    assert_eq!(executable_name("test.ijs"), "test");
+}
+
+#[test]
+fn executable_name_relative_path_test() {
+    assert_eq!(executable_name("dir/test.ijs"), "test");
 }
