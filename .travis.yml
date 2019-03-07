@@ -40,7 +40,6 @@ script:
       travis-cargo bench &&
       travis-cargo doc
   - cargo build --release
-  - ./integration_tests.sh
 
 after_success:
   - travis-cargo coveralls
@@ -48,12 +47,12 @@ after_success:
 notifications:
   email: false
 
-matrix:
-  allow_failures:
-    # These have segfault (signal 11) in the past. I could't reproduce locally, but
-    # only passing on stable is sufficient.
-    - rust: beta
-    - rust: nightly
+#matrix:
+#  allow_failures:
+#    # These have segfault (signal 11) in the past. I could't reproduce locally, but
+#    # only passing on stable is sufficient.
+#    - rust: beta
+#    - rust: nightly
 
 env:
   global:
