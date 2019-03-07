@@ -36,3 +36,4 @@ $ cargo test
 * Thoroughly document library code using inline rustdoc comments.
 * Add `cargo clippy` to Travis build (see GitHub README.md for clippy).
 * Builds should fail if `rustfmt` finds unformatted source file (see README.md for `rustfmt`).
+* Add build, Coveralls, LOC icons to README.md.

@@ -1,5 +1,5 @@
 sudo: required
-dist: trusty
+dist: xenial
 
 language: rust
 rust:
@@ -14,10 +14,10 @@ before_script:
       export PATH=$HOME/.local/bin:$PATH
 
 install:
- # Install LLVM 3.8.
- - wget http://llvm.org/pre-releases/3.8.0/rc2/clang+llvm-3.8.0-rc2-x86_64-linux-gnu-ubuntu-14.04.tar.xz
- - tar xf clang+llvm-3.8.0-rc2-x86_64-linux-gnu-ubuntu-14.04.tar.xz
- - export PATH="$PWD/clang+llvm-3.8.0-rc2-x86_64-linux-gnu-ubuntu-14.04/bin:$PATH"
+ # Install LLVM 7.
+ - wget http://releases.llvm.org/7.0.1/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+ - tar xf clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+ - export PATH="$PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH"
  - cc --version
 
  # llvm-config gives compiler arguments for the compiler it was
@@ -25,7 +25,7 @@ install:
  # 'unrecognized command line option ‘-Wcovered-switch-default’'
  - which cc
  - sudo rm `which cc`
- - sudo ln -s $PWD/clang+llvm-3.8.0-rc2-x86_64-linux-gnu-ubuntu-14.04/bin/clang /usr/bin/cc
+ - sudo ln -s $PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang /usr/bin/cc
  - cc --version
  - llvm-config --version
 
