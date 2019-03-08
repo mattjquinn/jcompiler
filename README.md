@@ -42,4 +42,5 @@ $ cargo test
 * Move `integration_tests.sh` to `src/tests/compiler_tests.rs`.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
-* Add Coveralls, crates.io, docs icons to README.md.
+* Add crates.io, docs icons to README.md.
+* Add precompiled binaries for each tagged release in GitHub.
