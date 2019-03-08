@@ -1,17 +1,13 @@
 sudo: required
 dist: xenial
-
 language: rust
+cache: cargo
+
+env: # required for allow_failures
 rust:
   - stable
   - beta
   - nightly
-
-# Install travis-cargo.
-before_script:
-  - |
-      pip install 'travis-cargo<0.2' --user &&
-      export PATH=$HOME/.local/bin:$PATH
 
 install:
  # Install LLVM 7.
@@ -32,29 +28,49 @@ install:
  # travis-coveralls dependencies
  - sudo apt-get install -y --force-yes libcurl4-openssl-dev libdw-dev libdw1 libelf-dev
 
-# Build and test.
-script:
-  - |
-      travis-cargo build &&
-      travis-cargo test &&
-      travis-cargo bench &&
-      travis-cargo doc
-  - cargo build --release
+matrix:
+  fast_finish: true
+  allow_failures:
+    - env: NAME='cargo-travis'
+  include:
+    - rust: stable
+      before_script:
+        - rustup component add rustfmt
+        - rustup component add clippy
+      script:
+        - cargo fmt -- --check
+        - cargo clippy -- -D clippy
+    - env: NAME='cargo-travis'
+      sudo: required # travis-ci/travis-ci#9061
+      before_script:
+        - cargo install cargo-update || echo "cargo-update already installed"
+        - cargo install cargo-travis || echo "cargo-travis already installed"
+        - cargo install-update -a
+      script:
+        - |
+          cargo build    --verbose &&
+          cargo coverage --verbose &&
+          bash <(curl -s https://codecov.io/bash) -s target/kcov
+        - |
+          cargo doc --verbose &&
+          cargo doc-upload
+      addons: # required for kcov
+        apt:
+          packages:
+            - libcurl4-openssl-dev
+            - libelf-dev
+            - libdw-dev
+            - binutils-dev
+            - cmake
+
+script: |
+  cargo build --verbose --release &&
+  cargo test  --verbose &&
+  cargo bench --verbose &&
+  cargo doc   --verbose
 
 after_success:
   - travis-cargo coveralls
 
 notifications:
   email: false
-
-#matrix:
-#  allow_failures:
-#    # These have segfault (signal 11) in the past. I could't reproduce locally, but
-#    # only passing on stable is sufficient.
-#    - rust: beta
-#    - rust: nightly
-
-#env:
-#  global:
-#    # Required for travis-cargo to work on nightly.
-#    - TRAVIS_CARGO_NIGHTLY_FEATURE=nightly
