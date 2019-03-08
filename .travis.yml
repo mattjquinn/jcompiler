@@ -43,7 +43,7 @@ matrix:
         - cargo clippy -- -D clippy
         - |
           cargo build    --verbose &&
-          cargo coveralls --verbose &&
+          cargo coveralls --verbose
         - |
           cargo doc --verbose &&
           cargo doc-upload
