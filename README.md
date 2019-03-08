@@ -1,4 +1,7 @@
 # jcompiler
+
+[![Build Status](https://travis-ci.com/mattjquinn/jcompiler.svg?branch=master)](https://travis-ci.com/mattjquinn/jcompiler)
+
 ### A compiler for the J programming language.
 
 ## Usage
@@ -33,7 +36,7 @@ $ cargo test
 * Replace `integration_tests.sh` with `src/tests/compiler_tests.rs`.
 * Rewrite `.travis.yml` to build, test, and run `integration_tests.sh`.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
-* Thoroughly document library code using inline rustdoc comments.
+* Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
 * Add `cargo clippy` to Travis build (see GitHub README.md for clippy).
 * Builds should fail if `rustfmt` finds unformatted source file (see README.md for `rustfmt`).
 * Add build, Coveralls, LOC icons to README.md.
