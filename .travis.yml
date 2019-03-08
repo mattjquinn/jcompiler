@@ -22,11 +22,11 @@ install:
 matrix:
   fast_finish: true
   allow_failures:
-  - env: NAME='nightly-with-rustfmt-clippy-coveralls'
+  - env: NAME='nightly-publish'
   include:
   - rust: nightly
     sudo: required
-    env: NAME='nightly-with-rustfmt-clippy-coveralls'
+    env: NAME='nightly-publish'
     before_script:
     - rustup component add rustfmt
     - rustup component add clippy
@@ -42,12 +42,6 @@ matrix:
     - |
       cargo doc --verbose &&
       cargo doc-upload
-    deploy:
-      provider: cargo
-      on:
-        tags: true
-      token:
-        secure: MrgC/Xe+oi5IZifRh6bLkuR7+phCAJTineqT+P4W6lHnvvjNPpHG7O1cuXVmgxac1wMxLVGDMKqaujGQMgPXdzZpM+YPXUoZdLi+8sVsERYBsVSzIxDTdDkHMB2h42ABFTK4l8L6OgbmmPf1hzUqrMUzQ/d9olBwbmAiXzTBPSyzmwSvxdoOlxn0japYW38y41+ci3YePTU496d5N5zkUrh5L96iVmcKBV6pGgIKdw1Fd/+dHkOVNyt4lsK2VyU/0wtf8NlMIjEwaIcd9iaDrwTAOHYJncpbsV3DUA1qcEWcO0YB/iVnQSCo5aTYaH2HvCsje8L1X/fe24uzQu8rPowrXZ7Y8E+nzZYxIUYI2hvBsGEe3HUrcFUHbyzM1auvzu01rG1mE8u/Ytca+2liWRMtXdu5kHeqMw3BEThocGyTEFnEwDPfj4MJP6Sng2AupmsYcJOI5TVEGnLKcBBebCm3rgd+BKhHWCFxxJmsHsdxafVHxz7EW9w3Uu79mmSPgPXqzAI9Tp3ilLbMGZuCLM3UVMvmlEXdm/dqqZpI+N5hQa05fMLxZq/NDix0OLmEwqW9/uXkygOzeKASCXGBgH2vqe+WK91gEFuGX77awdndJw8QDh4hdqTQnmlNEGqUfFzYORGDs0yro5DrM/qRbdVRuSybjxYPhUUSB39dwZs=
     addons:
       apt:
         packages:
@@ -66,3 +60,10 @@ script: |
 notifications:
   email: false
 
+deploy:
+  provider: cargo
+  on: # Only deploy from the 'nightly-publish' build, and only on tagged commits.
+    tags: true
+    condition: $NAME='nightly-publish'
+  token:
+    secure: MrgC/Xe+oi5IZifRh6bLkuR7+phCAJTineqT+P4W6lHnvvjNPpHG7O1cuXVmgxac1wMxLVGDMKqaujGQMgPXdzZpM+YPXUoZdLi+8sVsERYBsVSzIxDTdDkHMB2h42ABFTK4l8L6OgbmmPf1hzUqrMUzQ/d9olBwbmAiXzTBPSyzmwSvxdoOlxn0japYW38y41+ci3YePTU496d5N5zkUrh5L96iVmcKBV6pGgIKdw1Fd/+dHkOVNyt4lsK2VyU/0wtf8NlMIjEwaIcd9iaDrwTAOHYJncpbsV3DUA1qcEWcO0YB/iVnQSCo5aTYaH2HvCsje8L1X/fe24uzQu8rPowrXZ7Y8E+nzZYxIUYI2hvBsGEe3HUrcFUHbyzM1auvzu01rG1mE8u/Ytca+2liWRMtXdu5kHeqMw3BEThocGyTEFnEwDPfj4MJP6Sng2AupmsYcJOI5TVEGnLKcBBebCm3rgd+BKhHWCFxxJmsHsdxafVHxz7EW9w3Uu79mmSPgPXqzAI9Tp3ilLbMGZuCLM3UVMvmlEXdm/dqqZpI+N5hQa05fMLxZq/NDix0OLmEwqW9/uXkygOzeKASCXGBgH2vqe+WK91gEFuGX77awdndJw8QDh4hdqTQnmlNEGqUfFzYORGDs0yro5DrM/qRbdVRuSybjxYPhUUSB39dwZs=
