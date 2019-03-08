@@ -1,5 +1,6 @@
 # jcompiler
 
+[![Crates.io](https://img.shields.io/crates/v/jcompiler.svg?color=green)](https://crates.io/crates/jcompiler)
 [![Build Status](https://travis-ci.com/mattjquinn/jcompiler.svg?branch=master)](https://travis-ci.com/mattjquinn/jcompiler)
 [![Coverage Status](https://coveralls.io/repos/github/mattjquinn/jcompiler/badge.svg?branch=master)](https://coveralls.io/github/mattjquinn/jcompiler)
 [![lines of code](https://tokei.rs/b1/github/mattjquinn/jcompiler)](https://github.com/Aaronepower/tokei)
@@ -42,5 +43,4 @@ $ cargo test
 * Move `integration_tests.sh` to `src/tests/compiler_tests.rs`.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
-* Add crates.io, docs icons to README.md.
 * Add precompiled binaries for each tagged release in GitHub.
