@@ -6,6 +6,10 @@
 
 ### A compiler for the J programming language.
 
+## Documentation
+
+The latest API reference for the master branch is [available here](https://mattjquinn.github.io/jcompiler/master/jcompiler/index.html).
+
 ## Usage
 
 You will need LLVM and Rust installed.
