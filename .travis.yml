@@ -2,59 +2,54 @@ sudo: required
 dist: xenial
 language: rust
 cache: cargo
-
-env: # required for allow_failures
+env:
 rust:
-  - stable
-  - beta
-  - nightly
+- stable
+- beta
+- nightly
 
 install:
- # Install LLVM 7.
- - wget http://releases.llvm.org/7.0.1/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
- - tar xf clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
- - export PATH="$PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH"
- - cc --version
- # llvm-config gives compiler arguments for the compiler it was
- # compiled with. On ubuntu cc is gcc, so override that to avoid:
- # 'unrecognized command line option ‘-Wcovered-switch-default’'
- - which cc
- - sudo rm `which cc`
- - sudo ln -s $PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang /usr/bin/cc
- - cc --version
- - llvm-config --version
+- wget http://releases.llvm.org/7.0.1/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+- tar xf clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+- export PATH="$PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH"
+- cc --version
+- which cc
+- sudo rm `which cc`
+- sudo ln -s $PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang /usr/bin/cc
+- cc --version
+- llvm-config --version
 
 matrix:
   fast_finish: true
   allow_failures:
-    - env: NAME='nightly-with-rustfmt-clippy-coveralls'
+  - env: NAME='nightly-with-rustfmt-clippy-coveralls'
   include:
-    - rust: nightly
-      sudo: required # travis-ci/travis-ci#9061
-      env: NAME='nightly-with-rustfmt-clippy-coveralls'
-      before_script:
-        - rustup component add rustfmt
-        - rustup component add clippy
-        - cargo install cargo-update || echo "cargo-update already installed"
-        - cargo install cargo-travis || echo "cargo-travis already installed"
-        - cargo install-update -a
-      script:
-        - cargo fmt -- --check
-        - cargo clippy -- -D clippy
-        - |
-          cargo build    --verbose &&
-          cargo coveralls --verbose
-        - |
-          cargo doc --verbose &&
-          cargo doc-upload
-      addons: # required for coveralls
-        apt:
-          packages:
-            - libcurl4-openssl-dev
-            - libelf-dev
-            - libdw-dev
-            - binutils-dev
-            - cmake
+  - rust: nightly
+    sudo: required
+    env: NAME='nightly-with-rustfmt-clippy-coveralls'
+    before_script:
+    - rustup component add rustfmt
+    - rustup component add clippy
+    - cargo install cargo-update || echo "cargo-update already installed"
+    - cargo install cargo-travis || echo "cargo-travis already installed"
+    - cargo install-update -a
+    script:
+    - cargo fmt -- --check
+    - cargo clippy -- -D clippy
+    - |
+      cargo build    --verbose &&
+      cargo coveralls --verbose
+    - |
+      cargo doc --verbose &&
+      cargo doc-upload
+    addons:
+      apt:
+        packages:
+        - libcurl4-openssl-dev
+        - libelf-dev
+        - libdw-dev
+        - binutils-dev
+        - cmake
 
 script: |
   cargo build --verbose --release &&
@@ -64,3 +59,10 @@ script: |
 
 notifications:
   email: false
+
+deploy:
+  provider: cargo
+  on:
+    tags: true
+  token:
+    secure: MrgC/Xe+oi5IZifRh6bLkuR7+phCAJTineqT+P4W6lHnvvjNPpHG7O1cuXVmgxac1wMxLVGDMKqaujGQMgPXdzZpM+YPXUoZdLi+8sVsERYBsVSzIxDTdDkHMB2h42ABFTK4l8L6OgbmmPf1hzUqrMUzQ/d9olBwbmAiXzTBPSyzmwSvxdoOlxn0japYW38y41+ci3YePTU496d5N5zkUrh5L96iVmcKBV6pGgIKdw1Fd/+dHkOVNyt4lsK2VyU/0wtf8NlMIjEwaIcd9iaDrwTAOHYJncpbsV3DUA1qcEWcO0YB/iVnQSCo5aTYaH2HvCsje8L1X/fe24uzQu8rPowrXZ7Y8E+nzZYxIUYI2hvBsGEe3HUrcFUHbyzM1auvzu01rG1mE8u/Ytca+2liWRMtXdu5kHeqMw3BEThocGyTEFnEwDPfj4MJP6Sng2AupmsYcJOI5TVEGnLKcBBebCm3rgd+BKhHWCFxxJmsHsdxafVHxz7EW9w3Uu79mmSPgPXqzAI9Tp3ilLbMGZuCLM3UVMvmlEXdm/dqqZpI+N5hQa05fMLxZq/NDix0OLmEwqW9/uXkygOzeKASCXGBgH2vqe+WK91gEFuGX77awdndJw8QDh4hdqTQnmlNEGqUfFzYORGDs0yro5DrM/qRbdVRuSybjxYPhUUSB39dwZs=
