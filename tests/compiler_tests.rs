@@ -7,13 +7,36 @@ use std::{fs, str};
 use tempfile::NamedTempFile;
 use std::process::Command;
 
-#[test]
-fn compiler_test_number_expr() {
+fn compile(test_jfile : &str) -> (String, String) {
     let compile_to_path = String::from(NamedTempFile::new().unwrap().path()
-                                          .to_str().expect("valid tempfile path"));
-    jcompilerlib::compile("jlang_programs/ctest_number_expr.ijs", None, Some(compile_to_path.clone()));
+        .to_str().expect("valid tempfile path"));
+    jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
+                          None, Some(compile_to_path.clone()));
     let output = Command::new(compile_to_path)
         .output()
         .expect("failed to execute compiled binary");
-    assert_eq!(str::from_utf8(&output.stdout).unwrap(), "8\n");
+    let stdout = String::from(str::from_utf8(&output.stdout).unwrap());
+    let stderr = String::from(str::from_utf8(&output.stderr).unwrap());
+    (stdout, stderr)
+}
+
+#[test]
+fn ctest_number_expr() {
+    let (stdout, stderr) = compile("ctest_number_expr.ijs");
+    assert_eq!(&stdout[..], "8\n");
+    assert_eq!(&stderr[..], "");
+}
+
+#[test]
+fn ctest_list_expr() {
+    let (stdout, stderr) = compile("ctest_list_expr.ijs");
+    assert_eq!(&stdout[..], "2 4 6 8 10\n");
+    assert_eq!(&stderr[..], "");
+}
+
+#[test]
+fn ctest_monadic_increment() {
+    let (stdout, stderr) = compile("ctest_monadic_increment.ijs");
+    assert_eq!(&stdout[..], "2 3 4 5 6\n");
+    assert_eq!(&stderr[..], "");
 }

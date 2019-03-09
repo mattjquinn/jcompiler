@@ -74,15 +74,13 @@ fn main() {
         std::process::exit(1);
     }
 
-    if matches.opt_present("j") {
-        match jcompilerlib::compile(&matches.free[0],
-                                    matches.opt_str("target"),
-                                    None) {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("{}", e);
-                std::process::exit(2);
-            }
-        };
-    }
+    match jcompilerlib::compile(&matches.free[0],
+                                matches.opt_str("target"),
+                                None) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(2);
+        }
+    };
 }
