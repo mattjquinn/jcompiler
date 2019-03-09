@@ -3,7 +3,7 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 stmt = _{ expr }
 
 expr = { monadicExpr | dyadicExpr | terms }
-monadicExpr = { monadicVerb ~ terms }
+monadicExpr = { monadicVerb ~ expr }
 dyadicExpr = { terms ~ (dyadicVerb ~ terms)+ }
 terms = { term+ }
 term = _{ number | "(" ~ expr ~ ")" }

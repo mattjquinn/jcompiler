@@ -40,3 +40,10 @@ fn ctest_monadic_increment() {
     assert_eq!(&stdout[..], "2 3 4 5 6\n");
     assert_eq!(&stderr[..], "");
 }
+
+#[test]
+fn ctest_double_monadic_increment() {
+    let (stdout, stderr) = compile("ctest_double_monadic_increment.ijs");
+    assert_eq!(&stdout[..], "107 2002 70 46 90 2\n");
+    assert_eq!(&stderr[..], "");
+}

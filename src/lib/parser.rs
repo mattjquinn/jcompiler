@@ -44,9 +44,7 @@ pub fn parse(source: &str) -> Result<Vec<AstNode>, Error<Rule>> {
 
         match pair.as_rule() {
             Rule::expr => {
-                ast.push(Print(Box::new(build_ast_from_expr(
-                    pair.into_inner().next().unwrap(),
-                ))));
+                ast.push(Print(Box::new(build_ast_from_expr(pair))));
             }
             _ => {}
         }
@@ -60,12 +58,17 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
     // 3 * 2 + 1  is evaluated as 3 * (2 + 1)
 
     match pair.as_rule() {
+        Rule::expr => build_ast_from_expr(pair.into_inner().next().unwrap()),
         Rule::monadicExpr => {
             let mut pair = pair.into_inner();
             let verb = pair.next().unwrap().as_str();
-            let terms = pair.next().unwrap();
+            let expr = pair.next().unwrap();
             match verb {
-                ">:" => Increment(build_ast_from_terms(terms)),
+                ">:" => Increment(match expr.as_rule() {
+                    Rule::terms => build_ast_from_terms(expr),
+                    Rule::expr => vec![build_ast_from_expr(expr)],
+                    unexpected => panic!("Unsupported monadic expr: {}", expr)
+                }),
                 _ => panic!("Unsupported monadic verb in expr: {}", verb),
             }
         }
