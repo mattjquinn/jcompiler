@@ -62,10 +62,6 @@ fn compile_expr(
 ) -> Vec<LLVMValueRef> {
     match *expr {
         parser::AstNode::Number(n) => vec![compile_number_expr(n, module, bb)],
-        //        parser::AstNode::BinAdd{ref lhs, ref rhs} =>
-        //            compile_binadd_expr(&lhs, &rhs, module, bb),
-        //        parser::AstNode::BinMul{ref lhs, ref rhs} =>
-        //            compile_binmul_expr(&lhs, &rhs, module, bb),
         parser::AstNode::Terms(ref terms) => terms
             .iter()
             .flat_map(|t| compile_expr(t, module, bb))
@@ -89,6 +85,14 @@ fn compile_expr(
                 .into_iter()
                 .map(|t| compile_square(t, module, bb))
                 .collect_vec()
+        },
+        parser::AstNode::Plus{ref lhs, ref rhs} => {
+            let lhsvals = compile_expr(lhs, module, bb);
+            let rhsvals = compile_expr(rhs, module, bb);
+            assert_eq!(lhsvals.len(), rhsvals.len());
+            lhsvals.iter().zip(rhsvals.iter())
+                .map(|(l, r)| compile_add_llvmvalues(*l, *r, module, bb))
+                .collect()
         }
         _ => panic!("Not ready to compile expr: {:?}", expr),
     }
@@ -162,28 +166,25 @@ fn compile_global_printfmt_str(
     }
 }
 
-//fn compile_binadd_expr(
-//    a : &parser::AstNode,
-//    b : &parser::AstNode,
-//    module: &mut Module,
-//    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-//
-//    let builder = Builder::new();
-//    builder.position_at_end(bb);
-//
-//    let aexp = compile_expr(a, module, bb);
-//    let bexp = compile_expr(b, module, bb);
-//
-//    unsafe {
-//        LLVMBuildAdd(
-//            builder.builder,
-//            aexp,
-//            bexp,
-//            module.new_string_ptr("sum"),
-//        )
-//    }
-//}
-//
+fn compile_add_llvmvalues(
+    a : LLVMValueRef,
+    b : LLVMValueRef,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        LLVMBuildAdd(
+            builder.builder,
+            a,
+            b,
+            module.new_string_ptr("sum"),
+        )
+    }
+}
+
 //fn compile_binmul_expr(
 //    a : &parser::AstNode,
 //    b : &parser::AstNode,

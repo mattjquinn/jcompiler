@@ -69,3 +69,17 @@ fn ctest_increment_square() {
     assert_eq!(&stdout[..], "2 5 10 17 26\n");
     assert_eq!(&stderr[..], "");
 }
+
+#[test]
+fn ctest_additions_single_numbers() {
+    let (stdout, stderr) = compile("ctest_additions_single_numbers.ijs");
+    assert_eq!(&stdout[..], "3\n6\n10\n5\n0\n");
+    assert_eq!(&stderr[..], "");
+}
+
+#[test]
+fn ctest_additions_lists() {
+    let (stdout, stderr) = compile("ctest_additions_lists.ijs");
+    assert_eq!(&stdout[..], "3 3\n6 6 6\n12 15 14\n5\n0 0\n");
+    assert_eq!(&stderr[..], "");
+}
