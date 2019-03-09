@@ -40,7 +40,7 @@ $ cargo test
 ```
 
 ### TODO
-* Move `integration_tests.sh` to `src/tests/compiler_tests.rs`.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
 * Add precompiled binaries for each tagged release in GitHub.
+* Add initial entry to CHANGELOG.md for 0.1.0.

@@ -1,3 +1,5 @@
+/// Integration tests for just the parser.
+
 extern crate jcompilerlib;
 
 use jcompilerlib::parser;
