@@ -53,7 +53,7 @@ matrix:
 
 script: |
   cargo build --verbose --release &&
-  cargo test  --verbose &&
+  cargo test --verbose -- --test-threads 1 &&
   cargo bench --verbose &&
   cargo doc   --verbose
 

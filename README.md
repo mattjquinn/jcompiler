@@ -44,3 +44,4 @@ $ cargo test
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
 * Add precompiled binaries for each tagged release in GitHub.
 * Add initial entry to CHANGELOG.md for 0.1.0.
+* Compartmentalize LLVM state so as to allow concurrent tests and concurrent compilations in general.

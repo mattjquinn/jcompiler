@@ -15,8 +15,8 @@ fn compile(test_jfile : &str) -> (String, String) {
     let output = Command::new(compile_to_path)
         .output()
         .expect("failed to execute compiled binary");
-    let stdout = String::from(str::from_utf8(&output.stdout).unwrap());
-    let stderr = String::from(str::from_utf8(&output.stderr).unwrap());
+    let stdout = str::from_utf8(&output.stdout).unwrap().to_owned();
+    let stderr = str::from_utf8(&output.stderr).unwrap().to_owned();
     (stdout, stderr)
 }
 
