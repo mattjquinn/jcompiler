@@ -101,6 +101,6 @@ fn ctest_products_lists() {
 #[test]
 fn ctest_mixed_adds_mults() {
     let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
-    assert_eq!(&stdout[..], "170\n45\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n");
+    assert_eq!(&stdout[..], "170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n");
     assert_eq!(&stderr[..], "");
 }
