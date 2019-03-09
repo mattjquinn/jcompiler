@@ -79,6 +79,16 @@ fn compile_expr(
                 .into_iter()
                 .map(|t| compile_increment(t, module, bb))
                 .collect_vec()
+        },
+        parser::AstNode::Square(ref terms) => {
+            let exprs = terms
+                .iter()
+                .flat_map(|e| compile_expr(e, module, bb))
+                .collect_vec();
+            exprs
+                .into_iter()
+                .map(|t| compile_square(t, module, bb))
+                .collect_vec()
         }
         _ => panic!("Not ready to compile expr: {:?}", expr),
     }
@@ -112,6 +122,24 @@ fn compile_increment(
             term,
             int32(1),
             module.new_string_ptr("increment"),
+        )
+    }
+}
+
+fn compile_square(
+    term: LLVMValueRef,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef,
+) -> LLVMValueRef {
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        LLVMBuildMul(
+            builder.builder,
+            term,
+            term,
+            module.new_string_ptr("square"),
         )
     }
 }
