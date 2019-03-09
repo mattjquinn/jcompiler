@@ -14,6 +14,7 @@ pub enum AstNode {
     Print(Box<AstNode>),
     Number(u32),
     Plus {lhs: Box<AstNode>, rhs: Box<AstNode>},
+    Times {lhs: Box<AstNode>, rhs: Box<AstNode>},
     Terms(Vec<AstNode>),
     Increment(Vec<AstNode>),
     Square(Vec<AstNode>),
@@ -72,6 +73,7 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let rhs = build_ast_from_expr(rhspair);
             match op.as_str() {
                 "+" => AstNode::Plus{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+                "*" => AstNode::Times{lhs: Box::new(lhs), rhs: Box::new(rhs)},
                  _ => panic!("Unexpected binary op: {}", op.as_str())
             }
         },

@@ -83,3 +83,24 @@ fn ctest_additions_lists() {
     assert_eq!(&stdout[..], "3 3\n6 6 6\n12 15 14\n5\n0 0\n");
     assert_eq!(&stderr[..], "");
 }
+
+#[test]
+fn ctest_products_single_numbers() {
+    let (stdout, stderr) = compile("ctest_products_single_numbers.ijs");
+    assert_eq!(&stdout[..], "2\n6\n24\n4\n0\n");
+    assert_eq!(&stderr[..], "");
+}
+
+#[test]
+fn ctest_products_lists() {
+    let (stdout, stderr) = compile("ctest_products_lists.ijs");
+    assert_eq!(&stdout[..], "2 2\n6 6 6\n18 0 70\n4\n0 0\n");
+    assert_eq!(&stderr[..], "");
+}
+
+#[test]
+fn ctest_mixed_adds_mults() {
+    let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
+    assert_eq!(&stdout[..], "170\n45\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n");
+    assert_eq!(&stderr[..], "");
+}
