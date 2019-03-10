@@ -26,9 +26,8 @@ pub fn compile_to_module(
 
     let main_fn = add_main_fn(&mut module);
 
-    let (_, mut bb) = add_initial_bbs(&mut module, main_fn);
-
     unsafe {
+        let mut bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
         // This is the point we want to start execution from.
         bb = set_entry_point_after(&mut module, main_fn, bb);
 
@@ -577,23 +576,6 @@ fn define_jprint_fn(module: &mut Module) {
 
         builder.position_at_end(ret_bb);
         LLVMBuildRet(builder.builder, int32(0));
-    }
-}
-
-/// Set up the initial basic blocks for appending instructions.
-fn add_initial_bbs(
-    module: &mut Module,
-    main_fn: LLVMValueRef,
-) -> (LLVMBasicBlockRef, LLVMBasicBlockRef) {
-    unsafe {
-        // This basic block is empty, but we will add a branch during
-        // compilation according to InstrPosition.
-        let init_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
-
-        // We'll begin by appending instructions here.
-        let beginning_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("beginning"));
-
-        (init_bb, beginning_bb)
     }
 }
 
