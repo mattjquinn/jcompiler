@@ -12,6 +12,7 @@ use std::ptr::null_mut;
 use std::str;
 
 use parser;
+use llvm_sys::debuginfo::LLVMDIBuilderCreateArrayType;
 
 const LLVM_FALSE: LLVMBool = 0;
 const LLVM_TRUE: LLVMBool = 1;
@@ -116,10 +117,33 @@ fn compile_expr(
 ) -> Vec<LLVMValueRef> {
     match *expr {
         parser::AstNode::Number(n) => vec![compile_number_expr(n, module, bb)],
-        parser::AstNode::Terms(ref terms) => terms
-            .iter()
-            .flat_map(|t| compile_expr(t, module, bb))
-            .collect_vec(),
+        parser::AstNode::Terms(ref terms) => {
+            let compiled_terms = terms
+                .iter()
+                .flat_map(|t| compile_expr(t, module, bb))
+                .collect_vec();
+            unsafe {
+                let mut builder = Builder::new();
+                builder.position_at_end(bb);
+                let ptype = LLVMPointerType(LLVMInt32Type(), 0);
+                let atype = LLVMArrayType(ptype, terms.len() as u32);
+                let arr = LLVMBuildArrayAlloca(builder.builder,
+                                              atype, int32(0), module.new_string_ptr("arr"));
+                let mut arr_llvmvalrefs = Vec::new();
+                for (idx, t) in compiled_terms.iter().enumerate() {
+                    let mut offset_vec = vec![int32(idx as c_ulonglong)];
+                    arr_llvmvalrefs.push(LLVMBuildGEP(
+                        builder.builder,
+                        arr,
+                        offset_vec.as_mut_ptr(),
+                        offset_vec.len() as u32,
+                        module.new_string_ptr("expr"),
+                    ));
+                }
+                //arr_llvmvalrefs
+            }
+            compiled_terms
+        },
         parser::AstNode::Increment(ref terms) => {
             let exprs = terms
                 .iter()
