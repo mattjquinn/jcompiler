@@ -81,23 +81,27 @@ fn compile_expr(
                 let mut builder = Builder::new();
                 builder.position_at_end(bb);
                 let ptype = LLVMPointerType(LLVMInt32Type(), 0);
-                let atype = LLVMArrayType(ptype, terms.len() as u32);
+                let atype = LLVMArrayType(ptype, compiled_terms.len() as u32);
                 let arr = LLVMBuildArrayAlloca(builder.builder,
                                               atype, int32(0), module.new_string_ptr("arr"));
                 let mut arr_llvmvalrefs = Vec::new();
                 for (idx, t) in compiled_terms.iter().enumerate() {
-                    let mut offset_vec = vec![int32(idx as c_ulonglong)];
-                    arr_llvmvalrefs.push(LLVMBuildGEP(
+                    let mut offset_vec = vec![int64(0), int32(idx as c_ulonglong + 1)];
+                    let gep = LLVMBuildGEP(
                         builder.builder,
                         arr,
                         offset_vec.as_mut_ptr(),
                         offset_vec.len() as u32,
-                        module.new_string_ptr("expr"),
-                    ));
+                        module.new_string_ptr("arridx"),
+                    );
+                    LLVMBuildStore(builder.builder, *t, gep);
+                    let mut load = LLVMBuildLoad(builder.builder, gep, module.new_string_ptr("mqload"));
+//                    let mut args = vec![load];
+//                    add_function_call(module, bb, "jprint", &mut args[..], "");
+                    arr_llvmvalrefs.push(load);
                 }
-                //arr_llvmvalrefs
+                arr_llvmvalrefs
             }
-            compiled_terms
         },
         parser::AstNode::Increment(ref terms) => {
             let exprs = terms
@@ -378,6 +382,10 @@ unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
 // TODO: this should be a machine word size rather than hard-coding 32-bits.
 fn int32(val: c_ulonglong) -> LLVMValueRef {
     unsafe { LLVMConstInt(LLVMInt32Type(), val, LLVM_FALSE) }
+}
+
+fn int64(val: c_ulonglong) -> LLVMValueRef {
+    unsafe { LLVMConstInt(LLVMInt64Type(), val, LLVM_FALSE) }
 }
 
 fn int1_type() -> LLVMTypeRef {
