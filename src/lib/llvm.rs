@@ -4,7 +4,7 @@ use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
-use llvm_sys::{LLVMBuilder, LLVMModule};
+use llvm_sys::{LLVMBuilder, LLVMModule, LLVMIntPredicate};
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_uint, c_ulonglong};
@@ -36,14 +36,68 @@ pub fn compile_to_module(
         let builder = Builder::new();
         builder.position_at_end(bb);
 
+        let posfmt = LLVMBuildGlobalString(
+            builder.builder,
+            module.new_string_ptr("%i"),
+            module.new_string_ptr("printf_pos"),
+        );
+        let negfmt = LLVMBuildGlobalString(
+            builder.builder,
+            module.new_string_ptr("_%i"),
+            module.new_string_ptr("printf_neg"),
+        );
+
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
-                    let mut outputs = compile_expr(expr, &mut module, bb);
-                    let printfmt_str =
-                        compile_global_printfmt_str(outputs.len(), &mut module, &builder);
-                    outputs.insert(0, printfmt_str);
-                    add_function_call(&mut module, bb, "printf", &mut outputs, "");
+                    let outputs = compile_expr(expr, &mut module, bb);
+                    // Print each output (negative sign is "_" in J).
+                    for (idx, o) in outputs.iter().enumerate() {
+
+                        let neg_print_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("print_neg"));
+                        let pos_print_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("print_pos"));
+                        let next_body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
+
+                        let builder = Builder::new();
+                        builder.position_at_end(bb);
+
+                        let expr_is_neg = LLVMBuildICmp(
+                            builder.builder,
+                            LLVMIntPredicate::LLVMIntSLT,
+                            *o,
+                            int32(0),
+                            module.new_string_ptr("neg_term"),
+                        );
+
+                        LLVMBuildCondBr(
+                            builder.builder,
+                            expr_is_neg,
+                            neg_print_bb,
+                            pos_print_bb,
+                        );
+
+                        builder.position_at_end(neg_print_bb);
+                        let mut args = vec![*o];
+                        let abs = add_function_call(&mut module, neg_print_bb, "abs", &mut args[..], "abs");
+                        let mut args = vec![negfmt, abs];
+                        add_function_call(&mut module, neg_print_bb, "printf", &mut args[..], "");
+                        LLVMBuildBr(builder.builder, next_body_bb);
+
+                        builder.position_at_end(pos_print_bb);
+                        let mut args = vec![posfmt, *o];
+                        add_function_call(&mut module, pos_print_bb, "printf", &mut args[..], "");
+                        LLVMBuildBr(builder.builder, next_body_bb);
+
+                        bb = next_body_bb;
+
+                        if idx < outputs.len() - 1 {
+                            let mut args = vec![int8(' ' as u64)];
+                            add_function_call(&mut module, bb, "putchar", &mut args[..], "");
+                        }
+                    }
+                    // Print ending newline.
+                    let mut args = vec![int8('\n' as u64)];
+                    add_function_call(&mut module, bb, "putchar", &mut args[..], "");
                 }
                 _ => panic!("Not ready to copmile top-level AST node: {:?}", astnode),
             }
@@ -92,6 +146,14 @@ fn compile_expr(
             assert_eq!(lhsvals.len(), rhsvals.len());
             lhsvals.iter().zip(rhsvals.iter())
                 .map(|(l, r)| compile_add_llvmvalues(*l, *r, module, bb))
+                .collect()
+        },
+        parser::AstNode::Minus{ref lhs, ref rhs} => {
+            let lhsvals = compile_expr(lhs, module, bb);
+            let rhsvals = compile_expr(rhs, module, bb);
+            assert_eq!(lhsvals.len(), rhsvals.len());
+            lhsvals.iter().zip(rhsvals.iter())
+                .map(|(l, r)| compile_sub_llvmvalues(*l, *r, module, bb))
                 .collect()
         },
         parser::AstNode::Times{ref lhs, ref rhs} => {
@@ -156,24 +218,6 @@ fn compile_square(
     }
 }
 
-fn compile_global_printfmt_str(
-    num_args: usize,
-    module: &mut Module,
-    builder: &Builder,
-) -> LLVMValueRef {
-    let str = (0..num_args).map(|_| "%d ").collect::<String>();
-    let str = format!("{}\n", &str[..str.len() - 1]);
-
-    unsafe {
-        // TODO: Memoize these to prevent creation of identical format strings.
-        LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr(&str[..]),
-            module.new_string_ptr(&format!("printfmt_{}_int_args", num_args)[..]),
-        )
-    }
-}
-
 fn compile_add_llvmvalues(
     a : LLVMValueRef,
     b : LLVMValueRef,
@@ -189,6 +233,25 @@ fn compile_add_llvmvalues(
             a,
             b,
             module.new_string_ptr("sum"),
+        )
+    }
+}
+
+fn compile_sub_llvmvalues(
+    a : LLVMValueRef,
+    b : LLVMValueRef,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef) -> LLVMValueRef {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        LLVMBuildSub(
+            builder.builder,
+            a,
+            b,
+            module.new_string_ptr("difference"),
         )
     }
 }
@@ -381,6 +444,8 @@ fn add_c_declarations(module: &mut Module) {
         ],
         int32_type(),
     );
+
+    add_function(module, "abs", &mut [int32_type()], int32_type());
 }
 
 unsafe fn add_function_call(
@@ -521,19 +586,19 @@ unsafe fn set_entry_point_after(
     main_fn: LLVMValueRef,
     bb: LLVMBasicBlockRef,
 ) -> LLVMBasicBlockRef {
-    let after_init_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("after_init"));
+    let  body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
 
     // From the current bb, we want to continue execution in after_init.
     let builder = Builder::new();
     builder.position_at_end(bb);
-    LLVMBuildBr(builder.builder, after_init_bb);
+    LLVMBuildBr(builder.builder,  body_bb );
 
     // We also want to start execution in after_init.
     let init_bb = LLVMGetFirstBasicBlock(main_fn);
     builder.position_at_end(init_bb);
-    LLVMBuildBr(builder.builder, after_init_bb);
+    LLVMBuildBr(builder.builder,  body_bb );
 
-    after_init_bb
+    body_bb
 }
 
 pub fn optimise_ir(module: &mut Module, llvm_opt: i64) {
