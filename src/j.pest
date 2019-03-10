@@ -1,3 +1,6 @@
+// See https://code.jsoftware.com/wiki/User:Marshall_Lochbaum/Formal_Parser
+// for a formal parser description.
+
 program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
