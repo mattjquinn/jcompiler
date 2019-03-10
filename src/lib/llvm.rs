@@ -12,7 +12,6 @@ use std::ptr::null_mut;
 use std::str;
 
 use parser;
-use llvm_sys::debuginfo::LLVMDIBuilderCreateArrayType;
 
 const LLVM_FALSE: LLVMBool = 0;
 const LLVM_TRUE: LLVMBool = 1;
@@ -23,74 +22,30 @@ pub fn compile_to_module(
     ast: &[parser::AstNode],
 ) -> Module {
     let mut module = create_module(module_name, target_triple);
+
+    define_jprint_fn(&mut module);
+
     let main_fn = add_main_fn(&mut module);
 
     let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
 
     unsafe {
-        let global_builder = Builder::new();
-        global_builder.position_at_end(bb);
-
         // This is the point we want to start execution from.
         bb = set_entry_point_after(&mut module, main_fn, bb);
 
         let builder = Builder::new();
         builder.position_at_end(bb);
 
-        let posfmt = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("%i"),
-            module.new_string_ptr("printf_pos"),
-        );
-        let negfmt = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("_%i"),
-            module.new_string_ptr("printf_neg"),
-        );
-
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
                     let outputs = compile_expr(expr, &mut module, bb);
-                    // Print each output (negative sign is "_" in J).
                     for (idx, o) in outputs.iter().enumerate() {
 
-                        let neg_print_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("print_neg"));
-                        let pos_print_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("print_pos"));
-                        let next_body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
-
-                        let builder = Builder::new();
-                        builder.position_at_end(bb);
-
-                        let expr_is_neg = LLVMBuildICmp(
-                            builder.builder,
-                            LLVMIntPredicate::LLVMIntSLT,
-                            *o,
-                            int32(0),
-                            module.new_string_ptr("neg_term"),
-                        );
-
-                        LLVMBuildCondBr(
-                            builder.builder,
-                            expr_is_neg,
-                            neg_print_bb,
-                            pos_print_bb,
-                        );
-
-                        builder.position_at_end(neg_print_bb);
                         let mut args = vec![*o];
-                        let abs = add_function_call(&mut module, neg_print_bb, "abs", &mut args[..], "abs");
-                        let mut args = vec![negfmt, abs];
-                        add_function_call(&mut module, neg_print_bb, "printf", &mut args[..], "");
-                        LLVMBuildBr(builder.builder, next_body_bb);
+                        add_function_call(&mut module, bb, "jprint", &mut args[..], "");
 
-                        builder.position_at_end(pos_print_bb);
-                        let mut args = vec![posfmt, *o];
-                        add_function_call(&mut module, pos_print_bb, "printf", &mut args[..], "");
-                        LLVMBuildBr(builder.builder, next_body_bb);
-
-                        bb = next_body_bb;
-
+                        // Add separating spaces between terms
                         if idx < outputs.len() - 1 {
                             let mut args = vec![int8(' ' as u64)];
                             add_function_call(&mut module, bb, "putchar", &mut args[..], "");
@@ -557,6 +512,65 @@ fn add_main_fn(module: &mut Module) -> LLVMValueRef {
         let main_type = LLVMFunctionType(int32_type(), main_args.as_mut_ptr(), 0, LLVM_FALSE);
         // TODO: use add_function() here instead.
         LLVMAddFunction(module.module, module.new_string_ptr("main"), main_type)
+    }
+}
+
+fn define_jprint_fn(module: &mut Module) {
+    let builder = Builder::new();
+    unsafe {
+        let mut fn_args = vec![int32_type()];
+        let fn_type = LLVMFunctionType(int32_type(), fn_args.as_mut_ptr(), fn_args.len() as u32, LLVM_FALSE);
+        let jprint_fn = LLVMAddFunction(module.module, module.new_string_ptr("jprint"), fn_type);
+
+        let body_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("body"));
+        let print_neg_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("print_neg"));
+        let print_pos_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("print_pos"));
+        let ret_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("ret"));
+
+        let builder = Builder::new();
+        builder.position_at_end(body_bb);
+
+        let posfmt = LLVMBuildGlobalString(
+            builder.builder,
+            module.new_string_ptr("%i"),
+            module.new_string_ptr("printf_pos"),
+        );
+        let negfmt = LLVMBuildGlobalString(
+            builder.builder,
+            module.new_string_ptr("_%i"),
+            module.new_string_ptr("printf_neg"),
+        );
+
+        let n = LLVMGetParam(jprint_fn, 0);
+        let expr_is_neg = LLVMBuildICmp(
+            builder.builder,
+            LLVMIntPredicate::LLVMIntSLT,
+            n,
+            int32(0),
+            module.new_string_ptr("isneg"),
+        );
+
+        LLVMBuildCondBr(
+            builder.builder,
+            expr_is_neg,
+            print_neg_bb,
+            print_pos_bb,
+        );
+
+        builder.position_at_end(print_neg_bb);
+        let mut args = vec![n];
+        let abs = add_function_call(module, print_neg_bb, "abs", &mut args[..], "abs");
+        let mut args = vec![negfmt, abs];
+        add_function_call(module, print_neg_bb, "printf", &mut args[..], "");
+        LLVMBuildBr(builder.builder, ret_bb);
+
+        builder.position_at_end(print_pos_bb);
+        let mut args = vec![posfmt, n];
+        add_function_call(module, print_pos_bb, "printf", &mut args[..], "");
+        LLVMBuildBr(builder.builder, ret_bb);
+
+        builder.position_at_end(ret_bb);
+        LLVMBuildRet(builder.builder, int32(0));
     }
 }
 
