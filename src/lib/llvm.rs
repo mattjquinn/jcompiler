@@ -4,7 +4,7 @@ use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
-use llvm_sys::{LLVMBuilder, LLVMModule, LLVMIntPredicate};
+use llvm_sys::{LLVMBuilder, LLVMModule};
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_uint, c_ulonglong};
@@ -21,8 +21,6 @@ pub fn compile_to_module(
     ast: &[parser::AstNode],
 ) -> Module {
     let mut module = create_module(module_name, target_triple);
-
-    define_jprint_fn(&mut module);
 
     let main_fn = add_main_fn(&mut module);
 
@@ -389,13 +387,13 @@ fn int64(val: c_ulonglong) -> LLVMValueRef {
     unsafe { LLVMConstInt(LLVMInt64Type(), val, LLVM_FALSE) }
 }
 
-fn int1_type() -> LLVMTypeRef {
-    unsafe { LLVMInt1Type() }
-}
-
-fn int8_type() -> LLVMTypeRef {
-    unsafe { LLVMInt8Type() }
-}
+//fn int1_type() -> LLVMTypeRef {
+//    unsafe { LLVMInt1Type() }
+//}
+//
+//fn int8_type() -> LLVMTypeRef {
+//    unsafe { LLVMInt8Type() }
+//}
 
 fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
@@ -423,33 +421,33 @@ fn add_c_declarations(module: &mut Module) {
         void = LLVMVoidType();
     }
 
-    add_function(
-        module,
-        "llvm.memset.p0i8.i32",
-        &mut [
-            int8_ptr_type(),
-            int8_type(),
-            int32_type(),
-            int32_type(),
-            int1_type(),
-        ],
-        void,
-    );
+//    add_function(
+//        module,
+//        "llvm.memset.p0i8.i32",
+//        &mut [
+//            int8_ptr_type(),
+//            int8_type(),
+//            int32_type(),
+//            int32_type(),
+//            int1_type(),
+//        ],
+//        void,
+//    );
 
-    add_function(module, "malloc", &mut [int32_type()], int8_ptr_type());
-
-    add_function(module, "free", &mut [int8_ptr_type()], void);
-
-    add_function(
-        module,
-        "write",
-        &mut [int32_type(), int8_ptr_type(), int32_type()],
-        int32_type(),
-    );
+//    add_function(module, "malloc", &mut [int32_type()], int8_ptr_type());
+//
+//    add_function(module, "free", &mut [int8_ptr_type()], void);
+//
+//    add_function(
+//        module,
+//        "write",
+//        &mut [int32_type(), int8_ptr_type(), int32_type()],
+//        int32_type(),
+//    );
 
     add_function(module, "putchar", &mut [int32_type()], int32_type());
 
-    add_function(module, "getchar", &mut [], int32_type());
+//    add_function(module, "getchar", &mut [], int32_type());
 
     add_function(
         module,
@@ -460,7 +458,7 @@ fn add_c_declarations(module: &mut Module) {
         int32_type(),
     );
 
-    add_function(module, "abs", &mut [int32_type()], int32_type());
+    add_function(module, "jprint", &mut [int32_type()], void);
 }
 
 unsafe fn add_function_call(
@@ -521,64 +519,6 @@ fn add_main_fn(module: &mut Module) -> LLVMValueRef {
         let main_type = LLVMFunctionType(int32_type(), main_args.as_mut_ptr(), 0, LLVM_FALSE);
         // TODO: use add_function() here instead.
         LLVMAddFunction(module.module, module.new_string_ptr("main"), main_type)
-    }
-}
-
-fn define_jprint_fn(module: &mut Module) {
-    unsafe {
-        let mut fn_args = vec![int32_type()];
-        let fn_type = LLVMFunctionType(int32_type(), fn_args.as_mut_ptr(), fn_args.len() as u32, LLVM_FALSE);
-        let jprint_fn = LLVMAddFunction(module.module, module.new_string_ptr("jprint"), fn_type);
-
-        let body_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("body"));
-        let print_neg_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("print_neg"));
-        let print_pos_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("print_pos"));
-        let ret_bb = LLVMAppendBasicBlock(jprint_fn, module.new_string_ptr("ret"));
-
-        let builder = Builder::new();
-        builder.position_at_end(body_bb);
-
-        let posfmt = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("%i"),
-            module.new_string_ptr("printf_pos"),
-        );
-        let negfmt = LLVMBuildGlobalString(
-            builder.builder,
-            module.new_string_ptr("_%i"),
-            module.new_string_ptr("printf_neg"),
-        );
-
-        let n = LLVMGetParam(jprint_fn, 0);
-        let expr_is_neg = LLVMBuildICmp(
-            builder.builder,
-            LLVMIntPredicate::LLVMIntSLT,
-            n,
-            int32(0),
-            module.new_string_ptr("isneg"),
-        );
-
-        LLVMBuildCondBr(
-            builder.builder,
-            expr_is_neg,
-            print_neg_bb,
-            print_pos_bb,
-        );
-
-        builder.position_at_end(print_neg_bb);
-        let mut args = vec![n];
-        let abs = add_function_call(module, print_neg_bb, "abs", &mut args[..], "abs");
-        let mut args = vec![negfmt, abs];
-        add_function_call(module, print_neg_bb, "printf", &mut args[..], "");
-        LLVMBuildBr(builder.builder, ret_bb);
-
-        builder.position_at_end(print_pos_bb);
-        let mut args = vec![posfmt, n];
-        add_function_call(module, print_pos_bb, "printf", &mut args[..], "");
-        LLVMBuildBr(builder.builder, ret_bb);
-
-        builder.position_at_end(ret_bb);
-        LLVMBuildRet(builder.builder, int32(0));
     }
 }
 
