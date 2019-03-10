@@ -29,8 +29,11 @@ pub fn compile_to_module(
     unsafe {
         let mut bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
         // This is the point we want to start execution from.
-        bb = set_entry_point_after(&mut module, main_fn, bb);
-
+        let  body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+        LLVMBuildBr(builder.builder,  body_bb );
+        bb = body_bb;
         let builder = Builder::new();
         builder.position_at_end(bb);
 
@@ -586,27 +589,6 @@ unsafe fn add_main_cleanup(bb: LLVMBasicBlockRef) {
 
     let zero = int32(0);
     LLVMBuildRet(builder.builder, zero);
-}
-
-/// Ensure that execution starts after the basic block we pass in.
-unsafe fn set_entry_point_after(
-    module: &mut Module,
-    main_fn: LLVMValueRef,
-    bb: LLVMBasicBlockRef,
-) -> LLVMBasicBlockRef {
-    let  body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
-
-    // From the current bb, we want to continue execution in after_init.
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-    LLVMBuildBr(builder.builder,  body_bb );
-
-    // We also want to start execution in after_init.
-    let init_bb = LLVMGetFirstBasicBlock(main_fn);
-    builder.position_at_end(init_bb);
-    LLVMBuildBr(builder.builder,  body_bb );
-
-    body_bb
 }
 
 pub fn optimise_ir(module: &mut Module, llvm_opt: i64) {
