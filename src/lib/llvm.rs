@@ -14,7 +14,6 @@ use std::str;
 use parser;
 
 const LLVM_FALSE: LLVMBool = 0;
-const LLVM_TRUE: LLVMBool = 1;
 
 pub fn compile_to_module(
     module_name: &str,
@@ -27,7 +26,7 @@ pub fn compile_to_module(
 
     let main_fn = add_main_fn(&mut module);
 
-    let (init_bb, mut bb) = add_initial_bbs(&mut module, main_fn);
+    let (_, mut bb) = add_initial_bbs(&mut module, main_fn);
 
     unsafe {
         // This is the point we want to start execution from.
@@ -524,7 +523,6 @@ fn add_main_fn(module: &mut Module) -> LLVMValueRef {
 }
 
 fn define_jprint_fn(module: &mut Module) {
-    let builder = Builder::new();
     unsafe {
         let mut fn_args = vec![int32_type()];
         let fn_type = LLVMFunctionType(int32_type(), fn_args.as_mut_ptr(), fn_args.len() as u32, LLVM_FALSE);
@@ -606,51 +604,6 @@ unsafe fn add_main_cleanup(bb: LLVMBasicBlockRef) {
 
     let zero = int32(0);
     LLVMBuildRet(builder.builder, zero);
-}
-
-fn compile_static_outputs(module: &mut Module, bb: LLVMBasicBlockRef, outputs: &[i8]) {
-    unsafe {
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-
-        let mut llvm_outputs = vec![];
-        for value in outputs {
-            llvm_outputs.push(int8(*value as c_ulonglong));
-        }
-
-        let output_buf_type = LLVMArrayType(int8_type(), llvm_outputs.len() as c_uint);
-        let llvm_outputs_arr = LLVMConstArray(
-            int8_type(),
-            llvm_outputs.as_mut_ptr(),
-            llvm_outputs.len() as c_uint,
-        );
-
-        let known_outputs = LLVMAddGlobal(
-            module.module,
-            output_buf_type,
-            module.new_string_ptr("known_outputs"),
-        );
-        LLVMSetInitializer(known_outputs, llvm_outputs_arr);
-        LLVMSetGlobalConstant(known_outputs, LLVM_TRUE);
-
-        let stdout_fd = int32(1);
-        let llvm_num_outputs = int32(outputs.len() as c_ulonglong);
-
-        let known_outputs_ptr = LLVMBuildPointerCast(
-            builder.builder,
-            known_outputs,
-            int8_ptr_type(),
-            module.new_string_ptr("known_outputs_ptr"),
-        );
-
-        add_function_call(
-            module,
-            bb,
-            "write",
-            &mut [stdout_fd, known_outputs_ptr, llvm_num_outputs],
-            "",
-        );
-    }
 }
 
 /// Ensure that execution starts after the basic block we pass in.
