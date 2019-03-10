@@ -140,6 +140,16 @@ fn compile_expr(
                 .map(|t| compile_square(t, module, bb))
                 .collect_vec()
         },
+        parser::AstNode::Negate(ref terms) => {
+            let exprs = terms
+                .iter()
+                .flat_map(|e| compile_expr(e, module, bb))
+                .collect_vec();
+            exprs
+                .into_iter()
+                .map(|t| compile_negation(t, module, bb))
+                .collect_vec()
+        },
         parser::AstNode::Plus{ref lhs, ref rhs} => {
             let lhsvals = compile_expr(lhs, module, bb);
             let rhsvals = compile_expr(rhs, module, bb);
@@ -214,6 +224,23 @@ fn compile_square(
             term,
             term,
             module.new_string_ptr("square"),
+        )
+    }
+}
+
+fn compile_negation(
+    term: LLVMValueRef,
+    module: &mut Module,
+    bb: LLVMBasicBlockRef,
+) -> LLVMValueRef {
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        LLVMBuildNeg(
+            builder.builder,
+            term,
+            module.new_string_ptr("negate"),
         )
     }
 }

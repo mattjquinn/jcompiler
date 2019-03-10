@@ -8,7 +8,7 @@ dyadicExpr = { (monadicExpr | terms) ~ dyadicVerb ~ expr }
 terms = { term+ }
 term = _{ number | "(" ~ expr ~ ")" }
 
-monadicVerb = { ">:" | "*:" }
+monadicVerb = { ">:" | "*:" | "-" }
 dyadicVerb = { "+" | "*" | "-" }
 
 // @ means "atomic": no implicit whitespace allowed.

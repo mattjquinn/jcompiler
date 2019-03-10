@@ -118,3 +118,10 @@ fn ctest_subtractions_lists_positives() {
     assert_eq!("_1 _1\n2 2 2\n8 _3 10\n0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_negate() {
+    let (stdout, stderr) = compile("ctest_monadic_negate.ijs");
+    assert_eq!("_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

@@ -19,6 +19,7 @@ pub enum AstNode {
     Terms(Vec<AstNode>),
     Increment(Vec<AstNode>),
     Square(Vec<AstNode>),
+    Negate(Vec<AstNode>),
 }
 
 impl fmt::Display for AstNode {
@@ -62,6 +63,7 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             match verb {
                 ">:" => Increment(vec![build_ast_from_expr(expr)]),
                 "*:" => Square(vec![build_ast_from_expr(expr)]),
+                "-" => Negate(vec![build_ast_from_expr(expr)]),
                 _ => panic!("Unsupported monadic verb in expr: {}", verb),
             }
         },
