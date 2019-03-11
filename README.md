@@ -41,6 +41,8 @@ $ cargo test
 
 ### TODO
 * Only declare J library functions that are actually used by the program being compiled.
+* Next: support varying length term lists: 1 + 1 2 + 2      , >: 1 + 1 2 + 2
+* Next: for dynamic expressions, implement J's random fn using C's srand(seed)
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
 * Add precompiled binaries for each tagged release in GitHub.

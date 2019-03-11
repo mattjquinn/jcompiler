@@ -25,7 +25,7 @@ pub fn compile_to_module(
     let main_fn = add_main_fn(&mut module);
 
     unsafe {
-        let bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
+        let bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr(""));
         let builder = Builder::new();
         builder.position_at_end(bb);
 
@@ -201,20 +201,6 @@ fn compile_expr(
         _ => panic!("Not ready to compile expr: {:?}", expr),
     }
 }
-
-//fn compile_number_expr(n: u32, module: &mut Module, bb: LLVMBasicBlockRef) -> LLVMValueRef {
-//    let builder = Builder::new();
-//    builder.position_at_end(bb);
-//
-//    unsafe {
-//        let n_alloc = LLVMBuildAlloca(builder.builder, int32_type(), module.new_string_ptr("n"));
-//
-//        let n_init = int32(n as c_ulonglong);
-//        LLVMBuildStore(builder.builder, n_init, n_alloc);
-//
-//        LLVMBuildLoad(builder.builder, n_alloc, module.new_string_ptr("n_load"))
-//    }
-//}
 
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.
