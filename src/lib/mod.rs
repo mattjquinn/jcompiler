@@ -115,9 +115,10 @@ fn link_object_file(
             &target_triple,
             "-o",
             &executable_path[..],
+            "-lm",
         ]
     } else {
-        vec![object_file_path, jlib_c_file, "-o", &executable_path[..]]
+        vec![object_file_path, jlib_c_file, "-o", &executable_path[..], "-lm"]
     };
 
     shell::run_shell_command("clang-7", &clang_args[..])
