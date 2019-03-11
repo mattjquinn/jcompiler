@@ -40,6 +40,7 @@ $ cargo test
 ```
 
 ### TODO
+* Only declare J library functions that are actually used by the program being compiled.
 * Improve parser/compiler error messages (especially using `ansi_term` crate).
 * Thoroughly document library code using inline rustdoc comments, publicly host at accessible URL.
 * Add precompiled binaries for each tagged release in GitHub.

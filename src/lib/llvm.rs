@@ -25,13 +25,7 @@ pub fn compile_to_module(
     let main_fn = add_main_fn(&mut module);
 
     unsafe {
-        let mut bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
-        // This is the point we want to start execution from.
-        let  body_bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("body"));
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-        LLVMBuildBr(builder.builder,  body_bb );
-        bb = body_bb;
+        let bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr("init"));
         let builder = Builder::new();
         builder.position_at_end(bb);
 
@@ -222,116 +216,6 @@ fn compile_expr(
 //    }
 //}
 
-fn compile_increment(
-    term: LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-) -> LLVMValueRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildAdd(
-            builder.builder,
-            term,
-            int32(1),
-            module.new_string_ptr("increment"),
-        )
-    }
-}
-
-fn compile_square(
-    term: LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-) -> LLVMValueRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildMul(
-            builder.builder,
-            term,
-            term,
-            module.new_string_ptr("square"),
-        )
-    }
-}
-
-fn compile_negation(
-    term: LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-) -> LLVMValueRef {
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildNeg(
-            builder.builder,
-            term,
-            module.new_string_ptr("negate"),
-        )
-    }
-}
-
-fn compile_add_llvmvalues(
-    a : LLVMValueRef,
-    b : LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildAdd(
-            builder.builder,
-            a,
-            b,
-            module.new_string_ptr("sum"),
-        )
-    }
-}
-
-fn compile_sub_llvmvalues(
-    a : LLVMValueRef,
-    b : LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildSub(
-            builder.builder,
-            a,
-            b,
-            module.new_string_ptr("difference"),
-        )
-    }
-}
-
-fn compile_mult_llvmvalues(
-    a : LLVMValueRef,
-    b : LLVMValueRef,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef) -> LLVMValueRef {
-
-    let builder = Builder::new();
-    builder.position_at_end(bb);
-
-    unsafe {
-        LLVMBuildMul(
-            builder.builder,
-            a,
-            b,
-            module.new_string_ptr("prod"),
-        )
-    }
-}
-
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.
 pub struct Module {
@@ -421,9 +305,9 @@ struct CompileContext {
 
 /// Convert this integer to LLVM's representation of a constant
 /// integer.
-unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
-    LLVMConstInt(LLVMInt8Type(), val, LLVM_FALSE)
-}
+//unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
+//    LLVMConstInt(LLVMInt8Type(), val, LLVM_FALSE)
+//}
 /// Convert this integer to LLVM's representation of a constant
 /// integer.
 // TODO: this should be a machine word size rather than hard-coding 32-bits.
@@ -447,9 +331,9 @@ fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
 }
 
-fn int8_ptr_type() -> LLVMTypeRef {
-    unsafe { LLVMPointerType(LLVMInt8Type(), 0) }
-}
+//fn int8_ptr_type() -> LLVMTypeRef {
+//    unsafe { LLVMPointerType(LLVMInt8Type(), 0) }
+//}
 
 fn int32_ptr_type() -> LLVMTypeRef {
     unsafe { LLVMPointerType(LLVMInt32Type(), 0) }
@@ -497,18 +381,18 @@ fn add_c_declarations(module: &mut Module) {
 //        int32_type(),
 //    );
 
-    add_function(module, "putchar", &mut [int32_type()], int32_type());
+//    add_function(module, "putchar", &mut [int32_type()], int32_type());
 
 //    add_function(module, "getchar", &mut [], int32_type());
 
-    add_function(
-        module,
-        "printf",
-        &mut [
-            int8_ptr_type(), /* varargs; simply give extra args at call time. */
-        ],
-        int32_type(),
-    );
+//    add_function(
+//        module,
+//        "printf",
+//        &mut [
+//            int8_ptr_type(), /* varargs; simply give extra args at call time. */
+//        ],
+//        int32_type(),
+//    );
 
     add_function(module, "jprint", &mut [int32_ptr_type(), int32_type()], void);
     add_function(module, "jnegate", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
