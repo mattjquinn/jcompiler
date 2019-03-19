@@ -40,6 +40,9 @@ $ cargo test
 ```
 
 ### TODO
+* Ensure all malloc'd arrays are freed.
+* READ: APL: A Glimpse of Heaven: https://news.ycombinator.com/item?id=19325361
+* READ: K7 Tutorial: https://news.ycombinator.com/item?id=19418570
 * Only declare J library functions that are actually used by the program being compiled.
 * Next: support varying length term lists: 1 + 1 2 + 2      , >: 1 + 1 2 + 2
 * Next: for dynamic expressions, implement J's random fn using C's srand(seed)
