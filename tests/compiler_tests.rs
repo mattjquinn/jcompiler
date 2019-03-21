@@ -129,6 +129,6 @@ fn ctest_monadic_negate() {
 #[test]
 fn ctest_additions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_additions_lists_mixedlens_legal.ijs");
-    assert_eq!("11 21 31\n11 21 31\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!("11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }

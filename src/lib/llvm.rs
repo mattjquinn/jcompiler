@@ -169,10 +169,10 @@ fn compile_expr(
             }
         },
         parser::AstNode::Plus{ref lhs, ref rhs} => {
-            let mut lhs = compile_expr(lhs, module, bb);
             let mut rhs = compile_expr(rhs, module, bb);
+            let mut lhs = compile_expr(lhs, module, bb);
 
-            // If either of the arguments' is shorter than the other,
+            // If either of the arguments is shorter than the other,
             // we must expand it before passing it to the addition verb.
             let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
             if lhs.arr_len != res_length {
@@ -189,8 +189,8 @@ fn compile_expr(
             }
         },
         parser::AstNode::Minus{ref lhs, ref rhs} => {
-            let lhs = compile_expr(lhs, module, bb);
             let rhs = compile_expr(rhs, module, bb);
+            let lhs = compile_expr(lhs, module, bb);
             assert_eq!(lhs.arr_len, rhs.arr_len);
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
@@ -199,8 +199,8 @@ fn compile_expr(
             }
         },
         parser::AstNode::Times{ref lhs, ref rhs} => {
-            let lhs = compile_expr(lhs, module, bb);
             let rhs = compile_expr(rhs, module, bb);
+            let lhs = compile_expr(lhs, module, bb);
             assert_eq!(lhs.arr_len, rhs.arr_len);
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
@@ -235,10 +235,26 @@ fn expand_expr_array(expr_array : &ExprArrayPtr,
         LLVMSetAlignment(arr, 16);
         // Load the sole element out of the unexpanded array;
         // using offset of 0 per assumption of only one element above.
-        let mut src_offset_vec = vec![int64(0), int64(0)];
-        let src_gep = LLVMBuildGEP(
+        let fromtype = LLVMArrayType(
+            int32_type(),
+            1,
+        );
+
+        // IMPORTANT: Arrays allocated in the C funcs are simply pointers to
+        // an int array; we must cast to the array type here in order to index into it...
+        let expr_arr_ptr_cast = LLVMBuildPointerCast(
             builder.builder,
             expr_array.ptr,
+            fromtype,
+            module.new_string_ptr("prexpand_src_ptr_cast"));
+        // ...and because we are not casting to a pointer (just to an array), we do
+        // NOT need the first 0 index here to deref a pointer; just the second
+        // to index into the (first) position of the array.
+        let mut src_offset_vec = vec![int64(0)];
+
+        let src_gep = LLVMBuildGEP(
+            builder.builder,
+            expr_arr_ptr_cast,
             src_offset_vec.as_mut_ptr(),
             src_offset_vec.len() as u32,
             module.new_string_ptr("prexpand_src_arr"),
