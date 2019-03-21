@@ -101,7 +101,7 @@ fn ctest_products_lists() {
 #[test]
 fn ctest_mixed_adds_mults() {
     let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
-    assert_eq!("170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n", &stdout[..]);
+    assert_eq!("170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
@@ -137,5 +137,12 @@ fn ctest_additions_lists_mixedlens_legal() {
 fn ctest_subtractions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_subtractions_lists_mixedlens_legal.ijs");
     assert_eq!("_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn ctest_products_lists_mixedlens_legal() {
+    let (stdout, stderr) = compile("ctest_products_lists_mixedlens_legal.ijs");
+    assert_eq!("40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
