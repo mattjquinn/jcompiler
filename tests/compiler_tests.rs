@@ -160,3 +160,10 @@ fn ctest_insertions_times() {
     assert_eq!("0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_insertions_minus() {
+    let (stdout, stderr) = compile("ctest_insertions_minus.ijs");
+    assert_eq!("0\n5\n1\n_1\n2\n3\n16\n_3\n14\n10\n13 23 33\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

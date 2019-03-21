@@ -106,3 +106,22 @@ int* jreduce_times(int* expr_arr, int len) {
   }
   return out_arr;
 }
+
+int* jreduce_minus(int* expr_arr, int len) {
+
+  if (len < 2) { return expr_arr; }
+
+  // Reducing always results in a single element array.
+  int* out_arr = (int*)malloc(sizeof(int));
+
+  // Take each difference from right to left as
+  // the left hand side of each difference is accumulated in
+  // the output array (b/c subtraction is not commutative).
+  int i = len - 2;
+  out_arr[0] = expr_arr[len - 1];
+  do {
+    out_arr[0] = expr_arr[i] - out_arr[0];
+    i -= 1;
+  } while (i >= 0);
+  return out_arr;
+}
