@@ -94,3 +94,15 @@ int* jreduce_plus(int* expr_arr, int len) {
   }
   return out_arr;
 }
+
+int* jreduce_times(int* expr_arr, int len) {
+
+  // Reducing always results in a single element array.
+  int* out_arr = (int*)malloc(sizeof(int));
+
+  out_arr[0] = 1;
+  for (int i = 0; i < len; i++) {
+    out_arr[0] *= expr_arr[i];
+  }
+  return out_arr;
+}

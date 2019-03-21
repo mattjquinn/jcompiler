@@ -41,6 +41,8 @@ $ cargo test
 
 ### TODO
 * Add support for "_" in front of numbers.
+* Allow verbs to be standalone expressions by themselves (printing them should give
+  their textual representation just as ijconsole does).
 * Add tests for illegal array operations (i.e., 1 2 3 + 4 5)
 * Ensure all malloc'd arrays are freed.
 * READ: APL: A Glimpse of Heaven: https://news.ycombinator.com/item?id=19325361

@@ -230,11 +230,19 @@ fn compile_expr(
         },
         parser::AstNode::Reduce{ ref dyadic_verb, ref expr } => {
             let mut expr = compile_expr(expr, module, bb);
+            let mut args = vec![expr.ptr, int32(expr.arr_len as u64)];
             match &dyadic_verb[..] {
                 "+" => {
                     unsafe {
-                        let mut args = vec![expr.ptr, int32(expr.arr_len as u64)];
-                        let reduced_arr = add_function_call(module, bb, "jreduce_plus", &mut args[..], "reduced_plus_arr");
+                        let reduced_arr = add_function_call(
+                            module, bb, "jreduce_plus", &mut args[..], "reduced_plus_arr");
+                        ExprArrayPtr { ptr : reduced_arr, arr_len: 1 }
+                    }
+                },
+                "*" => {
+                    unsafe {
+                        let reduced_arr = add_function_call(
+                            module, bb, "jreduce_times", &mut args[..], "reduced_times_arr");
                         ExprArrayPtr { ptr : reduced_arr, arr_len: 1 }
                     }
                 },
@@ -498,6 +506,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jminus", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jtimes", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jreduce_plus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
+    add_function(module, "jreduce_times", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
 }
 
 unsafe fn add_function_call(
