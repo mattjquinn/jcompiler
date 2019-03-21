@@ -169,13 +169,23 @@ fn compile_expr(
             }
         },
         parser::AstNode::Plus{ref lhs, ref rhs} => {
-            let lhs = compile_expr(lhs, module, bb);
-            let rhs = compile_expr(rhs, module, bb);
-            assert_eq!(lhs.arr_len, rhs.arr_len);
+            let mut lhs = compile_expr(lhs, module, bb);
+            let mut rhs = compile_expr(rhs, module, bb);
+
+            // If either of the arguments' is shorter than the other,
+            // we must expand it before passing it to the addition verb.
+            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
+            if lhs.arr_len != res_length {
+                lhs = expand_expr_array(&lhs, res_length, module, bb);
+            }
+            if rhs.arr_len != res_length {
+                rhs = expand_expr_array(&rhs, res_length, module, bb);
+            }
+
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
                 let plus_arr = add_function_call(module, bb, "jplus", &mut args[..], "plus_arr");
-                ExprArrayPtr { ptr : plus_arr, arr_len: lhs.arr_len }
+                ExprArrayPtr { ptr : plus_arr, arr_len: res_length }
             }
         },
         parser::AstNode::Minus{ref lhs, ref rhs} => {
@@ -199,6 +209,57 @@ fn compile_expr(
             }
         },
         _ => panic!("Not ready to compile expr: {:?}", expr),
+    }
+}
+
+fn expand_expr_array(expr_array : &ExprArrayPtr,
+                     to_len: u32,
+                     module: &mut Module,
+                     bb: LLVMBasicBlockRef) -> ExprArrayPtr {
+    if expr_array.arr_len != 1 {
+        unimplemented!("Can only expand arrays of size 1 now; this one is: {}", expr_array.arr_len);
+    }
+    unsafe {
+        let builder = Builder::new();
+        builder.position_at_end(bb);
+        let atype = LLVMArrayType(
+            int32_type(),
+            to_len
+        );
+        let arr = LLVMBuildArrayAlloca(
+            builder.builder,
+            atype,
+            int32(0),
+            module.new_string_ptr("expansion_arr")
+        );
+        LLVMSetAlignment(arr, 16);
+        // Load the sole element out of the unexpanded array;
+        // using offset of 0 per assumption of only one element above.
+        let mut src_offset_vec = vec![int64(0), int64(0)];
+        let src_gep = LLVMBuildGEP(
+            builder.builder,
+            expr_array.ptr,
+            src_offset_vec.as_mut_ptr(),
+            src_offset_vec.len() as u32,
+            module.new_string_ptr("prexpand_src_arr"),
+        );
+        let src_load = LLVMBuildLoad(
+            builder.builder,
+            src_gep,
+            module.new_string_ptr("prexpand_src_load")
+        );
+        for idx in 0..to_len {
+            let mut dest_offset_vec = vec![int64(0), int64(idx as c_ulonglong)];
+            let dest_gep = LLVMBuildGEP(
+                builder.builder,
+                arr,
+                dest_offset_vec.as_mut_ptr(),
+                dest_offset_vec.len() as u32,
+                module.new_string_ptr("postexpand_dest_arr"),
+            );
+            LLVMBuildStore(builder.builder, src_load, dest_gep);
+        }
+        ExprArrayPtr { ptr : arr, arr_len : to_len }
     }
 }
 

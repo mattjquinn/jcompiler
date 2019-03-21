@@ -40,6 +40,7 @@ $ cargo test
 ```
 
 ### TODO
+* Add support for "_" in front of numbers.
 * Ensure all malloc'd arrays are freed.
 * READ: APL: A Glimpse of Heaven: https://news.ycombinator.com/item?id=19325361
 * READ: K7 Tutorial: https://news.ycombinator.com/item?id=19418570

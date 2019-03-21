@@ -122,6 +122,13 @@ fn ctest_subtractions_lists_positives() {
 #[test]
 fn ctest_monadic_negate() {
     let (stdout, stderr) = compile("ctest_monadic_negate.ijs");
-    assert_eq!("_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n", &stdout[..]);
+    assert_eq!("_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n2\n2\n2\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn ctest_additions_lists_mixedlens_legal() {
+    let (stdout, stderr) = compile("ctest_additions_lists_mixedlens_legal.ijs");
+    assert_eq!("11 21 31\n11 21 31\n0 0 0 0\n0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }

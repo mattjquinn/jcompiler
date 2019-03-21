@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
@@ -44,7 +45,11 @@ int* jsquare(int* arr, int len) {
 }
 
 int* jplus(int* lhs, int lhslen, int* rhs, int rhslen) {
-  // Assumes same size arrays; obviously not long-term accurate.
+
+  // Requires same-length array operands; expansion of different length
+  // operands should be done in LLVM prior to adding a call to this function.
+  assert(lhslen == rhslen);
+
   int* sum_arr = (int*)malloc(lhslen * sizeof(int));
   for (int i = 0; i < lhslen; i++) {
     sum_arr[i] = lhs[i] + rhs[i];
@@ -53,7 +58,11 @@ int* jplus(int* lhs, int lhslen, int* rhs, int rhslen) {
 }
 
 int* jminus(int* lhs, int lhslen, int* rhs, int rhslen) {
-  // Assumes same size arrays; obviously not long-term accurate.
+
+  // Requires same-length array operands; expansion of different length
+  // operands should be done in LLVM prior to adding a call to this function.
+  assert(lhslen == rhslen);
+
   int* diff_arr = (int*)malloc(lhslen * sizeof(int));
   for (int i = 0; i < lhslen; i++) {
     diff_arr[i] = lhs[i] - rhs[i];
@@ -62,7 +71,11 @@ int* jminus(int* lhs, int lhslen, int* rhs, int rhslen) {
 }
 
 int* jtimes(int* lhs, int lhslen, int* rhs, int rhslen) {
-  // Assumes same size arrays; obviously not long-term accurate.
+
+  // Requires same-length array operands; expansion of different length
+  // operands should be done in LLVM prior to adding a call to this function.
+  assert(lhslen == rhslen);
+
   int* prod_arr = (int*)malloc(lhslen * sizeof(int));
   for (int i = 0; i < lhslen; i++) {
     prod_arr[i] = lhs[i] * rhs[i];
