@@ -189,13 +189,23 @@ fn compile_expr(
             }
         },
         parser::AstNode::Minus{ref lhs, ref rhs} => {
-            let rhs = compile_expr(rhs, module, bb);
-            let lhs = compile_expr(lhs, module, bb);
-            assert_eq!(lhs.arr_len, rhs.arr_len);
+            let mut rhs = compile_expr(rhs, module, bb);
+            let mut lhs = compile_expr(lhs, module, bb);
+
+            // If either of the arguments is shorter than the other,
+            // we must expand it before passing it to the subtraction verb.
+            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
+            if lhs.arr_len != res_length {
+                lhs = expand_expr_array(&lhs, res_length, module, bb);
+            }
+            if rhs.arr_len != res_length {
+                rhs = expand_expr_array(&rhs, res_length, module, bb);
+            }
+
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let plus_arr = add_function_call(module, bb, "jminus", &mut args[..], "minus_arr");
-                ExprArrayPtr { ptr : plus_arr, arr_len: lhs.arr_len }
+                let sub_arr = add_function_call(module, bb, "jminus", &mut args[..], "minus_arr");
+                ExprArrayPtr { ptr : sub_arr, arr_len: lhs.arr_len }
             }
         },
         parser::AstNode::Times{ref lhs, ref rhs} => {

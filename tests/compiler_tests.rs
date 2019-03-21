@@ -132,3 +132,10 @@ fn ctest_additions_lists_mixedlens_legal() {
     assert_eq!("11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_subtractions_lists_mixedlens_legal() {
+    let (stdout, stderr) = compile("ctest_subtractions_lists_mixedlens_legal.ijs");
+    assert_eq!("_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

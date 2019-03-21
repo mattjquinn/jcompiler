@@ -41,6 +41,7 @@ $ cargo test
 
 ### TODO
 * Add support for "_" in front of numbers.
+* Add tests for illegal array operations (i.e., 1 2 3 + 4 5)
 * Ensure all malloc'd arrays are freed.
 * READ: APL: A Glimpse of Heaven: https://news.ycombinator.com/item?id=19325361
 * READ: K7 Tutorial: https://news.ycombinator.com/item?id=19418570
