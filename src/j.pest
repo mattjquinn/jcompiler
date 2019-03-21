@@ -5,9 +5,11 @@ program = _{ SOI ~ (stmt ~ "\n") * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = { monadicExpr | dyadicExpr | terms }
+expr = { insertExpr | monadicExpr | dyadicExpr | terms }
 monadicExpr = { monadicVerb ~ expr }
 dyadicExpr = { (monadicExpr | terms) ~ dyadicVerb ~ expr }
+// To think: "/" is a dyad itself, can we write this more concisely?
+insertExpr = { dyadicVerb ~ "/" ~ expr }
 terms = { term+ }
 term = _{ number | "(" ~ expr ~ ")" }
 

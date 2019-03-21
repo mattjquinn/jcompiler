@@ -20,6 +20,7 @@ pub enum AstNode {
     Increment(Box<AstNode>),
     Square(Box<AstNode>),
     Negate(Box<AstNode>),
+    Reduce { dyadic_verb: String, expr: Box<AstNode> },
 }
 
 impl fmt::Display for AstNode {
@@ -84,6 +85,14 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
         Rule::terms => Terms(pair.into_inner()
                                 .map(build_ast_from_term)
                                 .collect_vec()),
+        Rule::insertExpr => {
+            let mut pair = pair.into_inner();
+            let dyad_to_insert = pair.next().unwrap();
+            let expr = pair.next().unwrap();
+            let node = build_ast_from_expr(expr);
+            AstNode::Reduce { dyadic_verb : String::from(dyad_to_insert.as_str()),
+                              expr : Box::new(node) }
+        }
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr),
     }
 }

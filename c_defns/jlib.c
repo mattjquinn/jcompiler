@@ -82,3 +82,15 @@ int* jtimes(int* lhs, int lhslen, int* rhs, int rhslen) {
   }
   return prod_arr;
 }
+
+int* jreduce_plus(int* expr_arr, int len) {
+
+  // Reducing always results in a single element array.
+  int* out_arr = (int*)malloc(sizeof(int));
+
+  out_arr[0] = 0;
+  for (int i = 0; i < len; i++) {
+    out_arr[0] += expr_arr[i];
+  }
+  return out_arr;
+}

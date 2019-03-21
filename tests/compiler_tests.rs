@@ -146,3 +146,10 @@ fn ctest_products_lists_mixedlens_legal() {
     assert_eq!("40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_insertions() {
+    let (stdout, stderr) = compile("ctest_insertions.ijs");
+    assert_eq!("5\n3\n6\n11\n2\n_26\n_26\n_10\n90 180 270\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
