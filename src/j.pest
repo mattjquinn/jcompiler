@@ -14,7 +14,7 @@ terms = { term+ }
 term = _{ number | "(" ~ expr ~ ")" }
 
 monadicVerb = { ">:" | "*:" | "-" }
-dyadicVerb = { "+" | "*" | "-" }
+dyadicVerb = { "+" | "*" | "-" | "<" }
 
 // @ means "atomic": no implicit whitespace allowed.
 number = @{ ASCII_DIGIT+ }

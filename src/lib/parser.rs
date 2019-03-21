@@ -21,6 +21,7 @@ pub enum AstNode {
     Square(Box<AstNode>),
     Negate(Box<AstNode>),
     Reduce { dyadic_verb: String, expr: Box<AstNode> },
+    LessThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
 }
 
 impl fmt::Display for AstNode {
@@ -79,6 +80,7 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
                 "+" => AstNode::Plus{lhs: Box::new(lhs), rhs: Box::new(rhs)},
                 "*" => AstNode::Times{lhs: Box::new(lhs), rhs: Box::new(rhs)},
                 "-" => AstNode::Minus{lhs: Box::new(lhs), rhs: Box::new(rhs)},
+                "<" => AstNode::LessThan{lhs: Box::new(lhs), rhs: Box::new(rhs)},
                  _ => panic!("Unexpected binary op: {}", op.as_str())
             }
         },

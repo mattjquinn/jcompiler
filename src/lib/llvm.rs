@@ -205,7 +205,7 @@ fn compile_expr(
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
                 let sub_arr = add_function_call(module, bb, "jminus", &mut args[..], "minus_arr");
-                ExprArrayPtr { ptr : sub_arr, arr_len: lhs.arr_len }
+                ExprArrayPtr { ptr : sub_arr, arr_len: res_length }
             }
         },
         parser::AstNode::Times{ref lhs, ref rhs} => {
@@ -225,7 +225,7 @@ fn compile_expr(
             unsafe {
                 let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
                 let plus_arr = add_function_call(module, bb, "jtimes", &mut args[..], "times_arr");
-                ExprArrayPtr { ptr : plus_arr, arr_len: lhs.arr_len }
+                ExprArrayPtr { ptr : plus_arr, arr_len: res_length }
             }
         },
         parser::AstNode::Reduce{ ref dyadic_verb, ref expr } => {
@@ -253,7 +253,27 @@ fn compile_expr(
                 _ => { unimplemented!("Not ready to compile insert (reduce) with dyad: {}", dyadic_verb) }
             };
             ExprArrayPtr { ptr : reduced_arr, arr_len: 1 }
-        }
+        },
+        parser::AstNode::LessThan{ref lhs, ref rhs} => {
+            let mut rhs = compile_expr(rhs, module, bb);
+            let mut lhs = compile_expr(lhs, module, bb);
+
+            // If either of the arguments is shorter than the other,
+            // we must expand it before passing it to the times verb.
+            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
+            if lhs.arr_len != res_length {
+                lhs = expand_expr_array(&lhs, res_length, module, bb);
+            }
+            if rhs.arr_len != res_length {
+                rhs = expand_expr_array(&rhs, res_length, module, bb);
+            }
+
+            unsafe {
+                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
+                let lt_arr = add_function_call(module, bb, "jlessthan", &mut args[..], "lessthan_arr");
+                ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
+            }
+        },
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
 }
@@ -513,6 +533,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jreduce_plus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jreduce_times", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jreduce_minus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
+    add_function(module, "jlessthan", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
 }
 
 unsafe fn add_function_call(
