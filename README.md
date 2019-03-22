@@ -41,6 +41,8 @@ $ cargo test
 
 ### TODO
 * Add support for "_" in front of numbers.
+* Move simpler definitions back to LLVM to expand their test coverage
+  (dump IR to ensure correct translation).
 * Allow verbs to be standalone expressions by themselves (printing them should give
   their textual representation just as ijconsole does).
 * Add tests for illegal array operations (i.e., 1 2 3 + 4 5)
