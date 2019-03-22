@@ -202,3 +202,10 @@ fn ctest_global_assgmts_refs() {
     assert_eq!("99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_global_refs_mixedverbs() {
+    let (stdout, stderr) = compile("ctest_global_refs_mixedverbs.ijs");
+    assert_eq!("1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n6 5 2 10\n8 7 4 12\n36 25 4 100\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
