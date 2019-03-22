@@ -12,10 +12,6 @@ int* jbox_number(int num) {
   return boxed_arr;
 }
 
-int* jmalloc_array(int len) {
-  return (int*)malloc(len * sizeof(int));
-}
-
 void jexpand_copy(int* dest, int* src, int dest_idx, int src_idx) {
   dest[dest_idx] = src[src_idx];
 }

@@ -107,8 +107,12 @@ fn compile_expr(
                 }
                 let mut builder = Builder::new();
                 builder.position_at_end(bb);
-                let mut args = vec![int32(compiled_terms.len() as u64)];
-                let dest_arr = add_function_call(module, bb, "jmalloc_array", &mut args[..], "boxed_num");
+                let dest_arr = LLVMBuildArrayMalloc(
+                    builder.builder,
+                    int32_type(),
+                    int64(compiled_terms.len() as u64),
+                    module.new_string_ptr("malloc_array")
+                );
                 for (idx, src_arr) in compiled_terms.iter().enumerate() {
                       let mut args = vec![dest_arr, src_arr.ptr, int32(idx as u64), int32(0)];
                       add_function_call(module, bb, "jexpand_copy", &mut args[..], "");
@@ -545,7 +549,6 @@ fn add_c_declarations(module: &mut Module) {
 //    );
 
     add_function(module, "jbox_number", &mut [int32_type()], int32_ptr_type());
-    add_function(module, "jmalloc_array", &mut [int32_type()], int32_ptr_type());
     add_function(module, "jexpand_copy", &mut [int32_ptr_type(), int32_ptr_type(), int32_type(), int32_type()], void);
     add_function(module, "jprint", &mut [int32_ptr_type(), int32_type()], void);
     add_function(module, "jnegate", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
