@@ -165,3 +165,16 @@ int* jequal(int* lhs, int lhslen, int* rhs, int rhslen) {
   }
   return lt_arr;
 }
+
+int* jlargerthan(int* lhs, int lhslen, int* rhs, int rhslen) {
+
+  // Requires same-length array operands; expansion of different length
+  // operands should be done in LLVM prior to adding a call to this function.
+  assert(lhslen == rhslen);
+
+  int* gt_arr = (int*)malloc(lhslen * sizeof(int));
+  for (int i = 0; i < lhslen; i++) {
+    gt_arr[i] = (lhs[i] > rhs[i]) ? 1 : 0;
+  }
+  return gt_arr;
+}

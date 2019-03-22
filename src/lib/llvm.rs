@@ -257,6 +257,26 @@ fn compile_expr(
                 ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
             }
         },
+        parser::AstNode::LargerThan{ref lhs, ref rhs} => {
+            let mut rhs = compile_expr(rhs, module, bb);
+            let mut lhs = compile_expr(lhs, module, bb);
+
+            // If either of the arguments is shorter than the other,
+            // we must expand it before passing it to the times verb.
+            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
+            if lhs.arr_len != res_length {
+                lhs = expand_expr_array(&lhs, res_length, module, bb);
+            }
+            if rhs.arr_len != res_length {
+                rhs = expand_expr_array(&rhs, res_length, module, bb);
+            }
+
+            unsafe {
+                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
+                let lt_arr = add_function_call(module, bb, "jlargerthan", &mut args[..], "largerthan_arr");
+                ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
+            }
+        },
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
 }
@@ -520,6 +540,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jreduce_minus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jlessthan", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jequal", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
+    add_function(module, "jlargerthan", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
 }
 
 unsafe fn add_function_call(
