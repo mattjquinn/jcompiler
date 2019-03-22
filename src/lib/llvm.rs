@@ -61,26 +61,19 @@ fn compile_expr(
             let mut builder = Builder::new();
             builder.position_at_end(bb);
             unsafe {
-                let atype = LLVMArrayType(
+                let num = LLVMBuildAlloca(
+                    builder.builder,
                     int32_type(),
-                    1
+                    module.new_string_ptr("num")
                 );
-                let arr = LLVMBuildArrayAlloca(
+                LLVMBuildStore(builder.builder, int32(n as u64), num);
+                let num = LLVMBuildLoad(
                     builder.builder,
-                    atype,
-                    int32(0),
-                    module.new_string_ptr("arr")
+                    num,
+                    module.new_string_ptr("num_load")
                 );
-                LLVMSetAlignment(arr, 16);
-                let mut offset_vec = vec![int64(0), int64(0)];
-                let gep = LLVMBuildGEP(
-                    builder.builder,
-                    arr,
-                    offset_vec.as_mut_ptr(),
-                    offset_vec.len() as u32,
-                    module.new_string_ptr("arridx"),
-                );
-                LLVMBuildStore(builder.builder, int32(n as u64), gep);
+                let mut args = vec![num];
+                let arr = add_function_call(module, bb, "jbox_number", &mut args[..], "boxed_num");
                 ExprArrayPtr {ptr: arr, arr_len: 1 }
             }
         },
@@ -105,43 +98,13 @@ fn compile_expr(
                 }
                 let mut builder = Builder::new();
                 builder.position_at_end(bb);
-                let atype = LLVMArrayType(
-                    int32_type(),
-                    compiled_terms.len() as u32
-                );
-                let arr = LLVMBuildArrayAlloca(
-                    builder.builder,
-                    atype,
-                    int32(0),
-                    module.new_string_ptr("arr")
-                );
-                LLVMSetAlignment(arr, 16);
-                for (idx, t) in compiled_terms.iter().enumerate() {
-                    let mut dest_offset_vec = vec![int64(0), int64(idx as c_ulonglong)];
-                    let dest_gep = LLVMBuildGEP(
-                        builder.builder,
-                        arr,
-                        dest_offset_vec.as_mut_ptr(),
-                        dest_offset_vec.len() as u32,
-                        module.new_string_ptr("dest_arr"),
-                    );
-                    // Using offset of 0 per assumption of only one element above.
-                    let mut src_offset_vec = vec![int64(0), int64(0)];
-                    let src_gep = LLVMBuildGEP(
-                        builder.builder,
-                        t.ptr,
-                        src_offset_vec.as_mut_ptr(),
-                        src_offset_vec.len() as u32,
-                        module.new_string_ptr("src_arr"),
-                    );
-                    let src_load = LLVMBuildLoad(
-                        builder.builder,
-                        src_gep,
-                        module.new_string_ptr("src_load")
-                    );
-                    LLVMBuildStore(builder.builder, src_load, dest_gep);
+                let mut args = vec![int32(compiled_terms.len() as u64)];
+                let dest_arr = add_function_call(module, bb, "jmalloc_array", &mut args[..], "boxed_num");
+                for (idx, src_arr) in compiled_terms.iter().enumerate() {
+                      let mut args = vec![dest_arr, src_arr.ptr, int32(idx as u64), int32(0)];
+                      add_function_call(module, bb, "jexpand_copy", &mut args[..], "");
                 }
-                ExprArrayPtr {ptr: arr, arr_len: compiled_terms.len() as u32 }
+                ExprArrayPtr {ptr: dest_arr, arr_len: compiled_terms.len() as u32 }
             }
         },
         parser::AstNode::Increment(ref terms) => {
@@ -298,7 +261,6 @@ fn expand_expr_array(expr_array : &ExprArrayPtr,
             int32(0),
             module.new_string_ptr("expansion_arr")
         );
-        LLVMSetAlignment(arr, 16);
         // Load the sole element out of the unexpanded array;
         // using offset of 0 per assumption of only one element above.
         let fromtype = LLVMArrayType(
@@ -523,6 +485,9 @@ fn add_c_declarations(module: &mut Module) {
 //        int32_type(),
 //    );
 
+    add_function(module, "jbox_number", &mut [int32_type()], int32_ptr_type());
+    add_function(module, "jmalloc_array", &mut [int32_type()], int32_ptr_type());
+    add_function(module, "jexpand_copy", &mut [int32_ptr_type(), int32_ptr_type(), int32_type(), int32_type()], void);
     add_function(module, "jprint", &mut [int32_ptr_type(), int32_type()], void);
     add_function(module, "jnegate", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
     add_function(module, "jincrement", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());

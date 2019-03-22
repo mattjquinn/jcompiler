@@ -6,6 +6,20 @@
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
 
+int* jbox_number(int num) {
+  int* boxed_arr = (int*)malloc(sizeof(int));
+  boxed_arr[0] = num;
+  return boxed_arr;
+}
+
+int* jmalloc_array(int len) {
+  return (int*)malloc(len * sizeof(int));
+}
+
+void jexpand_copy(int* dest, int* src, int dest_idx, int src_idx) {
+  dest[dest_idx] = src[src_idx];
+}
+
 void jprint(int* arr, int len) {
 //  int m = 5;
 //  int a[100];

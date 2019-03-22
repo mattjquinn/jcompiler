@@ -31,7 +31,7 @@ fn ctest_number_expr() {
 #[test]
 fn ctest_list_expr() {
     let (stdout, stderr) = compile("ctest_list_expr.ijs");
-    assert_eq!("2 4 6 8 10\n", &stdout[..]);
+    assert_eq!("2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
@@ -171,6 +171,6 @@ fn ctest_insertions_minus() {
 #[test]
 fn ctest_lessthan() {
     let (stdout, stderr) = compile("ctest_lessthan.ijs");
-    assert_eq!("0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n", &stdout[..]);
+    assert_eq!("0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
