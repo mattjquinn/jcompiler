@@ -25,6 +25,7 @@ pub enum AstNode {
     Equal {lhs: Box<AstNode>, rhs: Box<AstNode>},
     LargerThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
     IsGlobal{ident: String, expr: Box<AstNode>},
+    Ident(String),
 }
 
 impl fmt::Display for AstNode {
@@ -116,6 +117,7 @@ fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
     match pair.as_rule() {
         Rule::number => AstNode::Number(pair.as_str().trim().parse().unwrap()),
         Rule::expr => build_ast_from_expr(pair),
+        Rule::ident => AstNode::Ident(String::from(pair.as_str())),
         unknown_term => panic!("Unexpected term: {:?}", unknown_term),
     }
 }

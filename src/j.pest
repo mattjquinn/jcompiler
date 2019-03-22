@@ -14,7 +14,7 @@ insertExpr = { dyadicVerb ~ "/" ~ expr }
 
 assgmtExpr = { ident ~ "=:" ~ expr }
 terms = { term+ }
-term = _{ number | "(" ~ expr ~ ")" }
+term = _{ number | ident | "(" ~ expr ~ ")" }
 
 monadicVerb = { ">:" | "*:" | "-" }
 dyadicVerb = { "+" | "*" | "-" | "<" | "=" | ">" }

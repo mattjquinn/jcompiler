@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use std::collections::HashMap;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
@@ -53,6 +54,7 @@ pub fn compile_to_module(
     }
 }
 
+#[derive(Clone)]
 struct ExprArrayPtr {
     ptr: LLVMValueRef,
     arr_len: u32,
@@ -284,11 +286,15 @@ fn compile_expr(
                 ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
             }
         },
-        parser::AstNode::IsGlobal{ ident: _, ref expr } => {
+        parser::AstNode::IsGlobal{ ref ident, ref expr } => {
             let mut expr = compile_expr(expr, module, bb);
-            // TODO: Update global variable map here.
+            module.global_scope_idents.insert(ident.clone(), expr.clone());
             expr
-        }
+        },
+        parser::AstNode::Ident(ref ident) => {
+            module.global_scope_idents.get(ident).expect(
+                &format!("undefined ident: {}", ident)[..]).clone()
+        },
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
 }
@@ -364,6 +370,7 @@ fn expand_expr_array(expr_array : &ExprArrayPtr,
 pub struct Module {
     module: *mut LLVMModule,
     strings: Vec<CString>,
+    global_scope_idents: HashMap<String, ExprArrayPtr>,
 }
 
 impl Module {
@@ -587,6 +594,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     let mut module = Module {
         module: llvm_module,
         strings: vec![c_module_name],
+        global_scope_idents: HashMap::new(),
     };
 
     let target_triple_cstring = if let Some(target_triple) = target_triple {
