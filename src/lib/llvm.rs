@@ -32,9 +32,16 @@ pub fn compile_to_module(
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
-                    let expr = compile_expr(expr, &mut module, bb);
-                    let mut args = vec![expr.ptr, int32(expr.arr_len as u64)];
-                    add_function_call(&mut module, bb, "jprint", &mut args[..], "");
+                    let c_expr = compile_expr(expr, &mut module, bb);
+                    match expr.as_ref() {
+                        // Top level global assignments aren't printed to console...
+                        parser::AstNode::IsGlobal {ident: _, expr: _} => (),
+                        // ... all other statements are:
+                        _ => {
+                            let mut args = vec![c_expr.ptr, int32(c_expr.arr_len as u64)];
+                            add_function_call(&mut module, bb, "jprint", &mut args[..], "");
+                        }
+                    }
                 }
                 _ => panic!("Not ready to compile top-level AST node: {:?}", astnode),
             }
@@ -277,6 +284,11 @@ fn compile_expr(
                 ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
             }
         },
+        parser::AstNode::IsGlobal{ ident: _, ref expr } => {
+            let mut expr = compile_expr(expr, module, bb);
+            // TODO: Update global variable map here.
+            expr
+        }
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
 }

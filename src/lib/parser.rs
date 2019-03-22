@@ -24,6 +24,7 @@ pub enum AstNode {
     LessThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
     Equal {lhs: Box<AstNode>, rhs: Box<AstNode>},
     LargerThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
+    IsGlobal{ident: String, expr: Box<AstNode>},
 }
 
 impl fmt::Display for AstNode {
@@ -98,7 +99,15 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let node = build_ast_from_expr(expr);
             AstNode::Reduce { dyadic_verb : String::from(dyad_to_insert.as_str()),
                               expr : Box::new(node) }
-        }
+        },
+        Rule::assgmtExpr => {
+            let mut pair = pair.into_inner();
+            let ident = pair.next().unwrap();
+            let expr = pair.next().unwrap();
+            let expr = build_ast_from_expr(expr);
+            AstNode::IsGlobal { ident : String::from(ident.as_str()),
+                                expr : Box::new(expr) }
+        },
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr),
     }
 }

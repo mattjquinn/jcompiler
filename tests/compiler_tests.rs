@@ -188,3 +188,10 @@ fn ctest_largerthan() {
     assert_eq!("1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_is_verb_globalassgmts() {
+    let (stdout, stderr) = compile("ctest_is_verb_globalassgmts.ijs");
+    assert_eq!("", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
