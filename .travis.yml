@@ -10,12 +10,13 @@ rust:
 
 install:
 - wget http://releases.llvm.org/7.0.1/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-- tar xf clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-- export PATH="$PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin:$PATH"
+- mkdir $PWD/.clang_llvm7
+- tar xf clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz -C $PWD/.clang_llvm7
+- export PATH="$PWD/.clang_llvm7/bin:$PATH"
 - cc --version
 - which cc
 - sudo rm `which cc`
-- sudo ln -s $PWD/clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang /usr/bin/cc
+- sudo ln -s $PWD/.clang_llvm7/bin/clang /usr/bin/cc
 - cc --version
 - llvm-config --version
 
