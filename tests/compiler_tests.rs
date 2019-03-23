@@ -8,17 +8,39 @@ use tempfile::NamedTempFile;
 use std::process::Command;
 
 fn compile(test_jfile : &str) -> (String, String) {
-    let compile_to_path = String::from(NamedTempFile::new().unwrap().path()
+
+    // First compile *without* optimizations/stripping.
+    let unopt_compile_to_path = String::from(NamedTempFile::new().unwrap().path()
         .to_str().expect("valid tempfile path"));
     jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
-                          None, Some(compile_to_path.clone()))
-        .expect("compilation failed");
-    let output = Command::new(compile_to_path)
+                          None, 0, false,
+                          Some(unopt_compile_to_path.clone()))
+        .expect("unoptimized compilation failed");
+    let unopt_output = Command::new(unopt_compile_to_path)
         .output()
-        .expect("failed to execute compiled binary");
-    let stdout = str::from_utf8(&output.stdout).unwrap().to_owned();
-    let stderr = str::from_utf8(&output.stderr).unwrap().to_owned();
-    (stdout, stderr)
+        .expect("failed to execute unoptimized binary");
+    let unopt_stdout = str::from_utf8(&unopt_output.stdout).unwrap().to_owned();
+    let unopt_stderr = str::from_utf8(&unopt_output.stderr).unwrap().to_owned();
+
+    // Then compile *with* optimizations/stripping.
+    let opt_compile_to_path = String::from(NamedTempFile::new().unwrap().path()
+        .to_str().expect("valid tempfile path"));
+    jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
+                          None, 3, true,
+                          Some(opt_compile_to_path.clone()))
+        .expect("optimized/stripped compilation failed");
+    let opt_output = Command::new(opt_compile_to_path)
+        .output()
+        .expect("failed to execute optimized/stripped binary");
+    let opt_stdout = str::from_utf8(&opt_output.stdout).unwrap().to_owned();
+    let opt_stderr = str::from_utf8(&opt_output.stderr).unwrap().to_owned();
+
+    // Ensure outputs of both agree.
+    assert_eq!(opt_stdout, unopt_stdout);
+    assert_eq!(opt_stderr, unopt_stderr);
+
+    // Return either set to caller for correctness assertions.
+    (opt_stdout, opt_stderr)
 }
 
 #[test]

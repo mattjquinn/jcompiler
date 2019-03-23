@@ -50,6 +50,8 @@ fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
 
 pub fn compile(path: &str,
                target_triple : Option<String>,
+               llvm_optimization_level : u8,
+               do_strip_executable : bool,
                output_path : Option<String>) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
@@ -65,14 +67,11 @@ pub fn compile(path: &str,
 
     let mut llvm_module = llvm::compile_to_module(path, target_triple.clone(), &ast);
 
+    llvm::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
     let llvm_ir_cstr = llvm_module.to_cstring();
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-    println!("Unoptimized:\n{}", llvm_ir);
 
-    //    llvm::optimise_ir(&mut llvm_module, 3);
-    //    let llvm_ir_cstr = llvm_module.to_cstring();
-    //    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-    //    println!("Optimized:\n{}", llvm_ir);
+    println!("LLVM IR optimized at level {}:\n{}", llvm_optimization_level, llvm_ir);
 
     // Compile the LLVM IR to a temporary object file.
     let object_file = try!(convert_io_error(NamedTempFile::new()));
@@ -84,18 +83,14 @@ pub fn compile(path: &str,
         Some(op) => op,
         None => executable_name(path),
     };
-    println!("Outputting executable to {}", output_path);
+    println!("Writing executable to {}", output_path);
     link_object_file(&obj_file_path, &output_path, target_triple).unwrap();
 
-    // TODO: Enable executable stripping.
-    //    fn strip_executable(executable_path: &str) -> Result<(), String> {
-    //        let strip_args = ["-s", &executable_path[..]];
-    //        shell::run_shell_command("strip", &strip_args[..])
-    //    }
-    //    let strip_opt = matches.opt_str("strip").unwrap_or_else(|| "yes".to_owned());
-    //    if strip_opt == "yes" {
-    //        try!(strip_executable(&output_name))
-    //    }
+    if do_strip_executable {
+        let strip_args = ["-s", &output_path[..]];
+        shell::run_shell_command("strip", &strip_args[..]).unwrap();
+        println!("Stripped executable of debug symbols.");
+    }
 
     Ok(())
 }

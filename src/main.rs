@@ -20,26 +20,11 @@ fn main() {
 
     let mut opts = Options::new();
 
-    opts.optflag("j", "jlang", "lex/parse jlang");
     opts.optflag("h", "help", "print usage");
     opts.optflag("v", "version", "print jcompiler version");
     opts.optflag("", "dump-llvm", "print LLVM IR generated");
-    opts.optflag("", "dump-ir", "print BF IR generated");
-
-    opts.optopt("O", "opt", "optimization level (0 to 2)", "LEVEL");
-    opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LEVEL");
-    opts.optopt(
-        "",
-        "passes",
-        "limit jcompiler optimisations to those specified",
-        "PASS-SPECIFICATION",
-    );
-    opts.optopt(
-        "",
-        "strip",
-        "strip symbols from the binary (default: yes)",
-        "yes|no",
-    );
+    opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LVL");
+    opts.optopt("", "strip", "strip symbols from the binary (default: yes)", "yes|no");
 
     let default_triple_cstring = llvm::get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
@@ -74,8 +59,36 @@ fn main() {
         std::process::exit(1);
     }
 
+    let llvm_opt_level : u8 = match matches.opt_str("llvm-opt") {
+        Some(lvlstr) =>
+            match lvlstr.parse::<u8>() {
+                Ok(n) if n <= 3 => n,
+                _ => {
+                    println!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr);
+                    return;
+                }
+        }
+        _ => 0,
+    };
+
+    let do_strip = match matches.opt_str("strip") {
+        Some(ans) => {
+            match &ans[..] {
+                "yes" => true,
+                "no" => false,
+                _ => {
+                    println!("Unrecognized choice \"{}\" for --strip; need \"yes\" or \"no\".", ans);
+                    return;
+                }
+            }
+        },
+        _ => true // Strip executables of debugging symbols by default.
+    };
+
     match jcompilerlib::compile(&matches.free[0],
                                 matches.opt_str("target"),
+                                llvm_opt_level,
+                                do_strip,
                                 None) {
         Ok(_) => {}
         Err(e) => {
