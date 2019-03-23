@@ -40,7 +40,6 @@ $ cargo test
 ```
 
 ### TODO
-* Add support for "_" in front of numbers.
 * Check result of malloc; if non-zero, branch to print error message and quit.
 * Free all malloc'd arrays at end of scope (for now this is top-level scope)
 * Move simpler definitions back to LLVM to expand their test coverage

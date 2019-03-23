@@ -209,3 +209,10 @@ fn ctest_global_refs_mixedverbs() {
     assert_eq!("1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n6 5 2 10\n8 7 4 12\n36 25 4 100\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_negative_numbers() {
+    let (stdout, stderr) = compile("ctest_negative_numbers.ijs");
+    assert_eq!("_1 _2 _3 _4 _5 _6 _7 _8 _9 _10\n2\n1 1 1 0 0\n_2 _4 _6 _8\n0 1 2 3 4\n4 1 0 1 4\n_8 _4 0 4 8\n10 8 _4 3 _9\n_8640\n_8\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

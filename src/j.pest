@@ -20,7 +20,7 @@ monadicVerb = { ">:" | "*:" | "-" }
 dyadicVerb = { "+" | "*" | "-" | "<" | "=" | ">" }
 
 // @ means "atomic": no implicit whitespace allowed.
-number = @{ ASCII_DIGIT+ }
+number = @{ "_"? ~ ASCII_DIGIT+ }
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
 WHITESPACE = _{ " " | "\t" }

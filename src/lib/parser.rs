@@ -12,7 +12,7 @@ pub struct JParser;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum AstNode {
     Print(Box<AstNode>),
-    Number(u32),
+    Number(i32),
     Plus {lhs: Box<AstNode>, rhs: Box<AstNode>},
     Minus {lhs: Box<AstNode>, rhs: Box<AstNode>},
     Times {lhs: Box<AstNode>, rhs: Box<AstNode>},
@@ -115,7 +115,15 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
 
 fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
     match pair.as_rule() {
-        Rule::number => AstNode::Number(pair.as_str().trim().parse().unwrap()),
+        Rule::number => {
+            let nstr = pair.as_str();
+            let (sign, nstr) = match &nstr[..1] {
+                "_" => (-1, &nstr[1..]),
+                _ => (1, &nstr[..]),
+            };
+            let num : i32 = nstr.parse().unwrap();
+            AstNode::Number(sign * num)
+        },
         Rule::expr => build_ast_from_expr(pair),
         Rule::ident => AstNode::Ident(String::from(pair.as_str())),
         unknown_term => panic!("Unexpected term: {:?}", unknown_term),
