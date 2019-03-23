@@ -41,13 +41,14 @@ $ cargo test
 
 ### TODO
 * Add support for "_" in front of numbers.
+* Check result of malloc; if non-zero, branch to print error message and quit.
+* Free all malloc'd arrays at end of scope (for now this is top-level scope)
 * Move simpler definitions back to LLVM to expand their test coverage
   (dump IR to ensure correct translation).
 * Allow verbs to be standalone expressions by themselves (printing them should give
   their textual representation just as ijconsole does).
 * Add tests for illegal array operations (i.e., 1 2 3 + 4 5); error
   message should be same as ijconsole (i.e., "length error")
-* Ensure all malloc'd arrays are freed.
 * READ: APL: A Glimpse of Heaven: https://news.ycombinator.com/item?id=19325361
 * READ: K7 Tutorial: https://news.ycombinator.com/item?id=19418570
 * Only declare J library functions that are actually used by the program being compiled.
