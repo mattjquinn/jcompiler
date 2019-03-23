@@ -12,8 +12,8 @@ install:
 - export CLANG_TAR=clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
 - wget http://releases.llvm.org/7.0.1/$CLANG_TAR
 - export CLANG_PATH=/opt/clang_llvm7
-- mkdir -p $CLANG_PATH
-- tar xf $CLANG_TAR -C $CLANG_PATH
+- sudo mkdir -p $CLANG_PATH
+- sudo tar xf $CLANG_TAR -C $CLANG_PATH
 - export PATH="$CLANG_PATH/bin:$PATH"
 - cc --version
 - which cc
