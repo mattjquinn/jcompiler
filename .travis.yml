@@ -15,11 +15,8 @@ install:
 - sudo mkdir -p $CLANG_PATH
 - sudo tar xf $CLANG_TAR -C $CLANG_PATH
 - export PATH="$CLANG_PATH/bin:$PATH"
-- cc --version
-- which cc
-- sudo rm `which cc`
-- sudo ln -s $CLANG_PATH/bin/clang /usr/bin/cc
-- cc --version
+- echo $PATH
+- clang --version
 - llvm-config --version
 
 matrix:
