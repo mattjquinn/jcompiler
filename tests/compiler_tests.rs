@@ -259,3 +259,10 @@ fn ctest_divisions() {
     assert_eq!(expected, &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_power() {
+    let (stdout, stderr) = compile("ctest_power.ijs");
+    assert_eq!("1\n1\n1\n8\n_8\n59049\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

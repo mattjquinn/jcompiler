@@ -25,6 +25,8 @@ pub enum DyadicVerb {
     Equal = 5,
     Minus = 6,
     Divide = 7,
+    Power = 8,
+    Residue = 9,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -131,6 +133,8 @@ fn dyadic_verb_as_enum(verb : &str) -> DyadicVerb {
         "=" => DyadicVerb::Equal,
         ">" => DyadicVerb::LargerThan,
         "%" => DyadicVerb::Divide,
+        "^" => DyadicVerb::Power,
+        "|" => DyadicVerb::Residue,
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }

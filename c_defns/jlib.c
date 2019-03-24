@@ -32,6 +32,8 @@ enum JDyadicVerb {
   JEqualOp = 5,
   JMinusOp = 6,
   JDivideOp = 7,
+  JPowerOp = 8,
+  JResidueOp = 9,
 };
 
 enum JMonadicVerb {
@@ -123,6 +125,12 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
                 *dptr = (double) lhsi / (double) rhsi;
                 ret->type = JDoublePrecisionFloatType;
                 ret->ptr = dptr;
+                return ret;
+            case JPowerOp:
+                iptr = (int*) malloc(sizeof(int));
+                *iptr = pow(lhsi, rhsi);
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 return ret;
             case JLessThanOp:
                 iptr = (int*) malloc(sizeof(int));
