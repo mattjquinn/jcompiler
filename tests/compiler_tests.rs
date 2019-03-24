@@ -273,3 +273,10 @@ fn ctest_monadic_reciprocal() {
     assert_eq!("1\n0.5\n0.333333\n0.25\n_1\n_0.5\n_0.333333\n_0.25\n1 0.5 0.333333 0.25 0.2\n_1 _0.5 _0.333333 _0.25 _0.2\n2.28333\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_tally() {
+    let (stdout, stderr) = compile("ctest_monadic_tally.ijs");
+    assert_eq!("1\n2\n3\n4\n_1 2 _3 4 _5\n5\n5\n1\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

@@ -41,6 +41,7 @@ enum JMonadicVerb {
   JSquareOp = 2,
   JNegateOp = 3,
   JReciprocalOp = 4,
+  JTallyOp = 5,
 };
 
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
@@ -341,6 +342,12 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                     ret->type = JDoublePrecisionFloatType;
                     ret->ptr = dptr;
                     return ret;
+                case JTallyOp:
+                    iptr = (int*) malloc(sizeof(int));
+                    *iptr = expr->len;
+                    ret->type = JIntegerType;
+                    ret->ptr = iptr;
+                    return ret;
                 default:
                     printf("ERROR: jmonad: unsupported verb on type integer: %d\n", op);
                     exit(EXIT_FAILURE);
@@ -372,6 +379,20 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
             return ret;
 
         case JArrayType:
+
+            if (op == JTallyOp) {
+                // The tally monad is not distributed over arrays;
+                // return the length of the array itself.
+                iptr = (int*) malloc(sizeof(int));
+                *iptr = expr->len;
+
+                ret = (struct JVal*) malloc(sizeof(struct JVal));
+                ret->type = JIntegerType;
+                ret->len = 1;
+                ret->ptr = iptr;
+                return ret;
+            }
+
             jvals_in = expr->ptr;
             jvals_out = (struct JVal**) malloc(expr->len * sizeof(struct JVal*));
 
