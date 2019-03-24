@@ -238,3 +238,10 @@ fn ctest_negative_numbers() {
     assert_eq!("_1 _2 _3 _4 _5 _6 _7 _8 _9 _10\n2\n1 1 1 0 0\n_2 _4 _6 _8\n0 1 2 3 4\n4 1 0 1 4\n_8 _4 0 4 8\n10 8 _4 3 _9\n_8640\n_8\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_decimals() {
+    let (stdout, stderr) = compile("ctest_decimals.ijs");
+    assert_eq!("0 0 0 0 0\n0 0 0 0 0\n1 1 1 1 1\n_1 _1 _1 _1 _1\n1 _2.943 3 _4 5 _800.123\n_1 _2.4 _3 0 1.9 8 7.123 2.71828\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

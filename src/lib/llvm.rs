@@ -8,7 +8,7 @@ use llvm_sys::transforms::pass_manager_builder::*;
 use llvm_sys::{LLVMBuilder, LLVMModule};
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_uint, c_ulonglong};
+use std::os::raw::{c_uint, c_ulonglong, c_double};
 use std::ptr::null_mut;
 use std::str;
 
@@ -58,6 +58,7 @@ pub fn compile_to_module(
 enum JValType {
     Integer = 1,
     Array = 2,
+    DoublePrecisionFloat = 3,
 }
 
 #[derive(Clone)]
@@ -80,7 +81,7 @@ fn alloc_jval(
     builder.position_at_end(bb);
 
     unsafe {
-        // Build a JVal struct to point to the number.
+        // Build a JVal struct.
         let jval_ptr = LLVMBuildAlloca(
             builder.builder,
             module.jval_struct_type,
@@ -118,6 +119,24 @@ fn alloc_jval(
             ptr_offset.len() as u32,
             module.new_string_ptr("jval_ptr_gep"),
         );
+        let ptr_gep = match val_type {
+            JValType::Integer =>
+                LLVMBuildPointerCast(
+                    builder.builder,
+                    ptr_gep,
+                    int32_ptr_ptr_type(),
+                    module.new_string_ptr("jval_ptr_cast")
+                )
+            ,
+            JValType::DoublePrecisionFloat =>
+                LLVMBuildPointerCast(
+                    builder.builder,
+                    ptr_gep,
+                    f64_ptr_ptr_type(),
+                    module.new_string_ptr("jval_ptr_cast")
+                )
+            , _ => ptr_gep
+        };
         LLVMBuildStore(builder.builder, val, ptr_gep);
 
         JValPtr { static_type : Some(val_type), static_len : Some(val_len), ptr : jval_ptr }
@@ -132,7 +151,7 @@ fn compile_expr(
     let builder = Builder::new();
     builder.position_at_end(bb);
     match *expr {
-        parser::AstNode::Number(n) => {
+        parser::AstNode::Integer(n) => {
             unsafe {
                 // Allocate space for the number.
                 let num = LLVMBuildAlloca(
@@ -144,6 +163,21 @@ fn compile_expr(
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::Integer;
+                alloc_jval(module, bb, num, ty.clone(), 1)
+            }
+        },
+        parser::AstNode::DoublePrecisionFloat(n) => {
+            unsafe {
+                // Allocate space for the number.
+                let num = LLVMBuildAlloca(
+                    builder.builder,
+                    f64_type(),
+                    module.new_string_ptr("dblfp_alloc")
+                );
+                LLVMBuildStore(builder.builder, f64(n), num);
+
+                // Point to the number via a JVal struct.
+                let ty = JValType::DoublePrecisionFloat;
                 alloc_jval(module, bb, num, ty.clone(), 1)
             }
         },
@@ -329,6 +363,11 @@ unsafe fn int1(val: c_ulonglong) -> LLVMValueRef {
 unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
     LLVMConstInt(LLVMInt8Type(), val, LLVM_FALSE)
 }
+
+unsafe fn f64(val: c_double) -> LLVMValueRef {
+    LLVMConstReal(LLVMDoubleType(), val)
+}
+
 /// Convert this integer to LLVM's representation of a constant
 /// integer.
 // TODO: this should be a machine word size rather than hard-coding 32-bits.
@@ -352,12 +391,20 @@ fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
 }
 
-//fn int8_ptr_type() -> LLVMTypeRef {
-//    unsafe { LLVMPointerType(LLVMInt8Type(), 0) }
-//}
+fn f64_type() -> LLVMTypeRef {
+    unsafe { LLVMDoubleType() }
+}
 
-fn int32_ptr_type() -> LLVMTypeRef {
-    unsafe { LLVMPointerType(LLVMInt32Type(), 0) }
+fn f64_ptr_ptr_type() -> LLVMTypeRef {
+    unsafe { LLVMPointerType(LLVMPointerType(LLVMDoubleType(), 0), 0) }
+}
+
+fn int32_ptr_ptr_type() -> LLVMTypeRef {
+    unsafe { LLVMPointerType(LLVMPointerType(LLVMInt32Type(), 0), 0) }
+}
+
+fn void_ptr_type() -> LLVMTypeRef {
+    unsafe { LLVMPointerType(LLVMVoidType(), 0) }
 }
 
 fn add_function(
@@ -470,7 +517,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
         let mut members = vec![
             int8_type(),        // the value's type
             int32_type(),       // the value's length
-            int32_ptr_type()    // a pointer to the value
+            void_ptr_type()    // a pointer to the value
         ];
         LLVMStructSetBody(
             jval_struct_type,

@@ -14,13 +14,14 @@ insertExpr = { dyadicVerb ~ "/" ~ expr }
 
 assgmtExpr = { ident ~ "=:" ~ expr }
 terms = { term+ }
-term = _{ number | ident | "(" ~ expr ~ ")" }
+term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
 monadicVerb = { ">:" | "*:" | "-" }
 dyadicVerb = { "+" | "*" | "-" | "<" | "=" | ">" }
 
 // @ means "atomic": no implicit whitespace allowed.
-number = @{ "_"? ~ ASCII_DIGIT+ }
+integer = @{ "_"? ~ ASCII_DIGIT+ }
+decimal = @{ "_"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* }
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
 WHITESPACE = _{ " " | "\t" }

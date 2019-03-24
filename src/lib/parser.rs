@@ -26,10 +26,11 @@ pub enum DyadicVerb {
     Minus = 6,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum AstNode {
     Print(Box<AstNode>),
-    Number(i32),
+    Integer(i32),
+    DoublePrecisionFloat(f64),
     MonadicOp { verb: MonadicVerb, expr: Box<AstNode> },
     DyadicOp { verb: DyadicVerb, lhs: Box<AstNode>, rhs: Box<AstNode>},
     Terms(Vec<AstNode>),
@@ -143,15 +144,28 @@ fn monadic_verb_as_enum(verb : &str) -> MonadicVerb {
 
 fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
     match pair.as_rule() {
-        Rule::number => {
-            let numstr = pair.as_str();
-            let (sign, numstr) = match &numstr[..1] {
-                "_" => (-1, &numstr[1..]),
-                _ => (1, &numstr[..]),
+        Rule::integer => {
+            let istr = pair.as_str();
+            let (sign, istr) = match &istr[..1] {
+                "_" => (-1, &istr[1..]),
+                _ => (1, &istr[..]),
             };
-            let num : i32 = numstr.parse().unwrap();
-            AstNode::Number(sign * num)
+            let integer : i32 = istr.parse().unwrap();
+            AstNode::Integer(sign * integer)
         },
+        Rule::decimal => {
+            let dstr = pair.as_str();
+            let (sign, dstr) = match &dstr[..1] {
+                "_" => (-1.0, &dstr[1..]),
+                _ => (1.0, &dstr[..]),
+            };
+            let mut flt : f64 = dstr.parse().unwrap();
+            if flt != 0.0 {
+                // Avoid negative zeroes; only multiply sign by nonzeroes.
+                flt *= sign;
+            }
+            AstNode::DoublePrecisionFloat(flt)
+        }
         Rule::expr => build_ast_from_expr(pair),
         Rule::ident => AstNode::Ident(String::from(pair.as_str())),
         unknown_term => panic!("Unexpected term: {:?}", unknown_term),

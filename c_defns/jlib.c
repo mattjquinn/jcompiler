@@ -7,6 +7,9 @@
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
 
+// Default print precision is 6; can be changed within J.
+static int PRINT_PRECISION = 6;
+
 struct JVal {
   char type;  // the value's type, as J defines it.
   int len;    // the number of elements pointed to by ptr
@@ -18,6 +21,7 @@ struct JVal {
 enum JValType {
   JIntegerType = 1,
   JArrayType = 2,
+  JDoublePrecisionFloatType = 3,
 };
 
 enum JDyadicVerb {
@@ -38,12 +42,18 @@ enum JMonadicVerb {
 void jprint(struct JVal* val, bool newline) {
   struct JVal** jvals;
   int* iptr;
+  double* dptr;
 
   switch (val->type) {
     case JIntegerType:
       iptr = (int*) val->ptr;
       if (*iptr < 0)         { printf("_%d", abs(*iptr)); }
       else                   { printf("%d", *iptr);       }
+      break;
+    case JDoublePrecisionFloatType:
+      dptr = (double*) val->ptr;
+      if (signbit(*dptr)) { printf("_%.*g", PRINT_PRECISION, fabs(*dptr)); }
+      else                { printf("%.*g", PRINT_PRECISION, *dptr); }
       break;
     case JArrayType:
       jvals = val->ptr;
