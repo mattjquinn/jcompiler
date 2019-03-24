@@ -42,6 +42,7 @@ $ cargo test
 ### TODO
 * Write more parser tests.
 * Modify grammar to allow end-line comments.
+* Print large numbers using scientific notation.
 * Replace exit() calls in c funcs with handler that cleans up.
 * Add a macro to compiler_tests.rs that eliminates duplication of that code.
 * Check result of malloc; if non-zero, branch to print error message and quit.

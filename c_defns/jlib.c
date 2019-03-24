@@ -150,6 +150,14 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
                 ret->type = JIntegerType;
                 ret->ptr = iptr;
                 return ret;
+            case JResidueOp:
+                iptr = (int*) malloc(sizeof(int));
+                // IMPORTANT: In J the operands to Residue are opposite of "%";
+                // i.e., 5 | 2 means 2 % 5
+                *iptr = (rhsi % lhsi);
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
+                return ret;
             default:
                 printf("ERROR: jdyad: unsupported op: %d for types lhs:%d, rhs:%d\n",
                     op, lhs->type, rhs->type);
