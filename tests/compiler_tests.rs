@@ -245,3 +245,10 @@ fn ctest_decimals() {
     assert_eq!("0 0 0 0 0\n0 0 0 0 0\n1 1 1 1 1\n_1 _1 _1 _1 _1\n1 _2.943 3 _4 5 _800.123\n_1 _2.4 _3 0 1.9 8 7.123 2.71828\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_divisions() {
+    let (stdout, stderr) = compile("ctest_divisions.ijs");
+    assert_eq!("0.75\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

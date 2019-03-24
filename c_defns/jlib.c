@@ -31,6 +31,7 @@ enum JDyadicVerb {
   JLargerThanOp = 4,
   JEqualOp = 5,
   JMinusOp = 6,
+  JDivideOp = 7,
 };
 
 enum JMonadicVerb {
@@ -79,42 +80,66 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     struct JVal** jvals_a;
     struct JVal** jvals_b;
     struct JVal** jvals_out;
-    int *iptr;
+    int* iptr;
+    double* dptr;
     int lhsi, rhsi;
 
     if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
         lhsi = *((int*) lhs->ptr);
         rhsi = *((int*) rhs->ptr);
-        iptr = (int*) malloc(sizeof(int));
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->len = 1;
 
         switch(op) {
             case JPlusOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = lhsi + rhsi;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 break;
             case JMinusOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = lhsi - rhsi;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 break;
             case JTimesOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = lhsi * rhsi;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
+                break;
+            case JDivideOp:
+                // Division always produces a double.
+                dptr = (double*) malloc(sizeof(double));
+                *dptr = (double) lhsi / (double) rhsi;
+                ret->type = JDoublePrecisionFloatType;
+                ret->ptr = dptr;
                 break;
             case JLessThanOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = (lhsi < rhsi) ? 1 : 0;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 break;
             case JLargerThanOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = (lhsi > rhsi) ? 1 : 0;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 break;
             case JEqualOp:
+                iptr = (int*) malloc(sizeof(int));
                 *iptr = (lhsi == rhsi) ? 1 : 0;
+                ret->type = JIntegerType;
+                ret->ptr = iptr;
                 break;
             default:
-                printf("ERROR: jdyad: unsupported nop: %d\n", op);
+                printf("ERROR: jdyad: unsupported op: %d\n", op);
                 exit(EXIT_FAILURE);
         }
 
-        ret = (struct JVal*) malloc(sizeof(struct JVal));
-        ret->type = JIntegerType;
-        ret->len = 1;
-        ret->ptr = iptr;
         return ret;
 
     } else if (lhs->type == JIntegerType && rhs->type == JArrayType) {

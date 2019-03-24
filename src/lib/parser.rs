@@ -24,6 +24,7 @@ pub enum DyadicVerb {
     LargerThan = 4,
     Equal = 5,
     Minus = 6,
+    Divide = 7,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -129,6 +130,7 @@ fn dyadic_verb_as_enum(verb : &str) -> DyadicVerb {
         "<" => DyadicVerb::LessThan,
         "=" => DyadicVerb::Equal,
         ">" => DyadicVerb::LargerThan,
+        "%" => DyadicVerb::Divide,
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }
