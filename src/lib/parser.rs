@@ -14,6 +14,7 @@ pub enum MonadicVerb {
     Increment = 1,
     Square = 2,
     Negate = 3,
+    Reciprocal = 4,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -144,6 +145,7 @@ fn monadic_verb_as_enum(verb : &str) -> MonadicVerb {
         ">:" => MonadicVerb::Increment,
         "*:" => MonadicVerb::Square,
         "-" =>  MonadicVerb::Negate,
+        "%" =>  MonadicVerb::Reciprocal,
         _ => panic!("Unsupported monadic verb: {}", verb),
     }
 }

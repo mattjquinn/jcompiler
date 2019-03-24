@@ -40,6 +40,7 @@ enum JMonadicVerb {
   JIncrementOp = 1,
   JSquareOp = 2,
   JNegateOp = 3,
+  JReciprocalOp = 4,
 };
 
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
@@ -311,28 +312,39 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
     switch (expr->type) {
         case JIntegerType:
             expri = *((int*) expr->ptr);
-            iptr = (int*) malloc(sizeof(int));
+
+            ret = (struct JVal*) malloc(sizeof(struct JVal));
+            ret->len = 1;
 
             switch (op) {
                 case JIncrementOp:
+                    iptr = (int*) malloc(sizeof(int));
                     *iptr = expri + 1;
-                    break;
+                    ret->type = JIntegerType;
+                    ret->ptr = iptr;
+                    return ret;
                 case JNegateOp:
+                    iptr = (int*) malloc(sizeof(int));
                     *iptr = expri * -1;
-                    break;
+                    ret->type = JIntegerType;
+                    ret->ptr = iptr;
+                    return ret;
                 case JSquareOp:
+                    iptr = (int*) malloc(sizeof(int));
                     *iptr = pow(expri, 2);
-                    break;
+                    ret->type = JIntegerType;
+                    ret->ptr = iptr;
+                    return ret;
+                case JReciprocalOp:
+                    dptr = (double*) malloc(sizeof(double));
+                    *dptr = 1.0 / (float) expri;
+                    ret->type = JDoublePrecisionFloatType;
+                    ret->ptr = dptr;
+                    return ret;
                 default:
                     printf("ERROR: jmonad: unsupported verb on type integer: %d\n", op);
                     exit(EXIT_FAILURE);
             }
-
-            ret = (struct JVal*) malloc(sizeof(struct JVal));
-            ret->type = JIntegerType;
-            ret->len = 1;
-            ret->ptr = iptr;
-            return ret;
 
         case JDoublePrecisionFloatType:
             exprd = *((double*) expr->ptr);

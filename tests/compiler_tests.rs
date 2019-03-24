@@ -266,3 +266,10 @@ fn ctest_power() {
     assert_eq!("1\n1\n1\n8\n_8\n59049\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_reciprocal() {
+    let (stdout, stderr) = compile("ctest_monadic_reciprocal.ijs");
+    assert_eq!("1\n0.5\n0.333333\n0.25\n_1\n_0.5\n_0.333333\n_0.25\n1 0.5 0.333333 0.25 0.2\n_1 _0.5 _0.333333 _0.25 _0.2\n2.28333\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
