@@ -10,20 +10,30 @@ use pest::Parser;
 pub struct JParser;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
+pub enum MonadicVerb {
+    Increment = 1,
+    Square = 2,
+    Negate = 3,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
+pub enum DyadicVerb {
+    Plus = 1,
+    Times = 2,
+    LessThan = 3,
+    LargerThan = 4,
+    Equal = 5,
+    Minus = 6,
+}
+
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum AstNode {
     Print(Box<AstNode>),
     Number(i32),
-    Plus {lhs: Box<AstNode>, rhs: Box<AstNode>},
-    Minus {lhs: Box<AstNode>, rhs: Box<AstNode>},
-    Times {lhs: Box<AstNode>, rhs: Box<AstNode>},
+    MonadicOp { verb: MonadicVerb, expr: Box<AstNode> },
+    DyadicOp { verb: DyadicVerb, lhs: Box<AstNode>, rhs: Box<AstNode>},
     Terms(Vec<AstNode>),
-    Increment(Box<AstNode>),
-    Square(Box<AstNode>),
-    Negate(Box<AstNode>),
-    Reduce { dyadic_verb: String, expr: Box<AstNode> },
-    LessThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
-    Equal {lhs: Box<AstNode>, rhs: Box<AstNode>},
-    LargerThan {lhs: Box<AstNode>, rhs: Box<AstNode>},
+    Reduce { verb: DyadicVerb, expr: Box<AstNode> },
     IsGlobal{ident: String, expr: Box<AstNode>},
     Ident(String),
 }
@@ -66,12 +76,8 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let mut pair = pair.into_inner();
             let verb = pair.next().unwrap().as_str();
             let expr = pair.next().unwrap();
-            match verb {
-                ">:" => Increment(Box::new(build_ast_from_expr(expr))),
-                "*:" => Square(Box::new(build_ast_from_expr(expr))),
-                "-" => Negate(Box::new(build_ast_from_expr(expr))),
-                _ => panic!("Unsupported monadic verb in expr: {}", verb),
-            }
+            let op = monadic_verb_as_enum(verb);
+            AstNode::MonadicOp { verb: op, expr: Box::new(build_ast_from_expr(expr))}
         },
         Rule::dyadicExpr => {
             let mut pair = pair.into_inner();
@@ -80,26 +86,27 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let op = pair.next().unwrap();
             let rhspair = pair.next().unwrap();
             let rhs = build_ast_from_expr(rhspair);
-            match op.as_str() {
-                "+" => AstNode::Plus{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                "*" => AstNode::Times{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                "-" => AstNode::Minus{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                "<" => AstNode::LessThan{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                "=" => AstNode::Equal{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                ">" => AstNode::LargerThan{lhs: Box::new(lhs), rhs: Box::new(rhs)},
-                 _ => panic!("Unexpected binary op: {}", op.as_str())
+            let op = dyadic_verb_as_enum(op.as_str());
+            AstNode::DyadicOp { verb: op, lhs: Box::new(lhs), rhs: Box::new(rhs)}
+        },
+        Rule::terms => {
+            let terms = pair.into_inner()
+                .map(build_ast_from_term)
+                .collect_vec();
+            // If there's just a single term, return it without
+            // wrapping it in a Terms node.
+            match terms.len() {
+                1 => terms.get(0).unwrap().clone(),
+                _ => Terms(terms),
             }
         },
-        Rule::terms => Terms(pair.into_inner()
-                                .map(build_ast_from_term)
-                                .collect_vec()),
         Rule::insertExpr => {
             let mut pair = pair.into_inner();
             let dyad_to_insert = pair.next().unwrap();
             let expr = pair.next().unwrap();
             let node = build_ast_from_expr(expr);
-            AstNode::Reduce { dyadic_verb : String::from(dyad_to_insert.as_str()),
-                              expr : Box::new(node) }
+            let op = dyadic_verb_as_enum(dyad_to_insert.as_str());
+            AstNode::Reduce { verb: op, expr : Box::new(node) }
         },
         Rule::assgmtExpr => {
             let mut pair = pair.into_inner();
@@ -113,15 +120,36 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
     }
 }
 
+fn dyadic_verb_as_enum(verb : &str) -> DyadicVerb {
+    match verb {
+        "+" => DyadicVerb::Plus,
+        "*" => DyadicVerb::Times,
+        "-" => DyadicVerb::Minus,
+        "<" => DyadicVerb::LessThan,
+        "=" => DyadicVerb::Equal,
+        ">" => DyadicVerb::LargerThan,
+        _ => panic!("Unexpected dyadic verb: {}", verb)
+    }
+}
+
+fn monadic_verb_as_enum(verb : &str) -> MonadicVerb {
+    match verb {
+        ">:" => MonadicVerb::Increment,
+        "*:" => MonadicVerb::Square,
+        "-" =>  MonadicVerb::Negate,
+        _ => panic!("Unsupported monadic verb: {}", verb),
+    }
+}
+
 fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
     match pair.as_rule() {
         Rule::number => {
-            let nstr = pair.as_str();
-            let (sign, nstr) = match &nstr[..1] {
-                "_" => (-1, &nstr[1..]),
-                _ => (1, &nstr[..]),
+            let numstr = pair.as_str();
+            let (sign, numstr) = match &numstr[..1] {
+                "_" => (-1, &numstr[1..]),
+                _ => (1, &numstr[..]),
             };
-            let num : i32 = nstr.parse().unwrap();
+            let num : i32 = numstr.parse().unwrap();
             AstNode::Number(sign * num)
         },
         Rule::expr => build_ast_from_expr(pair),

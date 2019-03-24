@@ -2,175 +2,255 @@
 #include <stdlib.h>
 #include <math.h>
 #include <assert.h>
+#include <stdbool.h>
 
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
 
-int* jbox_number(int num) {
-  int* boxed_arr = (int*)malloc(sizeof(int));
-  boxed_arr[0] = num;
-  return boxed_arr;
-}
+struct JVal {
+  char type;  // the value's type, as J defines it.
+  int len;    // the number of elements pointed to by ptr
+              // - for scalars: 1
+              // - for arrays: the length of the array
+  void* ptr;   // a pointer to the value
+};
 
-void jexpand_copy(int* dest, int* src, int dest_idx, int src_idx) {
-  dest[dest_idx] = src[src_idx];
-}
+enum JValType {
+  JIntegerType = 1,
+  JArrayType = 2,
+};
 
-void jprint(int* arr, int len) {
-//  int m = 5;
-//  int a[100];
-//  a[0] = m;
-//  printf("%d, %d\n", a[0], a[1]);
-  for (int a = 0; a < len; a++) {
-    int i = arr[a];
-    if (i < 0)         { printf("_%d", abs(i)); }
-    else               { printf("%d", i); }
-    if (a < (len - 1)) { printf(" "); }
+enum JDyadicVerb {
+  JPlusOp = 1,
+  JTimesOp = 2,
+  JLessThanOp = 3,
+  JLargerThanOp = 4,
+  JEqualOp = 5,
+  JMinusOp = 6,
+};
+
+enum JMonadicVerb {
+  JIncrementOp = 1,
+  JSquareOp = 2,
+  JNegateOp = 3,
+};
+
+void jprint(struct JVal* val, bool newline) {
+  struct JVal** jvals;
+  int* iptr;
+
+  switch (val->type) {
+    case JIntegerType:
+      iptr = (int*) val->ptr;
+      if (*iptr < 0)         { printf("_%d", abs(*iptr)); }
+      else                   { printf("%d", *iptr);       }
+      break;
+    case JArrayType:
+      jvals = val->ptr;
+      for (int i = 0; i < val->len; i++) {
+        jprint(jvals[i], false);
+        if (i < (val->len - 1)) { printf(" "); }
+      }
+      break;
+    default:
+      printf("ERROR: jprint: unsupported JVal (type:%d, len:%d)\n", val->type, val->len);
+      exit(EXIT_FAILURE);
   }
-  printf("\n");
+
+  if (newline) { printf("\n"); }
 }
 
-int* jnegate(int* arr, int len) {
-  int* neg_arr = (int*)malloc(len * sizeof(int));
-  for (int i = 0; i < len; i++) {
-    neg_arr[i] = arr[i] * -1;
-  }
-  return neg_arr;
+void jexpand(struct JVal** arr, struct JVal* val, int dest_idx) {
+  arr[dest_idx] = val;
 }
 
-int* jincrement(int* arr, int len) {
-  int* inc_arr = (int*)malloc(len * sizeof(int));
-  for (int i = 0; i < len; i++) {
-    inc_arr[i] = arr[i] + 1;
-  }
-  return inc_arr;
+struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
+    struct JVal* ret;
+    struct JVal** jvals_a;
+    struct JVal** jvals_b;
+    struct JVal** jvals_out;
+    int *iptr;
+    int lhsi, rhsi;
+
+    if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
+        lhsi = *((int*) lhs->ptr);
+        rhsi = *((int*) rhs->ptr);
+        iptr = (int*) malloc(sizeof(int));
+
+        switch(op) {
+            case JPlusOp:
+                *iptr = lhsi + rhsi;
+                break;
+            case JMinusOp:
+                *iptr = lhsi - rhsi;
+                break;
+            case JTimesOp:
+                *iptr = lhsi * rhsi;
+                break;
+            case JLessThanOp:
+                *iptr = (lhsi < rhsi) ? 1 : 0;
+                break;
+            case JLargerThanOp:
+                *iptr = (lhsi > rhsi) ? 1 : 0;
+                break;
+            case JEqualOp:
+                *iptr = (lhsi == rhsi) ? 1 : 0;
+                break;
+            default:
+                printf("ERROR: jdyad: unsupported nop: %d\n", op);
+                exit(EXIT_FAILURE);
+        }
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->type = JIntegerType;
+        ret->len = 1;
+        ret->ptr = iptr;
+        return ret;
+
+    } else if (lhs->type == JIntegerType && rhs->type == JArrayType) {
+        jvals_a = rhs->ptr;
+        jvals_out = (struct JVal**) malloc(rhs->len * sizeof(struct JVal*));
+
+        for (int i = 0; i < rhs->len; i++) {
+            jvals_out[i] = jdyad(op, lhs, jvals_a[i]);
+        }
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->type = JArrayType;
+        ret->len = rhs->len;
+        ret->ptr = jvals_out;
+        return ret;
+
+    } else if (lhs->type == JArrayType && rhs->type == JIntegerType) {
+        jvals_a = lhs->ptr;
+        jvals_out = (struct JVal**) malloc(lhs->len * sizeof(struct JVal*));
+
+        for (int i = 0; i < lhs->len; i++) {
+            jvals_out[i] = jdyad(op, jvals_a[i], rhs);
+        }
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->type = JArrayType;
+        ret->len = lhs->len;
+        ret->ptr = jvals_out;
+        return ret;
+
+    } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
+
+        // Array lengths must be the same.
+        if (lhs->len != rhs->len) {
+            printf("ERROR: jdyad: length mismatch: lhs (type:%d,len:%d), rhs (type:%d,len:%d)\n",
+                lhs->type, lhs->len, rhs->type, rhs->len);
+            exit(EXIT_FAILURE);
+        }
+
+        jvals_a = lhs->ptr;
+        jvals_b = rhs->ptr;
+        jvals_out = (struct JVal**) malloc(lhs->len * sizeof(struct JVal*));
+
+        for (int i = 0; i < lhs->len; i++) {
+            jvals_out[i] = jdyad(op, jvals_a[i], jvals_b[i]);
+        }
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->type = JArrayType;
+        ret->len = lhs->len;
+        ret->ptr = jvals_out;
+        return ret;
+    }
+
+    printf("ERROR: jdyad: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
+        lhs->type, lhs->len, rhs->type, rhs->len);
+    exit(EXIT_FAILURE);
 }
 
-int* jsquare(int* arr, int len) {
-  int* sq_arr = (int*)malloc(len * sizeof(int));
-  for (int i = 0; i < len; i++) {
-    sq_arr[i] = pow(arr[i], 2);
-  }
-  return sq_arr;
+struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
+    struct JVal** jvals_in;
+    struct JVal** jvals_out;
+    struct JVal* ret;
+    int *iptr;
+    int expri;
+
+    switch (expr->type) {
+        case JIntegerType:
+            expri = *((int*) expr->ptr);
+            iptr = (int*) malloc(sizeof(int));
+
+            switch (op) {
+                case JIncrementOp:
+                    *iptr = expri + 1;
+                    break;
+                case JNegateOp:
+                    *iptr = expri * -1;
+                    break;
+                case JSquareOp:
+                    *iptr = pow(expri, 2);
+                    break;
+                default:
+                    printf("ERROR: jmonad: unsupported op: %d\n", op);
+                    exit(EXIT_FAILURE);
+            }
+
+            ret = (struct JVal*) malloc(sizeof(struct JVal));
+            ret->type = JIntegerType;
+            ret->len = 1;
+            ret->ptr = iptr;
+            return ret;
+        case JArrayType:
+            jvals_in = expr->ptr;
+            jvals_out = (struct JVal**) malloc(expr->len * sizeof(struct JVal*));
+
+            for (int i = 0; i < expr->len; i++) {
+                jvals_out[i] = jmonad(op, jvals_in[i]);
+            }
+
+            ret = (struct JVal*) malloc(sizeof(struct JVal));
+            ret->type = JArrayType;
+            ret->len = expr->len;
+            ret->ptr = jvals_out;
+            return ret;
+        default:
+            printf("ERROR: jmonad: unsupported expr (type:%d,len:%d)\n",
+                expr->type, expr->len);
+            exit(EXIT_FAILURE);
+    }
 }
 
-int* jplus(int* lhs, int lhslen, int* rhs, int rhslen) {
+struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
 
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
+    // Reducing over a zero length or single expression has no effect.
+    if (expr->len < 2) { return expr; }
 
-  int* sum_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    sum_arr[i] = lhs[i] + rhs[i];
-  }
-  return sum_arr;
-}
+    struct JVal** jvals_in;
+    struct JVal* lhs;
+    struct JVal* rhs;
+    struct JVal* ret;
+    struct JVal* intermediate;
+    int i;
 
-int* jminus(int* lhs, int lhslen, int* rhs, int rhslen) {
+    switch (expr->type) {
+        case JArrayType:
+            // Reduce always results in a single value.
+            ret = (struct JVal*) malloc(sizeof(struct JVal));
 
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
+            // Take each difference from right to left as
+            // the left hand side of each difference is accumulated in
+            // the output array (remember: some operations like
+            // subtraction are not commutative).
+            jvals_in = expr->ptr;
+            i = expr->len - 2;
+            ret = jvals_in[i + 1];
+            do {
+                // TODO: Free the intermediate values that are
+                // returned by jdyad but never used beyond this function.
+                ret = jdyad(verb, jvals_in[i], ret);
+                i -= 1;
+            } while (i >= 0);
+            return ret;
 
-  int* diff_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    diff_arr[i] = lhs[i] - rhs[i];
-  }
-  return diff_arr;
-}
-
-int* jtimes(int* lhs, int lhslen, int* rhs, int rhslen) {
-
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
-
-  int* prod_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    prod_arr[i] = lhs[i] * rhs[i];
-  }
-  return prod_arr;
-}
-
-int* jreduce_plus(int* expr_arr, int len) {
-
-  // Reducing always results in a single element array.
-  int* out_arr = (int*)malloc(sizeof(int));
-
-  out_arr[0] = 0;
-  for (int i = 0; i < len; i++) {
-    out_arr[0] += expr_arr[i];
-  }
-  return out_arr;
-}
-
-int* jreduce_times(int* expr_arr, int len) {
-
-  // Reducing always results in a single element array.
-  int* out_arr = (int*)malloc(sizeof(int));
-
-  out_arr[0] = 1;
-  for (int i = 0; i < len; i++) {
-    out_arr[0] *= expr_arr[i];
-  }
-  return out_arr;
-}
-
-int* jreduce_minus(int* expr_arr, int len) {
-
-  if (len < 2) { return expr_arr; }
-
-  // Reducing always results in a single element array.
-  int* out_arr = (int*)malloc(sizeof(int));
-
-  // Take each difference from right to left as
-  // the left hand side of each difference is accumulated in
-  // the output array (b/c subtraction is not commutative).
-  int i = len - 2;
-  out_arr[0] = expr_arr[len - 1];
-  do {
-    out_arr[0] = expr_arr[i] - out_arr[0];
-    i -= 1;
-  } while (i >= 0);
-  return out_arr;
-}
-
-int* jlessthan(int* lhs, int lhslen, int* rhs, int rhslen) {
-
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
-
-  int* lt_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    lt_arr[i] = (lhs[i] < rhs[i]) ? 1 : 0;
-  }
-  return lt_arr;
-}
-
-int* jequal(int* lhs, int lhslen, int* rhs, int rhslen) {
-
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
-
-  int* lt_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    lt_arr[i] = (lhs[i] == rhs[i]) ? 1 : 0;
-  }
-  return lt_arr;
-}
-
-int* jlargerthan(int* lhs, int lhslen, int* rhs, int rhslen) {
-
-  // Requires same-length array operands; expansion of different length
-  // operands should be done in LLVM prior to adding a call to this function.
-  assert(lhslen == rhslen);
-
-  int* gt_arr = (int*)malloc(lhslen * sizeof(int));
-  for (int i = 0; i < lhslen; i++) {
-    gt_arr[i] = (lhs[i] > rhs[i]) ? 1 : 0;
-  }
-  return gt_arr;
+        default:
+            printf("ERROR: jreduce: unsupported expr (type:%d,len:%d)\n",
+                expr->type, expr->len);
+            exit(EXIT_FAILURE);
+    }
 }

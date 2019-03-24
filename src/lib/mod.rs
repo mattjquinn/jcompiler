@@ -84,7 +84,11 @@ pub fn compile(path: &str,
         None => executable_name(path),
     };
     println!("Writing executable to {}", output_path);
-    link_object_file(&obj_file_path, &output_path, target_triple).unwrap();
+    let res = link_object_file(&obj_file_path, &output_path, target_triple);
+    match res {
+        Ok(_) => (),
+        Err(e) => panic!(format!("Linking executable failed: {}", e)),
+    };
 
     if do_strip_executable {
         let strip_args = ["-s", &output_path[..]];

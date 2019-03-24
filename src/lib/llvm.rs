@@ -39,7 +39,7 @@ pub fn compile_to_module(
                         parser::AstNode::IsGlobal {ident: _, expr: _} => (),
                         // ... all other statements are:
                         _ => {
-                            let mut args = vec![c_expr.ptr, int32(c_expr.arr_len as u64)];
+                            let mut args = vec![c_expr.ptr, int1(1)];
                             add_function_call(&mut module, bb, "jprint", &mut args[..], "");
                         }
                     }
@@ -55,239 +55,166 @@ pub fn compile_to_module(
 }
 
 #[derive(Clone)]
-struct ExprArrayPtr {
-    ptr: LLVMValueRef,
-    arr_len: u32,
+enum JValType {
+    Integer = 1,
+    Array = 2,
+}
+
+#[derive(Clone)]
+struct JValPtr {
+    // TODO: Think of compile-time optimizations for which the
+    // static info recorded in this struct could be useful.
+    static_type : Option<JValType>,   // the type (if known at compile time)
+    static_len: Option<u64>,          // the length (if known at compile time)
+    ptr: LLVMValueRef,                // pointer to a JVal struct
+}
+
+fn alloc_jval(
+    module: &mut Module,
+    bb: LLVMBasicBlockRef,
+    val: LLVMValueRef,
+    val_type: JValType,
+    val_len: u64) -> JValPtr {
+
+    let builder = Builder::new();
+    builder.position_at_end(bb);
+
+    unsafe {
+        // Build a JVal struct to point to the number.
+        let jval_ptr = LLVMBuildAlloca(
+            builder.builder,
+            module.jval_struct_type,
+            module.new_string_ptr("jval")
+        );
+
+        // Indicate the type.
+        let mut type_offset = vec![int64(0), int32(0)];
+        let type_gep = LLVMBuildInBoundsGEP(
+            builder.builder,
+            jval_ptr,
+            type_offset.as_mut_ptr(),
+            type_offset.len() as u32,
+            module.new_string_ptr("jval_type_gep"),
+        );
+        LLVMBuildStore(builder.builder, int8(val_type.clone() as u64), type_gep);
+
+        // Indicate the length.
+        let mut len_offset = vec![int64(0), int32(1)];
+        let len_gep = LLVMBuildInBoundsGEP(
+            builder.builder,
+            jval_ptr,
+            len_offset.as_mut_ptr(),
+            len_offset.len() as u32,
+            module.new_string_ptr("jval_len_gep"),
+        );
+        LLVMBuildStore(builder.builder, int32(val_len), len_gep);
+
+        // Point to the value.
+        let mut ptr_offset = vec![int64(0), int32(2)];
+        let ptr_gep = LLVMBuildInBoundsGEP(
+            builder.builder,
+            jval_ptr,
+            ptr_offset.as_mut_ptr(),
+            ptr_offset.len() as u32,
+            module.new_string_ptr("jval_ptr_gep"),
+        );
+        LLVMBuildStore(builder.builder, val, ptr_gep);
+
+        JValPtr { static_type : Some(val_type), static_len : Some(val_len), ptr : jval_ptr }
+    }
 }
 
 fn compile_expr(
     expr: &parser::AstNode,
     module: &mut Module,
     bb: LLVMBasicBlockRef,
-) -> ExprArrayPtr {
+) -> JValPtr {
+    let builder = Builder::new();
+    builder.position_at_end(bb);
     match *expr {
         parser::AstNode::Number(n) => {
-            let mut builder = Builder::new();
-            builder.position_at_end(bb);
             unsafe {
+                // Allocate space for the number.
                 let num = LLVMBuildAlloca(
                     builder.builder,
                     int32_type(),
-                    module.new_string_ptr("num")
+                    module.new_string_ptr("int_alloc")
                 );
                 LLVMBuildStore(builder.builder, int32(n as u64), num);
-                let num = LLVMBuildLoad(
-                    builder.builder,
-                    num,
-                    module.new_string_ptr("num_load")
-                );
-                let mut args = vec![num];
-                let arr = add_function_call(module, bb, "jbox_number", &mut args[..], "boxed_num");
-                ExprArrayPtr {ptr: arr, arr_len: 1 }
+
+                // Point to the number via a JVal struct.
+                let ty = JValType::Integer;
+                alloc_jval(module, bb, num, ty.clone(), 1)
             }
         },
         parser::AstNode::Terms(ref terms) => {
+
+            // Ensure we have two or more terms to assemble into an array.
+            // Zero terms should be syntactically impossible;
+            // single terms should be unwrapped by the parser.
+            assert!(terms.len() >= 2);
+
+            // Compile the terms.
             let compiled_terms = terms
                 .iter()
                 .map(|t| compile_expr(t, module, bb))
                 .collect_vec();
-            if compiled_terms.len() == 1 {
-                // If there is only one term in this terms list, simply
-                // reuse the array representing that term.
-                return ExprArrayPtr { ptr : compiled_terms[0].ptr, arr_len : compiled_terms[0].arr_len};
-            }
+
             unsafe {
-                // If there is more than one term, combine each term's array
-                // representation into a single array.
-                for c in compiled_terms.iter() {
-                    // For now, only combine subterms that have a single element;
-                    // merging generally requires more thinking about how that
-                    // works / is represented in J.
-                    assert_eq!(c.arr_len, 1);
-                }
-                let mut builder = Builder::new();
-                builder.position_at_end(bb);
-                let dest_arr = LLVMBuildArrayMalloc(
+                // Allocate an array to hold the terms.
+                let arr = LLVMBuildArrayMalloc(
                     builder.builder,
-                    int32_type(),
+                    module.jval_ptr_type,
                     int64(compiled_terms.len() as u64),
-                    module.new_string_ptr("malloc_array")
+                    module.new_string_ptr("terms_arr")
                 );
-                for (idx, src_arr) in compiled_terms.iter().enumerate() {
-                      let mut args = vec![dest_arr, src_arr.ptr, int32(idx as u64), int32(0)];
-                      add_function_call(module, bb, "jexpand_copy", &mut args[..], "");
+
+                // Load pointers to each JVal into the array.
+                for (idx, jval) in compiled_terms.iter().enumerate() {
+                      let mut args = vec![arr, jval.ptr, int32(idx as u64)];
+                      add_function_call(module, bb, "jexpand", &mut args[..], "");
                 }
-                ExprArrayPtr {ptr: dest_arr, arr_len: compiled_terms.len() as u32 }
+
+                // Point to the array via a JVal struct.
+                let ty = JValType::Array;
+                alloc_jval(module, bb, arr, ty.clone(), compiled_terms.len() as u64)
             }
         },
-        parser::AstNode::Increment(ref terms) => {
-            let exprs = compile_expr(terms, module, bb);
+        parser::AstNode::MonadicOp {ref verb, ref expr} => {
+            let expr = compile_expr(expr, module, bb);
             unsafe {
-                let mut args = vec![exprs.ptr, int32(exprs.arr_len as u64)];
-                let inc_arr = add_function_call(module, bb, "jincrement", &mut args[..], "inc_arr");
-                ExprArrayPtr { ptr : inc_arr, arr_len: exprs.arr_len }
+                let mut args = vec![int8(verb.clone() as u64), expr.ptr];
+                let monad_op_arr = add_function_call(module, bb, "jmonad", &mut args[..], "monad_op_arr");
+                JValPtr { static_type : None, static_len : None, ptr : monad_op_arr }
             }
         },
-        parser::AstNode::Square(ref terms) => {
-            let exprs = compile_expr(terms, module, bb);
-            unsafe {
-                let mut args = vec![exprs.ptr, int32(exprs.arr_len as u64)];
-                let sq_arr = add_function_call(module, bb, "jsquare", &mut args[..], "sq_arr");
-                ExprArrayPtr { ptr : sq_arr, arr_len: exprs.arr_len }
-            }
-        },
-        parser::AstNode::Negate(ref terms) => {
-            let exprs = compile_expr(terms, module, bb);
-            unsafe {
-                let mut args = vec![exprs.ptr, int32(exprs.arr_len as u64)];
-                let neg_arr = add_function_call(module, bb, "jnegate", &mut args[..], "neg_arr");
-                ExprArrayPtr { ptr : neg_arr, arr_len: exprs.arr_len }
-            }
-        },
-        parser::AstNode::Plus{ref lhs, ref rhs} => {
+        parser::AstNode::DyadicOp {ref verb, ref lhs, ref rhs} => {
+
             let mut rhs = compile_expr(rhs, module, bb);
             let mut lhs = compile_expr(lhs, module, bb);
 
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the addition verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
+            // Pass args to dynamic library function; types/lengths will be resolved there.
+            // TODO: If both type and len of lhs and rhs are statically known,
+            // optimize by performing additions without function call overhead.
             unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let plus_arr = add_function_call(module, bb, "jplus", &mut args[..], "plus_arr");
-                ExprArrayPtr { ptr : plus_arr, arr_len: res_length }
+                let mut args = vec![int8(verb.clone() as u64), lhs.ptr, rhs.ptr];
+                let dyad_op_arr = add_function_call(
+                    module, bb, "jdyad", &mut args[..], "dyad_op_arr");
+                JValPtr { static_type : None, static_len : None, ptr : dyad_op_arr }
             }
         },
-        parser::AstNode::Minus{ref lhs, ref rhs} => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
+        parser::AstNode::Reduce{ ref verb, ref expr } => {
 
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the subtraction verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
-            unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let sub_arr = add_function_call(module, bb, "jminus", &mut args[..], "minus_arr");
-                ExprArrayPtr { ptr : sub_arr, arr_len: res_length }
-            }
-        },
-        parser::AstNode::Times{ref lhs, ref rhs} => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
-
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the times verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
-            unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let plus_arr = add_function_call(module, bb, "jtimes", &mut args[..], "times_arr");
-                ExprArrayPtr { ptr : plus_arr, arr_len: res_length }
-            }
-        },
-        parser::AstNode::Reduce{ ref dyadic_verb, ref expr } => {
             let mut expr = compile_expr(expr, module, bb);
-            let mut args = vec![expr.ptr, int32(expr.arr_len as u64)];
-            let reduced_arr = match &dyadic_verb[..] {
-                "+" => {
-                    unsafe {
-                        add_function_call(
-                            module, bb, "jreduce_plus", &mut args[..], "reduced_plus_arr")
-                    }
-                },
-                "*" => {
-                    unsafe {
-                        add_function_call(
-                            module, bb, "jreduce_times", &mut args[..], "reduced_times_arr")
-                    }
-                },
-                "-" => {
-                    unsafe {
-                        add_function_call(
-                            module, bb, "jreduce_minus", &mut args[..], "reduced_minus_arr")
-                    }
-                },
-                _ => { unimplemented!("Not ready to compile insert (reduce) with dyad: {}", dyadic_verb) }
-            };
-            ExprArrayPtr { ptr : reduced_arr, arr_len: 1 }
-        },
-        parser::AstNode::LessThan{ref lhs, ref rhs} => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
 
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the times verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
+            // Pass args to dynamic library function; types/lengths will be resolved there.
+            // TODO: If both type and len of lhs and rhs are statically known,
+            // optimize by performing additions without function call overhead.
             unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let lt_arr = add_function_call(module, bb, "jlessthan", &mut args[..], "lessthan_arr");
-                ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
-            }
-        },
-        parser::AstNode::Equal{ref lhs, ref rhs} => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
-
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the times verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
-            unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let lt_arr = add_function_call(module, bb, "jequal", &mut args[..], "equal_arr");
-                ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
-            }
-        },
-        parser::AstNode::LargerThan{ref lhs, ref rhs} => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
-
-            // If either of the arguments is shorter than the other,
-            // we must expand it before passing it to the times verb.
-            let res_length = std::cmp::max(lhs.arr_len, rhs.arr_len);
-            if lhs.arr_len != res_length {
-                lhs = expand_expr_array(&lhs, res_length, module, bb);
-            }
-            if rhs.arr_len != res_length {
-                rhs = expand_expr_array(&rhs, res_length, module, bb);
-            }
-
-            unsafe {
-                let mut args = vec![lhs.ptr, int32(lhs.arr_len as u64), rhs.ptr, int32(rhs.arr_len as u64)];
-                let lt_arr = add_function_call(module, bb, "jlargerthan", &mut args[..], "largerthan_arr");
-                ExprArrayPtr { ptr : lt_arr, arr_len: res_length }
+                let mut args = vec![int8(verb.clone() as u64), expr.ptr];
+                let reduced_arr = add_function_call(
+                    module, bb, "jreduce", &mut args[..], "reduced_arr");
+                JValPtr { static_type : None, static_len : None, ptr : reduced_arr }
             }
         },
         parser::AstNode::IsGlobal{ ref ident, ref expr } => {
@@ -303,78 +230,14 @@ fn compile_expr(
     }
 }
 
-fn expand_expr_array(expr_array : &ExprArrayPtr,
-                     to_len: u32,
-                     module: &mut Module,
-                     bb: LLVMBasicBlockRef) -> ExprArrayPtr {
-    if expr_array.arr_len != 1 {
-        unimplemented!("Can only expand arrays of size 1 now; this one is: {}", expr_array.arr_len);
-    }
-    unsafe {
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-        let atype = LLVMArrayType(
-            int32_type(),
-            to_len
-        );
-        let arr = LLVMBuildArrayAlloca(
-            builder.builder,
-            atype,
-            int32(0),
-            module.new_string_ptr("expansion_arr")
-        );
-        // Load the sole element out of the unexpanded array;
-        // using offset of 0 per assumption of only one element above.
-        let fromtype = LLVMArrayType(
-            int32_type(),
-            1,
-        );
-
-        // IMPORTANT: Arrays allocated in the C funcs are simply pointers to
-        // an int array; we must cast to the array type here in order to index into it...
-        let expr_arr_ptr_cast = LLVMBuildPointerCast(
-            builder.builder,
-            expr_array.ptr,
-            fromtype,
-            module.new_string_ptr("prexpand_src_ptr_cast"));
-        // ...and because we are not casting to a pointer (just to an array), we do
-        // NOT need the first 0 index here to deref a pointer; just the second
-        // to index into the (first) position of the array.
-        let mut src_offset_vec = vec![int64(0)];
-
-        let src_gep = LLVMBuildGEP(
-            builder.builder,
-            expr_arr_ptr_cast,
-            src_offset_vec.as_mut_ptr(),
-            src_offset_vec.len() as u32,
-            module.new_string_ptr("prexpand_src_arr"),
-        );
-        let src_load = LLVMBuildLoad(
-            builder.builder,
-            src_gep,
-            module.new_string_ptr("prexpand_src_load")
-        );
-        for idx in 0..to_len {
-            let mut dest_offset_vec = vec![int64(0), int64(idx as c_ulonglong)];
-            let dest_gep = LLVMBuildGEP(
-                builder.builder,
-                arr,
-                dest_offset_vec.as_mut_ptr(),
-                dest_offset_vec.len() as u32,
-                module.new_string_ptr("postexpand_dest_arr"),
-            );
-            LLVMBuildStore(builder.builder, src_load, dest_gep);
-        }
-        ExprArrayPtr { ptr : arr, arr_len : to_len }
-    }
-}
-
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.
 pub struct Module {
     module: *mut LLVMModule,
     strings: Vec<CString>,
-    global_scope_idents: HashMap<String, ExprArrayPtr>,
+    global_scope_idents: HashMap<String, JValPtr>,
+    jval_struct_type: LLVMTypeRef,
+    jval_ptr_type: LLVMTypeRef,
 }
 
 impl Module {
@@ -457,11 +320,15 @@ struct CompileContext {
     main_fn: LLVMValueRef,
 }
 
+unsafe fn int1(val: c_ulonglong) -> LLVMValueRef {
+    LLVMConstInt(LLVMInt1Type(), val, LLVM_FALSE)
+}
+
 /// Convert this integer to LLVM's representation of a constant
 /// integer.
-//unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
-//    LLVMConstInt(LLVMInt8Type(), val, LLVM_FALSE)
-//}
+unsafe fn int8(val: c_ulonglong) -> LLVMValueRef {
+    LLVMConstInt(LLVMInt8Type(), val, LLVM_FALSE)
+}
 /// Convert this integer to LLVM's representation of a constant
 /// integer.
 // TODO: this should be a machine word size rather than hard-coding 32-bits.
@@ -473,13 +340,13 @@ fn int64(val: c_ulonglong) -> LLVMValueRef {
     unsafe { LLVMConstInt(LLVMInt64Type(), val, LLVM_FALSE) }
 }
 
-//fn int1_type() -> LLVMTypeRef {
-//    unsafe { LLVMInt1Type() }
-//}
-//
-//fn int8_type() -> LLVMTypeRef {
-//    unsafe { LLVMInt8Type() }
-//}
+fn int1_type() -> LLVMTypeRef {
+    unsafe { LLVMInt1Type() }
+}
+
+fn int8_type() -> LLVMTypeRef {
+    unsafe { LLVMInt8Type() }
+}
 
 fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
@@ -504,6 +371,7 @@ fn add_function(
         LLVMAddFunction(module.module, module.new_string_ptr(fn_name), fn_type);
     }
 }
+
 
 fn add_c_declarations(module: &mut Module) {
     let void;
@@ -548,21 +416,17 @@ fn add_c_declarations(module: &mut Module) {
 //        int32_type(),
 //    );
 
-    add_function(module, "jbox_number", &mut [int32_type()], int32_ptr_type());
-    add_function(module, "jexpand_copy", &mut [int32_ptr_type(), int32_ptr_type(), int32_type(), int32_type()], void);
-    add_function(module, "jprint", &mut [int32_ptr_type(), int32_type()], void);
-    add_function(module, "jnegate", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jincrement", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jsquare", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jplus", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jminus", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jtimes", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jreduce_plus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jreduce_times", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jreduce_minus", &mut [int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jlessthan", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jequal", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
-    add_function(module, "jlargerthan", &mut [int32_ptr_type(), int32_type(), int32_ptr_type(), int32_type()], int32_ptr_type());
+    let jval_ptr_type = module.jval_ptr_type.clone();
+    let jval_ptr_ptr_type = unsafe { LLVMPointerType(
+        module.jval_ptr_type.clone(),
+        0
+    )};
+
+    add_function(module, "jprint", & mut [jval_ptr_type, int1_type()], void);
+    add_function(module, "jexpand", &mut [jval_ptr_ptr_type, jval_ptr_type, int32_type()], void);
+    add_function(module, "jmonad", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
+    add_function(module, "jdyad", & mut [int8_type(), jval_ptr_type, jval_ptr_type], jval_ptr_type);
+    add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
 }
 
 unsafe fn add_function_call(
@@ -590,14 +454,38 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     let c_module_name = CString::new(module_name).unwrap();
     let module_name_char_ptr = c_module_name.to_bytes_with_nul().as_ptr() as *const _;
 
-    let llvm_module;
-    unsafe {
-        llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
-    }
-    let mut module = Module {
-        module: llvm_module,
-        strings: vec![c_module_name],
-        global_scope_idents: HashMap::new(),
+    let c_jval_struct_name = CString::new("jval_struct").unwrap();
+    let jval_struct_name_char_ptr = c_jval_struct_name.to_bytes_with_nul().as_ptr() as *const _;
+
+    let mut module = unsafe {
+        let llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
+
+        let global_ctx = LLVMGetGlobalContext();
+        let jval_struct_type = LLVMStructCreateNamed(
+            global_ctx,
+            jval_struct_name_char_ptr,
+        );
+        // IMPORTANT: Be sure this matches up with the corresponding definition
+        // in jlib.c.
+        let mut members = vec![
+            int8_type(),        // the value's type
+            int32_type(),       // the value's length
+            int32_ptr_type()    // a pointer to the value
+        ];
+        LLVMStructSetBody(
+            jval_struct_type,
+            members.as_mut_ptr(),
+            members.len() as u32,
+            0
+        );
+
+        Module {
+            module: llvm_module,
+            strings: vec![c_module_name, c_jval_struct_name],
+            global_scope_idents: HashMap::new(),
+            jval_struct_type : jval_struct_type,
+            jval_ptr_type : LLVMPointerType(jval_struct_type, 0),
+        }
     };
 
     let target_triple_cstring = if let Some(target_triple) = target_triple {
@@ -609,7 +497,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     // This is necessary for maximum LLVM performance, see
     // http://llvm.org/docs/Frontend/PerformanceTips.html
     unsafe {
-        LLVMSetTarget(llvm_module, target_triple_cstring.as_ptr() as *const _);
+        LLVMSetTarget(module.module, target_triple_cstring.as_ptr() as *const _);
     }
     // TODO: add a function to the LLVM C API that gives us the
     // data layout from the target machine.

@@ -13,7 +13,7 @@ The latest API reference for the master branch is [available here](https://mattj
 
 ## Usage
 
-You will need LLVM and Rust installed.
+You will need LLVM 7 and Rust installed.
 
     $ cargo build --release
 
@@ -40,6 +40,10 @@ $ cargo test
 ```
 
 ### TODO
+* Only need LLVM to compile jcompiler; can distribute jcompiler itself
+  a binary for each platform.
+* Replace exit() calls in c funcs with handler that cleans up.
+* Add a macro to compiler_tests.rs that eliminates duplication of that code.
 * Check result of malloc; if non-zero, branch to print error message and quit.
 * Free all malloc'd arrays at end of scope (for now this is top-level scope)
 * Move simpler definitions back to LLVM to expand their test coverage
