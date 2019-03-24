@@ -40,8 +40,7 @@ $ cargo test
 ```
 
 ### TODO
-* Only need LLVM to compile jcompiler; can distribute jcompiler itself
-  a binary for each platform.
+* Write more parser tests.
 * Replace exit() calls in c funcs with handler that cleans up.
 * Add a macro to compiler_tests.rs that eliminates duplication of that code.
 * Check result of malloc; if non-zero, branch to print error message and quit.

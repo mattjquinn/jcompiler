@@ -162,7 +162,7 @@ fn compile_expr(
 
             unsafe {
                 // Allocate an array to hold the terms.
-                let arr = LLVMBuildArrayMalloc(
+                let arr = LLVMBuildArrayAlloca(
                     builder.builder,
                     module.jval_ptr_type,
                     int64(compiled_terms.len() as u64),
