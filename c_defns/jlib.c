@@ -430,11 +430,18 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
             do {
                 // TODO: Free the intermediate values that are
                 // returned by jdyad but never used beyond this function.
-                ret = jdyad(verb, jvals_in[i], ret);
+                intermediate = jdyad(verb, jvals_in[i], ret);
+                if (i != expr->len -2) {
+                    // On the first iteration of the loop, ret points to
+                    // the last element of the array. On all other iterations,
+                    // ret points to an intermediate computation from the previous
+                    // loop iteration. Free only those previous intermediates here.
+                    jval_drop(ret, false);
+                }
+                ret = intermediate;
                 i -= 1;
             } while (i >= 0);
 
-//            jval_drop(expr);
             return ret;
 
         default:
@@ -580,11 +587,17 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
     alive_heap_jval_counter -= 1;
 }
 
-void jmemory_report() {
-    printf("=== MEMORY REPORT ========================\n");
-    printf("%d\talive JVals on heap\n", alive_heap_jval_counter);
-    printf("%d\talive ints on heap\n", alive_heap_int_counter);
-    printf("%d\talive doubles on heap\n", alive_heap_double_counter);
-    printf("%d\talive JVal pointer arrays on heap\n", alive_heap_jvalptrarray_counter);
-    printf("==========================================\n");
+void jmemory_enforce() {
+//    printf("=== MEMORY REPORT ========================\n");
+//    printf("%d\talive JVals on heap\n", alive_heap_jval_counter);
+//    printf("%d\talive ints on heap\n", alive_heap_int_counter);
+//    printf("%d\talive doubles on heap\n", alive_heap_double_counter);
+//    printf("%d\talive JVal pointer arrays on heap\n", alive_heap_jvalptrarray_counter);
+//    printf("==========================================\n");
+
+    // Require all heap allocations to have been freed in the course of execution.
+    assert(alive_heap_jval_counter == 0);
+    assert(alive_heap_int_counter == 0);
+    assert(alive_heap_double_counter == 0);
+    assert(alive_heap_jvalptrarray_counter == 0);
 }

@@ -63,9 +63,9 @@ pub fn compile_to_module(
             add_function_call(&mut module, bb, "jval_drop", &mut args[..], "");
         }
 
-        // Display memory usage report.
-//        let mut args = vec![];
-//        add_function_call(&mut module, bb, "jmemory_report", &mut args[..], "");
+        // Enforce memory cleanliness requirements.
+        let mut args = vec![];
+        add_function_call(&mut module, bb, "jmemory_enforce", &mut args[..], "");
 
         add_main_cleanup(bb);
 
@@ -257,6 +257,11 @@ fn compile_expr(
             unsafe {
                 let mut args = vec![int8(verb.clone() as u64), expr.ptr];
                 let monad_op_arr = add_function_call(module, bb, "jmonad", &mut args[..], "monad_op_arr");
+
+                // Drop the operand.
+                let mut args = vec![expr.ptr, int1(0)];
+                add_function_call(module, bb, "jval_drop", &mut args[..], "");
+
                 JValPtr { static_type : None, static_len : None, ptr : monad_op_arr }
             }
         },
@@ -272,6 +277,13 @@ fn compile_expr(
                 let mut args = vec![int8(verb.clone() as u64), lhs.ptr, rhs.ptr];
                 let dyad_op_arr = add_function_call(
                     module, bb, "jdyad", &mut args[..], "dyad_op_arr");
+
+                // Drop the operands.
+                let mut args = vec![lhs.ptr, int1(0)];
+                add_function_call(module, bb, "jval_drop", &mut args[..], "");
+                let mut args = vec![rhs.ptr, int1(0)];
+                add_function_call(module, bb, "jval_drop", &mut args[..], "");
+
                 JValPtr { static_type : None, static_len : None, ptr : dyad_op_arr }
             }
         },
@@ -286,22 +298,45 @@ fn compile_expr(
                 let mut args = vec![int8(verb.clone() as u64), expr.ptr];
                 let reduced_arr = add_function_call(
                     module, bb, "jreduce", &mut args[..], "reduced_arr");
+
+                // Drop the operand.
+                let mut args = vec![expr.ptr, int1(0)];
+                add_function_call(module, bb, "jval_drop", &mut args[..], "");
+
                 JValPtr { static_type : None, static_len : None, ptr : reduced_arr }
             }
         },
         parser::AstNode::IsGlobal{ ref ident, ref expr } => {
             let mut expr = compile_expr(expr, module, bb);
 
+            // IMPORTANT: For an assignment sequence such as:
+            //   z =: 6
+            //   z =: 8
+            // this code will clone 8 into a global, then free the non-global 8,
+            // and finally free 6. The issue is that
+            // 6 could be referred to elsewhere, thus we eventually need reference counting.
+
             // Clone the JVal into the global heap space.
-            // TODO: OPTIMIZATION: If the underlying JVal is already global, no need to clone.
             let mut args = vec![expr.ptr, int64(JValLocation::HeapGlobal as u64)];
             let global_clone = unsafe { add_function_call(module, bb, "jval_clone", &mut args[..], "") };
 
-            // Drop the underlying (non-global) expression.
+            // Drop the underlying expression
             unsafe {
                 let mut args = vec![expr.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
             }
+
+            // If the global has an existing value, drop it now.
+            // Note: This existing value may be a global referenced elsewhere
+            // as noted above, and thus this should really decrement a reference counter
+            // first before freeing.
+            if module.global_scope_idents.contains_key(ident) {
+                unsafe {
+                    let mut args = vec![module.global_scope_idents.get(ident).cloned().unwrap().ptr, int1(1)];
+                    add_function_call(module, bb, "jval_drop", &mut args[..], "");
+                }
+            }
+
 
             let global = JValPtr { static_type : None, static_len : None, ptr : global_clone };
             module.global_scope_idents.insert(ident.clone(), global.clone());
@@ -527,7 +562,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
     add_function(module, "jval_drop", & mut [jval_ptr_type, int1_type()], void);
     add_function(module, "jval_clone", & mut [jval_ptr_type, int8_type()], jval_ptr_type);
-    add_function(module, "jmemory_report", & mut [], void);
+    add_function(module, "jmemory_enforce", & mut [], void);
 }
 
 unsafe fn add_function_call(
