@@ -23,24 +23,25 @@ pub fn compile_to_module(
 ) -> Module {
     let mut module = create_module(module_name, target_triple);
 
-    let main_fn = add_main_fn(&mut module);
+    let main_bb = add_main_fn(&mut module);
 
     unsafe {
-        let bb = LLVMAppendBasicBlock(main_fn, module.new_string_ptr(""));
-        let builder = Builder::new();
-        builder.position_at_end(bb);
-
         for astnode in ast {
+
+            // Each top-level statement gets its own function,
+            // as each statement gets its own stack frame.
+            let (stmt_fn, stmt_bb) = add_stmt_fn(&mut module);
+
             let jval = match astnode {
                 parser::AstNode::Print(expr) => {
-                    let c_expr = compile_expr(expr, &mut module, bb);
+                    let c_expr = compile_expr(expr, &mut module, stmt_bb);
                     match expr.as_ref() {
                         // Top level global assignments aren't printed to console...
                         parser::AstNode::IsGlobal {ident: _, expr: _} => (),
                         // ... all other statements are:
                         _ => {
                             let mut args = vec![c_expr.ptr, int1(1)];
-                            add_function_call(&mut module, bb, "jprint", &mut args[..], "");
+                            add_function_call(&mut module, stmt_bb, "jprint", &mut args[..], "");
                         }
                     }
                     c_expr
@@ -52,22 +53,34 @@ pub fn compile_to_module(
             // Notice that 0/false is passed as second param: we don't drop globals until end of
             // program/global scope.
             let mut args = vec![jval.ptr, int1(0)];
-            add_function_call(&mut module, bb, "jval_drop", &mut args[..], "");
+            add_function_call(&mut module, stmt_bb, "jval_drop", &mut args[..], "");
 
+            // Return from the top-level stmt function.
+            let stmt_builder = Builder::new();
+            stmt_builder.position_at_end(stmt_bb);
+            LLVMBuildRetVoid(stmt_builder.builder);
+
+            // Call the statement function from main.
+            let main_builder = Builder::new();
+            main_builder.position_at_end(main_bb);
+            LLVMBuildCall(
+                main_builder.builder,
+                stmt_fn,
+                Vec::new().as_mut_ptr(),
+                0,
+                module.new_string_ptr(""),
+            );
         }
 
         // End of global scope: drop all globals.
-        let global_jvals = module.global_scope_idents.values().cloned().collect_vec();
-        for jval in global_jvals {
-            let mut args = vec![jval.ptr, int1(1)];   // -> 1 for true to drop globals.
-            add_function_call(&mut module, bb, "jval_drop", &mut args[..], "");
-        }
+        let mut args = vec![];
+        add_function_call(&mut module, main_bb, "jglobals_dropall", &mut args[..], "");
 
         // Enforce memory cleanliness requirements.
         let mut args = vec![];
-        add_function_call(&mut module, bb, "jmemory_enforce", &mut args[..], "");
+        add_function_call(&mut module, main_bb, "jmemory_enforce", &mut args[..], "");
 
-        add_main_cleanup(bb);
+        add_main_cleanup(main_bb);
 
         module
     }
@@ -326,25 +339,28 @@ fn compile_expr(
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
             }
 
-            // If the global has an existing value, drop it now.
-            // Note: This existing value may be a global referenced elsewhere
-            // as noted above, and thus this should really decrement a reference counter
-            // first before freeing.
-            if module.global_scope_idents.contains_key(ident) {
-                unsafe {
-                    let mut args = vec![module.global_scope_idents.get(ident).cloned().unwrap().ptr, int1(1)];
-                    add_function_call(module, bb, "jval_drop", &mut args[..], "");
-                }
+            // Register identifier; if already registered, will get existing id assigned,
+            // otherwise unique one will be assigned to it.
+            let global_id = module.get_or_assign_id_to_global_ident(&ident[..]);
+
+            // Set the global identifier to refer to the cloned value.
+            // Note that this will drop any prior referred to values behind the scenes
+            // and will cause future problems; see note there.
+            unsafe {
+                let mut args = vec![int32(global_id as u64), global_clone];
+                add_function_call(module, bb, "jglobal_set_reference", &mut args[..], "");
             }
 
-
             let global = JValPtr { static_type : None, static_len : None, ptr : global_clone };
-            module.global_scope_idents.insert(ident.clone(), global.clone());
             global
         },
         parser::AstNode::Ident(ref ident) => {
-            module.global_scope_idents.get(ident).expect(
-                &format!("undefined ident: {}", ident)[..]).clone()
+            let global_id = module.get_or_assign_id_to_global_ident(ident);
+            unsafe {
+                let mut args = vec![int32(global_id as u64)];
+                let global_ref = add_function_call(module, bb, "jglobal_get_reference", &mut args[..], "global_ref");
+                JValPtr { static_type : None, static_len : None, ptr : global_ref}
+            }
         },
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
@@ -355,7 +371,7 @@ fn compile_expr(
 pub struct Module {
     module: *mut LLVMModule,
     strings: Vec<CString>,
-    global_scope_idents: HashMap<String, JValPtr>,
+    global_scope_idents: HashMap<String, u32>,
     jval_struct_type: LLVMTypeRef,
     jval_ptr_type: LLVMTypeRef,
 }
@@ -392,6 +408,13 @@ impl Module {
             module_string
         }
     }
+
+    fn get_or_assign_id_to_global_ident(&mut self, ident: &str) -> u32 {
+        let current_len = self.global_scope_idents.len() as u32;
+        *self.global_scope_idents.entry(String::from(ident))
+            .or_insert(current_len)
+    }
+
 }
 
 impl Drop for Module {
@@ -563,6 +586,10 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jval_drop", & mut [jval_ptr_type, int1_type()], void);
     add_function(module, "jval_clone", & mut [jval_ptr_type, int8_type()], jval_ptr_type);
     add_function(module, "jmemory_enforce", & mut [], void);
+
+    add_function(module, "jglobal_set_reference", & mut [int32_type(), jval_ptr_ptr_type], void);
+    add_function(module, "jglobal_get_reference", & mut [int32_type()], jval_ptr_type);
+    add_function(module, "jglobals_dropall", & mut [], void);
 }
 
 unsafe fn add_function_call(
@@ -692,12 +719,24 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     module
 }
 
-fn add_main_fn(module: &mut Module) -> LLVMValueRef {
+fn add_main_fn(module: &mut Module) -> LLVMBasicBlockRef {
     let mut main_args = vec![];
     unsafe {
         let main_type = LLVMFunctionType(int32_type(), main_args.as_mut_ptr(), 0, LLVM_FALSE);
         // TODO: use add_function() here instead.
-        LLVMAddFunction(module.module, module.new_string_ptr("main"), main_type)
+        let main_fn = LLVMAddFunction(module.module, module.new_string_ptr("main"), main_type);
+        LLVMAppendBasicBlock(main_fn, module.new_string_ptr(""))
+    }
+}
+
+fn add_stmt_fn(module: &mut Module) -> (LLVMValueRef, LLVMBasicBlockRef) {
+    let mut args = vec![];
+    unsafe {
+        let stmt_type = LLVMFunctionType(LLVMVoidType(), args.as_mut_ptr(), 0, LLVM_FALSE);
+        // TODO: use add_function() here instead.
+        let stmt_fn = LLVMAddFunction(module.module, module.new_string_ptr("stmt"), stmt_type);
+        let stmt_bb = LLVMAppendBasicBlock(stmt_fn, module.new_string_ptr(""));
+        (stmt_fn, stmt_bb)
     }
 }
 

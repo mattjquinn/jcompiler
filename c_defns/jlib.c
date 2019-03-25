@@ -10,11 +10,16 @@ extern int alive_heap_int_counter;
 extern int alive_heap_double_counter;
 extern int alive_heap_jvalptrarray_counter;
 
+// Storing global references statically for now; will obviously
+// need to dynamically allocate space as programs grow.
+static const int JNUM_GLOBAL_SLOTS = 20;
+static struct JVal* jglobals[JNUM_GLOBAL_SLOTS] = { NULL };
+
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
 
 // Default print precision is 6; can be changed within J.
-static int PRINT_PRECISION = 6;
+static int JPRINT_PRECISION = 6;
 
 struct JVal {
   char type;  // the value's type, as J defines it.
@@ -80,8 +85,8 @@ void jprint(struct JVal* val, bool newline) {
       break;
     case JDoublePrecisionFloatType:
       dptr = (double*) val->ptr;
-      if (signbit(*dptr) && *dptr != -0.0) { printf("_%.*g", PRINT_PRECISION, fabs(*dptr)); }
-      else                                 { printf("%.*g", PRINT_PRECISION, fabs(*dptr)); }
+      if (signbit(*dptr) && *dptr != -0.0) { printf("_%.*g", JPRINT_PRECISION, fabs(*dptr)); }
+      else                                 { printf("%.*g", JPRINT_PRECISION, fabs(*dptr)); }
       break;
     case JArrayType:
       jvals = val->ptr;
@@ -585,6 +590,40 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
     // Then free the JVal itself.
     free(jval);
     alive_heap_jval_counter -= 1;
+}
+
+void jglobal_set_reference(int global_id, struct JVal* jval) {
+
+    // If another value is referred to, drop it first before shadowing it.
+    // TODO: This will cause problems in the future if multiple variables
+    // refer to the same value and that value is dropped.
+    if (jglobals[global_id] != NULL) {
+        jval_drop(jglobals[global_id], true);
+    }
+
+    // Update the reference.
+    jglobals[global_id] = jval;
+}
+
+struct JVal* jglobal_get_reference(int global_id) {
+
+    // ID must be within bounds of static global slot bank.
+    if (global_id < 0 || global_id >= JNUM_GLOBAL_SLOTS) {
+        printf("ERROR: get_global: illegal global_id: %d", global_id);
+        exit(EXIT_FAILURE);
+    }
+
+    // Return the reference.
+    return jglobals[global_id];
+}
+
+void jglobals_dropall() {
+
+    for (int i = 0; i < JNUM_GLOBAL_SLOTS; i++) {
+        if (jglobals[i] != NULL) {
+            jval_drop(jglobals[i], true);
+        }
+    }
 }
 
 void jmemory_enforce() {

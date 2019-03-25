@@ -13,6 +13,7 @@ extern crate tempfile;
 
 #[macro_use]
 extern crate pest_derive;
+extern crate core;
 
 pub mod llvm;
 pub mod parser;
