@@ -48,6 +48,9 @@ pub fn compile_to_module(
             }
         }
 
+//        let mut args = vec![];
+//        add_function_call(&mut module, bb, "jmemory_report", &mut args[..], "");
+
         add_main_cleanup(bb);
 
         module
@@ -474,6 +477,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jmonad", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
     add_function(module, "jdyad", & mut [int8_type(), jval_ptr_type, jval_ptr_type], jval_ptr_type);
     add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
+    add_function(module, "jmemory_report", & mut [], void);
 }
 
 unsafe fn add_function_call(
@@ -504,6 +508,9 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     let c_jval_struct_name = CString::new("jval_struct").unwrap();
     let jval_struct_name_char_ptr = c_jval_struct_name.to_bytes_with_nul().as_ptr() as *const _;
 
+    let c_heap_jval_ctr_name = CString::new("heap_jval_alloc_counter").unwrap();
+    let heap_jval_ctr_name_ptr = c_heap_jval_ctr_name.to_bytes_with_nul().as_ptr() as *const _;
+
     let mut module = unsafe {
         let llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
 
@@ -526,11 +533,18 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             0
         );
 
+        let heap_jval_ctr = LLVMAddGlobal(
+            llvm_module,
+            int32_type(),
+            heap_jval_ctr_name_ptr,
+        );
+        LLVMSetInitializer(heap_jval_ctr, int32(0));
+
         Module {
             module: llvm_module,
-            strings: vec![c_module_name, c_jval_struct_name],
+            strings: vec![c_module_name, c_jval_struct_name, c_heap_jval_ctr_name],
             global_scope_idents: HashMap::new(),
-            jval_struct_type : jval_struct_type,
+            jval_struct_type,
             jval_ptr_type : LLVMPointerType(jval_struct_type, 0),
         }
     };

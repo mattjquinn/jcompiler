@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <stdbool.h>
 
+extern int heap_jval_alloc_counter;
+
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
 
@@ -472,9 +474,10 @@ struct JVal* jvalalloc(enum JValType type, int len) {
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
     if (!jval) {
-        printf("ERROR: jvalalloc: call to malloc %new JVal failed.");
+        printf("ERROR: jvalalloc: call to malloc new JVal failed.");
         exit(EXIT_FAILURE);
     }
+    heap_jval_alloc_counter += 1;
 
     jval->len = len;
     jval->type = type;
@@ -511,4 +514,10 @@ struct JVal* jvalalloc(enum JValType type, int len) {
             printf("ERROR: jvalalloc: unsupported type: %d", type);
             exit(EXIT_FAILURE);
     }
+}
+
+void jmemory_report() {
+    printf("=== MEMORY REPORT ========================\n");
+    printf("%d\tactive JVals allocated on heap\n", heap_jval_alloc_counter);
+    printf("==========================================\n");
 }
