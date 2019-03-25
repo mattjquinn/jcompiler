@@ -4,7 +4,11 @@
 #include <assert.h>
 #include <stdbool.h>
 
-extern int heap_jval_alloc_counter;
+// These counters keep track of heap allocations/frees.
+extern int alive_heap_jval_counter;
+extern int alive_heap_int_counter;
+extern int alive_heap_double_counter;
+extern int alive_heap_jvalptrarray_counter;
 
 // NOTE: To get LLVM IR of this source, run
 // $ clang-7 -S jlib.c -emit-llvm -o -  (note the trailing hyphen)
@@ -14,6 +18,7 @@ static int PRINT_PRECISION = 6;
 
 struct JVal {
   char type;  // the value's type, as J defines it.
+  char loc;   // the value's location in memory (stack, heap, global, etc.)
   int len;    // the number of elements pointed to by ptr
               // - for scalars: 1
               // - for arrays: the length of the array
@@ -24,6 +29,12 @@ enum JValType {
   JIntegerType = 1,
   JArrayType = 2,
   JDoublePrecisionFloatType = 3,
+};
+
+enum JValLocation {
+    JLocStack = 1,
+    JLocHeapLocal = 2,
+    JLocHeapGlobal = 3,
 };
 
 enum JDyadicVerb {
@@ -53,6 +64,7 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                struct JVal* arr,
                                                bool is_numeric_lhs);
 struct JVal* jval_heapalloc(enum JValType type, int len);
+void jval_drop(struct JVal* jval, bool do_drop_globals);
 
 
 void jprint(struct JVal* val, bool newline) {
@@ -79,7 +91,8 @@ void jprint(struct JVal* val, bool newline) {
       }
       break;
     default:
-      printf("ERROR: jprint: unsupported JVal (type:%d, len:%d)\n", val->type, val->len);
+      printf("ERROR: jprint: unsupported JVal (loc:%d, type:%d, len:%d)\n",
+        val->loc, val->type, val->len);
       exit(EXIT_FAILURE);
   }
 
@@ -420,6 +433,8 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
                 ret = jdyad(verb, jvals_in[i], ret);
                 i -= 1;
             } while (i >= 0);
+
+//            jval_drop(expr);
             return ret;
 
         default:
@@ -442,10 +457,11 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
         printf("ERROR: jval_heapalloc: call to malloc new JVal failed.");
         exit(EXIT_FAILURE);
     }
-    heap_jval_alloc_counter += 1;
+    alive_heap_jval_counter += 1;
 
-    jval->len = len;
     jval->type = type;
+    jval->loc = JLocHeapLocal;
+    jval->len = len;
 
     // Allocate space for the type instance pointed to.
     switch (type) {
@@ -455,6 +471,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 printf("ERROR: jval_heapalloc: call to malloc %d new int(s) failed.", len);
                 exit(EXIT_FAILURE);
             }
+            alive_heap_int_counter += 1;
             jval->ptr = iptr;
             return jval;
         case JDoublePrecisionFloatType:
@@ -463,6 +480,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 printf("ERROR: jval_heapalloc: call to malloc %d new double(s) failed.", len);
                 exit(EXIT_FAILURE);
             }
+            alive_heap_double_counter += 1;
             jval->ptr = dptr;
             return jval;
         case JArrayType:
@@ -473,6 +491,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 printf("ERROR: jval_heapalloc: call to malloc %d new JVals*(s) failed.", len);
                 exit(EXIT_FAILURE);
             }
+            alive_heap_jvalptrarray_counter += 1;
             jval->ptr = jvals;
             return jval;
         default:
@@ -481,8 +500,91 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
     }
 }
 
+struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
+    struct JVal* ret;
+    struct JVal** jvalsout;
+    struct JVal** jvalsin;
+    ret = jval_heapalloc(jval->type, jval->len);
+    ret->loc = loc;
+
+    switch (jval->type) {
+        case JIntegerType:
+            *(int*)ret->ptr = *(int*)jval->ptr;
+            return ret;
+        case JDoublePrecisionFloatType:
+            *(double*)ret->ptr = *(double*)jval->ptr;
+            return ret;
+        case JArrayType:
+            jvalsin = (struct JVal**) jval->ptr;
+            jvalsout = (struct JVal**) ret->ptr;
+            for (int i = 0; i < jval->len; i++) {
+                jvalsout[i] = jval_clone(jvalsin[i], loc);
+            }
+            return ret;
+        default:
+            printf("ERROR: jval_clone: unsupported type: %d\n", jval->type);
+            exit(EXIT_FAILURE);
+    }
+}
+
+// When JVals go out of scope, use this function to free them
+// (will only free JVals on the heap, not on the stack or in global scope).
+void jval_drop(struct JVal* jval, bool do_drop_globals) {
+
+    switch (jval->loc) {
+        case JLocStack:
+            // Don't try to free stack memory; this JVal will be dropped
+            // when its parent top-level stmt stack frame is popped.
+            return;
+        case JLocHeapLocal:
+            // Continue to free local heap allocation.
+            break;
+        case JLocHeapGlobal:
+            // Only drop globals if we've been explicitly asked to
+            // (i.e., by caller at end of a scope).
+            if (do_drop_globals) { break; }
+            else                 { return; }
+            exit(EXIT_FAILURE);
+        default:
+            printf("ERROR: jval_drop: unsupported address location: %d\n", jval->loc);
+            exit(EXIT_FAILURE);
+    }
+
+    struct JVal** jvals;
+
+//    printf("DROPPING type %d\n", jval->type);
+    // First free the pointed-to value.
+    switch (jval->type) {
+        case JIntegerType:
+            free(jval->ptr);
+            alive_heap_int_counter -= 1;
+            break;
+        case JDoublePrecisionFloatType:
+            free(jval->ptr);
+            alive_heap_double_counter -= 1;
+            break;
+        case JArrayType:
+            jvals = (struct JVal**) jval->ptr;
+            for (int i = 0; i < jval->len; i++) {
+                jval_drop(jvals[i], do_drop_globals);
+            }
+            alive_heap_jvalptrarray_counter -= 1;
+            break;
+        default:
+            printf("ERROR: jval_drop: unsupported type: %d", jval->type);
+            exit(EXIT_FAILURE);
+    }
+
+    // Then free the JVal itself.
+    free(jval);
+    alive_heap_jval_counter -= 1;
+}
+
 void jmemory_report() {
     printf("=== MEMORY REPORT ========================\n");
-    printf("%d\tactive JVals allocated on heap\n", heap_jval_alloc_counter);
+    printf("%d\talive JVals on heap\n", alive_heap_jval_counter);
+    printf("%d\talive ints on heap\n", alive_heap_int_counter);
+    printf("%d\talive doubles on heap\n", alive_heap_double_counter);
+    printf("%d\talive JVal pointer arrays on heap\n", alive_heap_jvalptrarray_counter);
     printf("==========================================\n");
 }
