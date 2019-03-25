@@ -50,6 +50,7 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                struct JVal* numeric,
                                                struct JVal* arr,
                                                bool is_numeric_lhs);
+struct JVal* jvalalloc(enum JValType type, int len);
 
 
 void jprint(struct JVal* val, bool newline) {
@@ -105,66 +106,45 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
         lhsi = *((int*) lhs->ptr);
         rhsi = *((int*) rhs->ptr);
 
-        ret = (struct JVal*) malloc(sizeof(struct JVal));
-        ret->len = 1;
-
         switch(op) {
             case JPlusOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = lhsi + rhsi;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = lhsi + rhsi;
                 return ret;
             case JMinusOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = lhsi - rhsi;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = lhsi - rhsi;
                 return ret;
             case JTimesOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = lhsi * rhsi;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = lhsi * rhsi;
                 return ret;
             case JDivideOp:
                 // Division always produces a double.
-                dptr = (double*) malloc(sizeof(double));
-                *dptr = (double) lhsi / (double) rhsi;
-                ret->type = JDoublePrecisionFloatType;
-                ret->ptr = dptr;
+                ret = jvalalloc(JDoublePrecisionFloatType, 1);
+                *(double*)ret->ptr = (double) lhsi / (double) rhsi;
                 return ret;
             case JPowerOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = pow(lhsi, rhsi);
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = pow(lhsi, rhsi);
                 return ret;
             case JLessThanOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsi < rhsi) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsi < rhsi) ? 1 : 0;
                 return ret;
             case JLargerThanOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsi > rhsi) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsi > rhsi) ? 1 : 0;
                 return ret;
             case JEqualOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsi == rhsi) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsi == rhsi) ? 1 : 0;
                 return ret;
             case JResidueOp:
-                iptr = (int*) malloc(sizeof(int));
+                ret = jvalalloc(JIntegerType, 1);
                 // IMPORTANT: In J the operands to Residue are opposite of "%";
                 // i.e., 5 | 2 means 2 % 5
-                *iptr = (rhsi % lhsi);
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                *(int*)ret->ptr = (rhsi % lhsi);
                 return ret;
             default:
                 printf("ERROR: jdyad: unsupported op: %d for types lhs:%d, rhs:%d\n",
@@ -193,51 +173,34 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
                 break;
         }
 
-        ret = (struct JVal*) malloc(sizeof(struct JVal));
-        ret->len = 1;
-
         switch(op) {
             case JPlusOp:
-                dptr = (double*) malloc(sizeof(double));
-                *dptr = lhsd + rhsd;
-                ret->type = JDoublePrecisionFloatType;
-                ret->ptr = dptr;
+                ret = jvalalloc(JDoublePrecisionFloatType, 1);
+                *(double*)ret->ptr = lhsd + rhsd;
                 return ret;
             case JMinusOp:
-                dptr = (double*) malloc(sizeof(double));
-                *dptr = lhsd - rhsd;
-                ret->type = JDoublePrecisionFloatType;
-                ret->ptr = dptr;
+                ret = jvalalloc(JDoublePrecisionFloatType, 1);
+                *(double*)ret->ptr = lhsd - rhsd;
                 return ret;
             case JTimesOp:
-                dptr = (double*) malloc(sizeof(double));
-                *dptr = lhsd * rhsd;
-                ret->type = JDoublePrecisionFloatType;
-                ret->ptr = dptr;
+                ret = jvalalloc(JDoublePrecisionFloatType, 1);
+                *(double*)ret->ptr = lhsd * rhsd;
                 return ret;
             case JDivideOp:
-                dptr = (double*) malloc(sizeof(double));
-                *dptr = lhsd / rhsd;
-                ret->type = JDoublePrecisionFloatType;
-                ret->ptr = dptr;
+                ret = jvalalloc(JDoublePrecisionFloatType, 1);
+                *(double*)ret->ptr = lhsd / rhsd;
                 return ret;
             case JLessThanOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsd < rhsd) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsd < rhsd) ? 1 : 0;
                 return ret;
             case JLargerThanOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsd > rhsd) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsd > rhsd) ? 1 : 0;
                 return ret;
             case JEqualOp:
-                iptr = (int*) malloc(sizeof(int));
-                *iptr = (lhsd == rhsd) ? 1 : 0;
-                ret->type = JIntegerType;
-                ret->ptr = iptr;
+                ret = jvalalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsd == rhsd) ? 1 : 0;
                 return ret;
             default:
                 printf("ERROR: jdyad: unsupported op: %d for types lhs:%d, rhs:%d\n",
@@ -265,16 +228,13 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
         jvals_a = lhs->ptr;
         jvals_b = rhs->ptr;
-        jvals_out = (struct JVal**) malloc(lhs->len * sizeof(struct JVal*));
+        ret = jvalalloc(JArrayType, lhs->len);
+        jvals_out = (struct JVal**)ret->ptr;
 
         for (int i = 0; i < lhs->len; i++) {
             jvals_out[i] = jdyad(op, jvals_a[i], jvals_b[i]);
         }
 
-        ret = (struct JVal*) malloc(sizeof(struct JVal));
-        ret->type = JArrayType;
-        ret->len = lhs->len;
-        ret->ptr = jvals_out;
         return ret;
     }
 
@@ -313,18 +273,15 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
         return ret;
 
     } else if (lhs->type == JIntegerType && rhs->type == JArrayType) {
-        printf("ERROR: jdyad: copy: support int with array\n",
-            lhs->type, lhs->len, rhs->type, rhs->len);
+        printf("ERROR: jdyad: copy: support int with array\n");
         exit(EXIT_FAILURE);
 
     } else if (lhs->type == JArrayType && rhs->type == JIntegerType) {
-        printf("ERROR: jdyad: copy: support array with int\n",
-            lhs->type, lhs->len, rhs->type, rhs->len);
+        printf("ERROR: jdyad: copy: support array with int\n");
         exit(EXIT_FAILURE);
 
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
-        printf("ERROR: jdyad: copy: support array with array\n",
-            lhs->type, lhs->len, rhs->type, rhs->len);
+        printf("ERROR: jdyad: copy: support array with array\n");
         exit(EXIT_FAILURE);
 
     } else {
@@ -343,7 +300,8 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
     struct JVal** jvals_out;
 
     jvals = arr->ptr;
-    jvals_out = (struct JVal**) malloc(arr->len * sizeof(struct JVal*));
+    ret = jvalalloc(JArrayType, arr->len);
+    jvals_out = (struct JVal**)ret->ptr;
 
     for (int i = 0; i < arr->len; i++) {
         // Must preserve order of operands as some operations are not commutative.
@@ -351,10 +309,6 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
         else                    { jvals_out[i] = jdyad(op, jvals[i], numeric); }
     }
 
-    ret = (struct JVal*) malloc(sizeof(struct JVal));
-    ret->type = JArrayType;
-    ret->len = arr->len;
-    ret->ptr = jvals_out;
     return ret;
 }
 
@@ -504,6 +458,57 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
         default:
             printf("ERROR: jreduce: unsupported expr (type:%d,len:%d)\n",
                 expr->type, expr->len);
+            exit(EXIT_FAILURE);
+    }
+}
+
+// All heap memory allocations must be done using this function.
+struct JVal* jvalalloc(enum JValType type, int len) {
+    struct JVal* jval;
+    struct JVal** jvals;
+    int* iptr;
+    double* dptr;
+
+    // Allocate space for the JVal itself.
+    jval = malloc(sizeof(struct JVal));
+    if (!jval) {
+        printf("ERROR: jvalalloc: call to malloc %new JVal failed.");
+        exit(EXIT_FAILURE);
+    }
+
+    jval->len = len;
+    jval->type = type;
+
+    // Allocate space for the type instance pointed to.
+    switch (type) {
+        case JIntegerType:
+            iptr = malloc(len * sizeof(int));
+            if (!iptr) {
+                printf("ERROR: jvalalloc: call to malloc %d new int(s) failed.", len);
+                exit(EXIT_FAILURE);
+            }
+            jval->ptr = iptr;
+            return jval;
+        case JDoublePrecisionFloatType:
+            dptr = malloc(len * sizeof(double));
+            if (!dptr) {
+                printf("ERROR: jvalalloc: call to malloc %d new double(s) failed.", len);
+                exit(EXIT_FAILURE);
+            }
+            jval->ptr = dptr;
+            return jval;
+        case JArrayType:
+            // REMEMBER: This is just allocating space for _pointers_ to the JVals
+            // that will eventually comprise the array, not the actual JVals themselves.
+            jvals = malloc(len * sizeof(struct JVal*));
+            if (!jvals) {
+                printf("ERROR: jvalalloc: call to malloc %d new JVals*(s) failed.", len);
+                exit(EXIT_FAILURE);
+            }
+            jval->ptr = jvals;
+            return jval;
+        default:
+            printf("ERROR: jvalalloc: unsupported type: %d", type);
             exit(EXIT_FAILURE);
     }
 }
