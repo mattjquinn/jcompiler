@@ -34,6 +34,7 @@ enum JDyadicVerb {
   JDivideOp = 7,
   JPowerOp = 8,
   JResidueOp = 9,
+  JCopyOp = 10,
 };
 
 enum JMonadicVerb {
@@ -44,6 +45,7 @@ enum JMonadicVerb {
   JTallyOp = 5,
 };
 
+struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                struct JVal* numeric,
                                                struct JVal* arr,
@@ -94,6 +96,10 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     double* dptr;
     int lhsi, rhsi;
     double lhsd, rhsd;
+
+    if (op == JCopyOp) {
+        return jdyad_internal_copy_verb(lhs, rhs);
+    }
 
     if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
         lhsi = *((int*) lhs->ptr);
@@ -275,6 +281,57 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     printf("ERROR: jdyad: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
         lhs->type, lhs->len, rhs->type, rhs->len);
     exit(EXIT_FAILURE);
+}
+
+struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
+    struct JVal* ret;
+    int* iptr;
+    int lhsi, rhsi;
+    struct JVal** jvals_out;
+
+    if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
+        lhsi = *((int*) lhs->ptr);
+        rhsi = *((int*) rhs->ptr);
+
+        jvals_out = (struct JVal**) malloc(lhsi * sizeof(struct JVal*));
+
+        // Copies the rhs value "n" times, where n is lhs value.
+        for (int i = 0; i < lhsi; i++) {
+            iptr = (int*) malloc(sizeof(int));
+            *iptr = rhsi;
+            ret = (struct JVal*) malloc(sizeof(struct JVal));
+            ret->type = JIntegerType;
+            ret->len = 1;
+            ret->ptr = iptr;
+            jvals_out[i] = ret;
+        }
+
+        ret = (struct JVal*) malloc(sizeof(struct JVal));
+        ret->type = JArrayType;
+        ret->len = lhsi;
+        ret->ptr = jvals_out;
+        return ret;
+
+    } else if (lhs->type == JIntegerType && rhs->type == JArrayType) {
+        printf("ERROR: jdyad: copy: support int with array\n",
+            lhs->type, lhs->len, rhs->type, rhs->len);
+        exit(EXIT_FAILURE);
+
+    } else if (lhs->type == JArrayType && rhs->type == JIntegerType) {
+        printf("ERROR: jdyad: copy: support array with int\n",
+            lhs->type, lhs->len, rhs->type, rhs->len);
+        exit(EXIT_FAILURE);
+
+    } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
+        printf("ERROR: jdyad: copy: support array with array\n",
+            lhs->type, lhs->len, rhs->type, rhs->len);
+        exit(EXIT_FAILURE);
+
+    } else {
+        printf("ERROR: jdyad: copy: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
+            lhs->type, lhs->len, rhs->type, rhs->len);
+        exit(EXIT_FAILURE);
+    }
 }
 
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,

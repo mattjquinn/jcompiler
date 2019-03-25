@@ -42,6 +42,10 @@ $ cargo test
 ### TODO
 * Write more parser tests.
 * Modify grammar to allow end-line comments.
+* Experiment with definining runtime library in Rust
+  on branch `with-rust-runtime` (and possibly use Cargo's
+  workspace feature to contain both crates such that they
+  can share definitions.)
 * Print large numbers using scientific notation.
 * Replace exit() calls in c funcs with handler that cleans up.
 * Add a macro to compiler_tests.rs that eliminates duplication of that code.
@@ -49,8 +53,6 @@ $ cargo test
 * Free all malloc'd arrays at end of scope (for now this is top-level scope)
 * Move simpler definitions back to LLVM to expand their test coverage
   (dump IR to ensure correct translation).
-* Research how best to rewrite C defns in Rust such that they can be
-  linked into compiled executables.
 * Allow verbs to be standalone expressions by themselves (printing them should give
   their textual representation just as ijconsole does).
 * Add tests for illegal array operations (i.e., 1 2 3 + 4 5); error

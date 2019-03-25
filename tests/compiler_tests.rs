@@ -280,3 +280,10 @@ fn ctest_monadic_tally() {
     assert_eq!("1\n2\n3\n4\n_1 2 _3 4 _5\n5\n5\n1\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_dyadic_copy() {
+    let (stdout, stderr) = compile("ctest_dyadic_copy.ijs");
+    assert_eq!("1 1 1 1 1\n5\n\n0 0 0\n_1 _1 _1 _1 _1 _1 _1\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
