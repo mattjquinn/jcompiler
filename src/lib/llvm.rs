@@ -41,6 +41,8 @@ pub fn compile_to_module(
                         _ => {
                             let mut args = vec![c_expr.ptr, int1(1)];
                             add_function_call(&mut module, bb, "jprint", &mut args[..], "");
+                            let mut args = vec![];
+                            add_function_call(&mut module, bb, "hello", &mut args[..], "");
                         }
                     }
                 }
@@ -468,6 +470,8 @@ fn add_c_declarations(module: &mut Module) {
         module.jval_ptr_type.clone(),
         0
     )};
+
+    add_function(module, "hello", & mut [], void);
 
     add_function(module, "jprint", & mut [jval_ptr_type, int1_type()], void);
     add_function(module, "jexpand", &mut [jval_ptr_ptr_type, jval_ptr_type, int32_type()], void);

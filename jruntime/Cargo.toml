@@ -1,0 +1,11 @@
+[package]
+name = "jruntime"
+version = "0.1.0"
+authors = ["Matt Quinn <matt@mattjquinn.com>"]
+edition = "2018"
+
+[lib]
+name = "jruntime"
+crate-type = ["dylib"]
+
+[dependencies]

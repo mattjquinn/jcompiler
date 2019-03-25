@@ -106,20 +106,23 @@ fn link_object_file(
 ) -> Result<(), String> {
     let jlib_c_file = "c_defns/jlib.c";
     // Link the object file.
-    let clang_args = if let Some(ref target_triple) = target_triple {
-        vec![
-            object_file_path,
-            jlib_c_file,
-            "-target",
-            &target_triple,
-            "-o",
-            &executable_path[..],
-            "-lm",
-        ]
-    } else {
-        vec![object_file_path, jlib_c_file, "-o", &executable_path[..], "-lm"]
-    };
-
+    let mut clang_args =
+        if let Some(ref target_triple) = target_triple {
+            vec![
+                object_file_path,
+                jlib_c_file,
+                "-target",
+                &target_triple,
+                "-o",
+                &executable_path[..],
+                "-lm",
+            ]
+        } else {
+            vec![object_file_path, jlib_c_file, "-o", &executable_path[..], "-lm"]
+        };
+    clang_args.push("jruntime/target/debug/libjruntime.so");
+    clang_args.push("-v");
+    println!("Running clang-7 with args:{:?}", &clang_args[..]);
     shell::run_shell_command("clang-7", &clang_args[..])
 }
 
