@@ -650,7 +650,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             jval_struct_name_char_ptr,
         );
         // IMPORTANT: Be sure this matches up with the corresponding definition
-        // in jlib.c.
+        // in jverbs.c.
         let mut members = vec![
             int8_type(),        // the value's type
             int8_type(),        // the value's location

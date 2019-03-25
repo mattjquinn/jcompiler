@@ -105,12 +105,12 @@ fn link_object_file(
     executable_path: &str,
     target_triple: Option<String>,
 ) -> Result<(), String> {
-    let jlib_c_file = "c_defns/jlib.c";
     // Link the object file.
     let clang_args = if let Some(ref target_triple) = target_triple {
         vec![
             object_file_path,
-            jlib_c_file,
+            "c_defns/jverbs.c",
+            "c_defns/jmemory.c",
             "-target",
             &target_triple,
             "-o",
@@ -118,7 +118,8 @@ fn link_object_file(
             "-lm",
         ]
     } else {
-        vec![object_file_path, jlib_c_file, "-o", &executable_path[..], "-lm"]
+        vec![object_file_path, "c_defns/jverbs.c", "c_defns/jmemory.c",
+             "-o", &executable_path[..], "-lm"]
     };
 
     shell::run_shell_command("clang-7", &clang_args[..])
