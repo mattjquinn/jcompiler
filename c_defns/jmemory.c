@@ -16,6 +16,10 @@ extern int alive_heap_jval_counter;
 extern int alive_heap_int_counter;
 extern int alive_heap_double_counter;
 extern int alive_heap_jvalptrarray_counter;
+extern int total_heap_jval_counter;
+extern int total_heap_int_counter;
+extern int total_heap_double_counter;
+extern int total_heap_jvalptrarray_counter;
 
 // All heap memory allocations must be done using this function.
 struct JVal* jval_heapalloc(enum JValType type, int len) {
@@ -31,6 +35,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
         exit(EXIT_FAILURE);
     }
     alive_heap_jval_counter += 1;
+    total_heap_jval_counter += 1;
 
     jval->type = type;
     jval->loc = JLocHeapLocal;
@@ -45,6 +50,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 exit(EXIT_FAILURE);
             }
             alive_heap_int_counter += 1;
+            total_heap_int_counter += 1;
             jval->ptr = iptr;
             return jval;
         case JDoublePrecisionFloatType:
@@ -54,6 +60,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 exit(EXIT_FAILURE);
             }
             alive_heap_double_counter += 1;
+            total_heap_double_counter += 1;
             jval->ptr = dptr;
             return jval;
         case JArrayType:
@@ -65,6 +72,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
                 exit(EXIT_FAILURE);
             }
             alive_heap_jvalptrarray_counter += 1;
+            total_heap_jvalptrarray_counter += 1;
             jval->ptr = jvals;
             return jval;
         default:
@@ -188,12 +196,16 @@ void jglobals_dropall() {
 }
 
 void jmemory_enforce() {
-//    printf("=== MEMORY REPORT ========================\n");
-//    printf("%d\talive JVals on heap\n", alive_heap_jval_counter);
-//    printf("%d\talive ints on heap\n", alive_heap_int_counter);
-//    printf("%d\talive doubles on heap\n", alive_heap_double_counter);
-//    printf("%d\talive JVal pointer arrays on heap\n", alive_heap_jvalptrarray_counter);
-//    printf("==========================================\n");
+//    printf("=== MEMORY REPORT ================================================\n");
+//    printf("%d \\ %d\t\talive \\ historical JVals on heap\n",
+//        alive_heap_jval_counter, total_heap_jval_counter);
+//    printf("%d \\ %d\t\talive \\ historical ints on heap\n",
+//        alive_heap_int_counter, total_heap_int_counter);
+//    printf("%d \\ %d\t\talive \\ historical doubles on heap\n",
+//        alive_heap_double_counter, total_heap_double_counter);
+//    printf("%d \\ %d\t\talive \\ historical JVal pointer arrays on heap\n",
+//        alive_heap_jvalptrarray_counter, total_heap_jvalptrarray_counter);
+//    printf("==================================================================\n");
 
     // Require all heap allocations to have been freed in the course of execution.
     assert(alive_heap_jval_counter == 0);

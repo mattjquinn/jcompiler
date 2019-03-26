@@ -641,6 +641,22 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     let alive_heap_jvalptrarray_counter_name = c_alive_heap_jvalptrarray_counter_name.to_bytes_with_nul().as_ptr() as *const _;
     strings.push(c_alive_heap_jvalptrarray_counter_name);
 
+    let c_total_heap_jval_counter_name = CString::new("total_heap_jval_counter").unwrap();
+    let total_heap_jval_counter_name = c_total_heap_jval_counter_name.to_bytes_with_nul().as_ptr() as *const _;
+    strings.push(c_total_heap_jval_counter_name);
+
+    let c_total_heap_int_counter_name = CString::new("total_heap_int_counter").unwrap();
+    let total_heap_int_counter_name = c_total_heap_int_counter_name.to_bytes_with_nul().as_ptr() as *const _;
+    strings.push(c_total_heap_int_counter_name);
+
+    let c_total_heap_double_counter_name = CString::new("total_heap_double_counter").unwrap();
+    let total_heap_double_counter_name = c_total_heap_double_counter_name.to_bytes_with_nul().as_ptr() as *const _;
+    strings.push(c_total_heap_double_counter_name);
+
+    let c_total_heap_jvalptrarray_counter_name = CString::new("total_heap_jvalptrarray_counter").unwrap();
+    let total_heap_jvalptrarray_counter_name = c_total_heap_jvalptrarray_counter_name.to_bytes_with_nul().as_ptr() as *const _;
+    strings.push(c_total_heap_jvalptrarray_counter_name);
+
     let mut module = unsafe {
         let llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
 
@@ -691,6 +707,34 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             alive_heap_jvalptrarray_counter_name,
         );
         LLVMSetInitializer(alive_heap_jvalptrarray_counter, int32(0));
+
+        let total_heap_jval_counter = LLVMAddGlobal(
+            llvm_module,
+            int32_type(),
+            total_heap_jval_counter_name,
+        );
+        LLVMSetInitializer(total_heap_jval_counter, int32(0));
+
+        let total_heap_int_counter = LLVMAddGlobal(
+            llvm_module,
+            int32_type(),
+            total_heap_int_counter_name,
+        );
+        LLVMSetInitializer(total_heap_int_counter, int32(0));
+
+        let total_heap_double_counter = LLVMAddGlobal(
+            llvm_module,
+            int32_type(),
+            total_heap_double_counter_name,
+        );
+        LLVMSetInitializer(total_heap_double_counter, int32(0));
+
+        let total_heap_jvalptrarray_counter = LLVMAddGlobal(
+            llvm_module,
+            int32_type(),
+            total_heap_jvalptrarray_counter_name,
+        );
+        LLVMSetInitializer(total_heap_jvalptrarray_counter, int32(0));
 
         Module {
             module: llvm_module,
