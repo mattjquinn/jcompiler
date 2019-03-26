@@ -60,7 +60,7 @@ y > 7
 (y > 7) # y
 NB.   this is a whole line of annotation
 6 + 6  NB. ought to produce 12
-NB. >. _1.7 1 1.7
+>. _1.7 1 1.7
 NB. 3 >. 1 3 5
 NB. >. / 1 6 5
 NB. 1 >. 6 >. 5 NB. by the meaning of /

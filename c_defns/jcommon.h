@@ -38,5 +38,6 @@ enum JMonadicVerb {
   JNegateOp = 3,
   JReciprocalOp = 4,
   JTallyOp = 5,
+  JCeilingOp = 6,
 };
 

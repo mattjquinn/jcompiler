@@ -287,3 +287,10 @@ fn ctest_dyadic_copy() {
     assert_eq!("1 1 1 1 1\n5\n\n0 0 0\n_1 _1 _1 _1 _1 _1 _1\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_ceiling() {
+    let (stdout, stderr) = compile("ctest_monadic_ceiling.ijs");
+    assert_eq!("_1 1 2\n_1 _1 _1 _1 _1 0 0 0 3 4 5556\n1 2 3 4 5\n_1 1 3\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

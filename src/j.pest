@@ -16,7 +16,7 @@ assgmtExpr = { ident ~ "=:" ~ expr }
 terms = { term+ }
 term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
-monadicVerb = { ">:" | "*:" | "-" | "%" | "#" }
+monadicVerb = { ">:" | "*:" | "-" | "%" | "#" | ">." }
 dyadicVerb = {   "+" | "*" | "-" | "%" | "<"
                | "=" | ">" | "^" | "|" | "#"
               }

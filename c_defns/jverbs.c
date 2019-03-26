@@ -367,6 +367,11 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                     ret = jval_heapalloc(JIntegerType, 1);
                     *(int*)ret->ptr = expr->len;
                     return ret;
+                case JCeilingOp:
+                    // ceil(int) is the int itself:
+                    ret = jval_heapalloc(JIntegerType, 1);
+                    *(int*)ret->ptr = expri;
+                    return ret;
                 default:
                     printf("ERROR: jmonad: unsupported verb on type integer: %d\n", op);
                     exit(EXIT_FAILURE);
@@ -374,17 +379,23 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 
         case JDoublePrecisionFloatType:
             exprd = *((double*) expr->ptr);
-            ret = jval_heapalloc(JDoublePrecisionFloatType, 1);
 
             switch (op) {
                 case JIncrementOp:
+                    ret = jval_heapalloc(JDoublePrecisionFloatType, 1);
                     *(double*)ret->ptr = exprd + 1.0;
                     return ret;
                 case JNegateOp:
+                    ret = jval_heapalloc(JDoublePrecisionFloatType, 1);
                     *(double*)ret->ptr = exprd * -1.0;
                     return ret;
                 case JSquareOp:
+                    ret = jval_heapalloc(JDoublePrecisionFloatType, 1);
                     *(double*)ret->ptr = pow(exprd, 2.0);
+                    return ret;
+                case JCeilingOp:
+                    ret = jval_heapalloc(JIntegerType, 1);
+                    *(int*)ret->ptr = ceil(exprd);
                     return ret;
                 default:
                     printf("ERROR: jmonad: unsupported verb on type double: %d\n", op);
