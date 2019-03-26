@@ -308,3 +308,18 @@ fn ctest_monadic_largerorequal() {
     assert_eq!("1 1 0\n1 1 1 0 0\n1\n1 1 1 1 1\n1 1 1 0 0\n1 1 0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_ch1_learningjbook() {
+    let (stdout, stderr) = compile("ctest_ch1_learningjbook.ijs");
+    let expected = format!(
+        "{}{}{}{}{}",
+        "4\n6\n6\n0.75\n1\n_1\n_3\n8\n16\n1 4 9 16\n11 22 33\n11 21 31\n11 12 13\n",
+        "0 1 0 1 0 1 0 1\n0 1 2 0 1 2 0 1\n12\n9\n1.75\n99\n99\n8\n9\n100\n99\n",
+        "0\n1\n0.25\n9\n24\n1\n0\n0\n1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n4\n",
+        "3 4 5\n1 1 1\n3\n3\n6 7 8 9 10\n6 7 9\n6 7 8 9 10\n",
+        "0 0 1 1 1\n8 9 10\n12\n_1 1 2\n3 3 5\n6\n6\n6\n6\n6\n6\n_1 4 6 7.3\n1 1 0\n"
+    );
+    assert_eq!(expected, &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
