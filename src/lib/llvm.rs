@@ -625,38 +625,6 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
     let jval_struct_name_char_ptr = c_jval_struct_name.to_bytes_with_nul().as_ptr() as *const _;
     strings.push(c_jval_struct_name);
 
-    let c_alive_heap_jval_counter_name = CString::new("alive_heap_jval_counter").unwrap();
-    let alive_heap_jval_counter_name = c_alive_heap_jval_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_alive_heap_jval_counter_name);
-
-    let c_alive_heap_int_counter_name = CString::new("alive_heap_int_counter").unwrap();
-    let alive_heap_int_counter_name = c_alive_heap_int_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_alive_heap_int_counter_name);
-
-    let c_alive_heap_double_counter_name = CString::new("alive_heap_double_counter").unwrap();
-    let alive_heap_double_counter_name = c_alive_heap_double_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_alive_heap_double_counter_name);
-
-    let c_alive_heap_jvalptrarray_counter_name = CString::new("alive_heap_jvalptrarray_counter").unwrap();
-    let alive_heap_jvalptrarray_counter_name = c_alive_heap_jvalptrarray_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_alive_heap_jvalptrarray_counter_name);
-
-    let c_total_heap_jval_counter_name = CString::new("total_heap_jval_counter").unwrap();
-    let total_heap_jval_counter_name = c_total_heap_jval_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_total_heap_jval_counter_name);
-
-    let c_total_heap_int_counter_name = CString::new("total_heap_int_counter").unwrap();
-    let total_heap_int_counter_name = c_total_heap_int_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_total_heap_int_counter_name);
-
-    let c_total_heap_double_counter_name = CString::new("total_heap_double_counter").unwrap();
-    let total_heap_double_counter_name = c_total_heap_double_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_total_heap_double_counter_name);
-
-    let c_total_heap_jvalptrarray_counter_name = CString::new("total_heap_jvalptrarray_counter").unwrap();
-    let total_heap_jvalptrarray_counter_name = c_total_heap_jvalptrarray_counter_name.to_bytes_with_nul().as_ptr() as *const _;
-    strings.push(c_total_heap_jvalptrarray_counter_name);
-
     let mut module = unsafe {
         let llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
 
@@ -680,61 +648,27 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             0
         );
 
-        let alive_heap_jval_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            alive_heap_jval_counter_name,
-        );
-        LLVMSetInitializer(alive_heap_jval_counter, int32(0));
+        let heap_counter_names = vec![
+            "alive_heap_jval_counter",
+            "total_heap_jval_counter",
+            "alive_heap_int_counter",
+            "total_heap_int_counter",
+            "alive_heap_double_counter",
+            "total_heap_double_counter",
+            "alive_heap_jvalptrarray_counter",
+            "total_heap_jvalptrarray_counter",
+        ];
 
-        let alive_heap_int_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            alive_heap_int_counter_name,
-        );
-        LLVMSetInitializer(alive_heap_int_counter, int32(0));
-
-        let alive_heap_double_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            alive_heap_double_counter_name,
-        );
-        LLVMSetInitializer(alive_heap_double_counter, int32(0));
-
-        let alive_heap_jvalptrarray_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            alive_heap_jvalptrarray_counter_name,
-        );
-        LLVMSetInitializer(alive_heap_jvalptrarray_counter, int32(0));
-
-        let total_heap_jval_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            total_heap_jval_counter_name,
-        );
-        LLVMSetInitializer(total_heap_jval_counter, int32(0));
-
-        let total_heap_int_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            total_heap_int_counter_name,
-        );
-        LLVMSetInitializer(total_heap_int_counter, int32(0));
-
-        let total_heap_double_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            total_heap_double_counter_name,
-        );
-        LLVMSetInitializer(total_heap_double_counter, int32(0));
-
-        let total_heap_jvalptrarray_counter = LLVMAddGlobal(
-            llvm_module,
-            int32_type(),
-            total_heap_jvalptrarray_counter_name,
-        );
-        LLVMSetInitializer(total_heap_jvalptrarray_counter, int32(0));
+        heap_counter_names.iter().for_each(|name| {
+            let cstr_name = CString::new(*name).unwrap();
+            let counter = LLVMAddGlobal(
+                llvm_module,
+                int32_type(),
+                cstr_name.to_bytes_with_nul().as_ptr() as * const _
+            );
+            LLVMSetInitializer(counter, int32(0));
+            strings.push(cstr_name);
+        });
 
         Module {
             module: llvm_module,
