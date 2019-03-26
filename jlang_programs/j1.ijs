@@ -55,18 +55,18 @@ x = x
 # x
 y =: 6 7 8 9 10
 1 1 0 1 0 # y
-NB. y
-NB. y > 7
-NB. NB. (y > 7) # y
-NB. NB.   this is a whole line of annotation
-NB. NB. 6 + 6  NB. ought to produce 12
-NB. NB. >. _1.7 1 1.7
-NB. NB. 3 >. 1 3 5
-NB. NB. >. / 1 6 5
-NB. NB. 1 >. 6 >. 5 NB. by the meaning of /
-NB. NB. 1 >. (6 >. 5) NB. by rightmost-first rule
-NB. NB. 1 >. (6) NB. by the meaning of >.
-NB. NB. 1 >. 6 NB. by the meaning of ()
-NB. NB. 6 NB. by the meaning of >.
-NB. NB. >: _2 3 5 6.3
-NB. NB. 3 >: 1 3 5
+y       NB. here
+y > 7
+(y > 7) # y
+NB.   this is a whole line of annotation
+6 + 6  NB. ought to produce 12
+NB. >. _1.7 1 1.7
+NB. 3 >. 1 3 5
+NB. >. / 1 6 5
+NB. 1 >. 6 >. 5 NB. by the meaning of /
+NB. 1 >. (6 >. 5) NB. by rightmost-first rule
+NB. 1 >. (6) NB. by the meaning of >.
+NB. 1 >. 6 NB. by the meaning of ()
+NB. 6 NB. by the meaning of >.
+NB. >: _2 3 5 6.3
+NB. 3 >: 1 3 5

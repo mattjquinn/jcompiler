@@ -44,7 +44,6 @@ $ cargo test
 * Reorganize llvm.rs, make as much as possible private (i.e. global_idents map on Module struct)
 * Handle divide by zero
 * Add tests for dyadic Power, Residue, Reciprocal verbs (ints + doubles like that for dyadic %).
-* Modify grammar to allow end-line comments.
 * Experiment with definining runtime library in Rust
   on branch `with-rust-runtime` (and possibly use Cargo's
   workspace feature to contain both crates such that they
