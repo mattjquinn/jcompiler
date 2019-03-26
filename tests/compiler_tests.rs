@@ -14,7 +14,7 @@ fn compile(test_jfile : &str) -> (String, String) {
         .to_str().expect("valid tempfile path"));
     jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
                           None, 0, false,
-                          Some(unopt_compile_to_path.clone()))
+                          false, Some(unopt_compile_to_path.clone()))
         .expect("unoptimized compilation failed");
     let unopt_output = Command::new(unopt_compile_to_path)
         .output()
@@ -27,7 +27,7 @@ fn compile(test_jfile : &str) -> (String, String) {
         .to_str().expect("valid tempfile path"));
     jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
                           None, 3, true,
-                          Some(opt_compile_to_path.clone()))
+                          false, Some(opt_compile_to_path.clone()))
         .expect("optimized/stripped compilation failed");
     let opt_output = Command::new(opt_compile_to_path)
         .output()

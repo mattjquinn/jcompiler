@@ -41,7 +41,6 @@ $ cargo test
 
 ### TODO
 * Fix segfault when an identifier is used without prior declaration.
-* Add flag to options that displays memory usage info on stdout.
 * Write more parser tests.
 * Reorganize llvm.rs, make as much as possible private (i.e. global_idents map on Module struct)
 * Handle divide by zero

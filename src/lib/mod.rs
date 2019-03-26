@@ -53,6 +53,7 @@ pub fn compile(path: &str,
                target_triple : Option<String>,
                llvm_optimization_level : u8,
                do_strip_executable : bool,
+               do_report_mem_usage : bool,
                output_path : Option<String>) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
@@ -66,7 +67,11 @@ pub fn compile(path: &str,
         println!("{:?}", astnode);
     }
 
-    let mut llvm_module = llvm::compile_to_module(path, target_triple.clone(), &ast);
+    let mut llvm_module = llvm::compile_to_module(
+        path,
+        target_triple.clone(),
+        do_report_mem_usage,
+        &ast);
 
     llvm::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
     let llvm_ir_cstr = llvm_module.to_cstring();

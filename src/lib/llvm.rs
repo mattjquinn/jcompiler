@@ -19,6 +19,7 @@ const LLVM_FALSE: LLVMBool = 0;
 pub fn compile_to_module(
     module_name: &str,
     target_triple: Option<String>,
+    do_report_mem_usage: bool,
     ast: &[parser::AstNode],
 ) -> Module {
     let mut module = create_module(module_name, target_triple);
@@ -77,8 +78,8 @@ pub fn compile_to_module(
         add_function_call(&mut module, main_bb, "jglobals_dropall", &mut args[..], "");
 
         // Enforce memory cleanliness requirements.
-        let mut args = vec![];
-        add_function_call(&mut module, main_bb, "jmemory_enforce", &mut args[..], "");
+        let mut args = vec![int1(do_report_mem_usage as u64)];
+        add_function_call(&mut module, main_bb, "jmemory_check", &mut args[..], "");
 
         add_main_cleanup(main_bb);
 
@@ -585,7 +586,7 @@ fn add_c_declarations(module: &mut Module) {
     add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
     add_function(module, "jval_drop", & mut [jval_ptr_type, int1_type()], void);
     add_function(module, "jval_clone", & mut [jval_ptr_type, int8_type()], jval_ptr_type);
-    add_function(module, "jmemory_enforce", & mut [], void);
+    add_function(module, "jmemory_check", & mut [int1_type()], void);
 
     add_function(module, "jglobal_set_reference", & mut [int32_type(), jval_ptr_ptr_type], void);
     add_function(module, "jglobal_get_reference", & mut [int32_type()], jval_ptr_type);

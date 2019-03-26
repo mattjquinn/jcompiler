@@ -195,17 +195,20 @@ void jglobals_dropall() {
     }
 }
 
-void jmemory_enforce() {
-//    printf("=== MEMORY REPORT ================================================\n");
-//    printf("%d \\ %d\t\talive \\ historical JVals on heap\n",
-//        alive_heap_jval_counter, total_heap_jval_counter);
-//    printf("%d \\ %d\t\talive \\ historical ints on heap\n",
-//        alive_heap_int_counter, total_heap_int_counter);
-//    printf("%d \\ %d\t\talive \\ historical doubles on heap\n",
-//        alive_heap_double_counter, total_heap_double_counter);
-//    printf("%d \\ %d\t\talive \\ historical JVal pointer arrays on heap\n",
-//        alive_heap_jvalptrarray_counter, total_heap_jvalptrarray_counter);
-//    printf("==================================================================\n");
+void jmemory_check(bool do_print_usage) {
+
+    if (do_print_usage) {
+        printf("=== MEMORY REPORT ================================================\n");
+        printf("%d \\ %d\t\talive \\ historical JVals on heap\n",
+            alive_heap_jval_counter, total_heap_jval_counter);
+        printf("%d \\ %d\t\talive \\ historical ints on heap\n",
+            alive_heap_int_counter, total_heap_int_counter);
+        printf("%d \\ %d\t\talive \\ historical doubles on heap\n",
+            alive_heap_double_counter, total_heap_double_counter);
+        printf("%d \\ %d\t\talive \\ historical JVal pointer arrays on heap\n",
+            alive_heap_jvalptrarray_counter, total_heap_jvalptrarray_counter);
+        printf("==================================================================\n");
+    }
 
     // Require all heap allocations to have been freed in the course of execution.
     assert(alive_heap_jval_counter == 0);
