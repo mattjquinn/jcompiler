@@ -301,3 +301,10 @@ fn ctest_monadic_largerof() {
     assert_eq!("3 3 5\n3\n3 3 3 3 4 5 6\n0 _1 _2 _3 _3 _3 _3\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_largerorequal() {
+    let (stdout, stderr) = compile("ctest_monadic_largerorequal.ijs");
+    assert_eq!("1 1 0\n1 1 1 0 0\n1\n1 1 1 1 1\n1 1 1 0 0\n1 1 0 0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

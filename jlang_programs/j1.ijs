@@ -68,5 +68,5 @@ NB.   this is a whole line of annotation
 1 >. (6) NB. by the meaning of >.
 1 >. 6 NB. by the meaning of ()
 6 NB. by the meaning of >.
-NB. >: _2 3 5 6.3
-NB. 3 >: 1 3 5
+>: _2 3 5 6.3
+3 >: 1 3 5

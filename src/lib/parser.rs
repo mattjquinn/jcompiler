@@ -32,6 +32,7 @@ pub enum DyadicVerb {
     Residue = 9,
     Copy = 10,
     LargerOf = 11,
+    LargerOrEqual = 12,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -142,6 +143,7 @@ fn dyadic_verb_as_enum(verb : &str) -> DyadicVerb {
         "|" => DyadicVerb::Residue,
         "#" => DyadicVerb::Copy,
         ">." =>DyadicVerb::LargerOf,
+        ">:" =>DyadicVerb::LargerOrEqual,
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }

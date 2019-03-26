@@ -18,7 +18,7 @@ term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
 monadicVerb = { ">:" | "*:" | "-" | "%" | "#" | ">." }
 dyadicVerb = {   "+" | "*" | "-" | "%" | "<"
-               | "=" | ">." | "^" | "|" | "#" | ">" }
+               | "=" | ">." | "^" | "|" | "#" | ">:" | ">" }
 
 // @ means "atomic": no implicit whitespace allowed.
 integer = @{ "_"? ~ ASCII_DIGIT+ }
