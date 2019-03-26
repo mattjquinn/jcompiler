@@ -30,6 +30,7 @@ enum JDyadicVerb {
   JPowerOp = 8,
   JResidueOp = 9,
   JCopyOp = 10,
+  JLargerOfOp = 11,
 };
 
 enum JMonadicVerb {

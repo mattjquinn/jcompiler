@@ -294,3 +294,10 @@ fn ctest_monadic_ceiling() {
     assert_eq!("_1 1 2\n_1 _1 _1 _1 _1 0 0 0 3 4 5556\n1 2 3 4 5\n_1 1 3\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_largerof() {
+    let (stdout, stderr) = compile("ctest_monadic_largerof.ijs");
+    assert_eq!("3 3 5\n3\n3 3 3 3 4 5 6\n0 _1 _2 _3 _3 _3 _3\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

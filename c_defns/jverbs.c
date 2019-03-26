@@ -106,6 +106,10 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
                 ret = jval_heapalloc(JIntegerType, 1);
                 *(int*)ret->ptr = (lhsi > rhsi) ? 1 : 0;
                 return ret;
+            case JLargerOfOp:
+                ret = jval_heapalloc(JIntegerType, 1);
+                *(int*)ret->ptr = (lhsi > rhsi) ? lhsi : rhsi;
+                return ret;
             case JEqualOp:
                 ret = jval_heapalloc(JIntegerType, 1);
                 *(int*)ret->ptr = (lhsi == rhsi) ? 1 : 0;

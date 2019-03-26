@@ -61,12 +61,12 @@ y > 7
 NB.   this is a whole line of annotation
 6 + 6  NB. ought to produce 12
 >. _1.7 1 1.7
-NB. 3 >. 1 3 5
-NB. >. / 1 6 5
-NB. 1 >. 6 >. 5 NB. by the meaning of /
-NB. 1 >. (6 >. 5) NB. by rightmost-first rule
-NB. 1 >. (6) NB. by the meaning of >.
-NB. 1 >. 6 NB. by the meaning of ()
-NB. 6 NB. by the meaning of >.
+3 >. 1 3 5
+>. / 1 6 5
+1 >. 6 >. 5 NB. by the meaning of /
+1 >. (6 >. 5) NB. by rightmost-first rule
+1 >. (6) NB. by the meaning of >.
+1 >. 6 NB. by the meaning of ()
+6 NB. by the meaning of >.
 NB. >: _2 3 5 6.3
 NB. 3 >: 1 3 5
