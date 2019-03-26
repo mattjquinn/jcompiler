@@ -1,70 +1,60 @@
-NB. + / x > 2
-NB. x
-NB. x = x
-NB. +/ x = x
-NB. >: x
-NB. >: >: >: x
-NB. *: >: x
-NB. 1 0 5 + 2 7 2 + 9 8 7
-NB. 4 + 1
-NB. 0 0 + 0 0
-NB. 2 + 2
-NB. 2*3
-NB. 2 * 3
-NB. 3 % 4
-NB. 3 - 2
-NB. 2 - 3
-NB. - 3
-NB. 2 ^ 3
-NB. *: 4
-NB. *: 1 2 3 4
-NB. 1 2 3 + 10 20 30
-NB. 1 + 10 20 30
-NB. 1 2 3 + 10
-NB. 2 | 0 1 2 3 4 5 6 7
-NB. 3 | 0 1 2 3 4 5 6 7
-NB. (2+1)*(2+2)
-NB. 3 * 2 + 1
-NB. 1 + 3 % 4
-NB. x =: 100
-NB. x - 1
-NB. y =: x - 1
-NB. y
-NB. z =: 6
-NB. z =: 8
-NB. z
-NB. z =: z + 1
-NB. z
-NB. 1 + (u =: 99)
-NB. u
-NB. x                           =: 0
-NB. X				            =: 1
-NB. K9				            =: 2
-NB. finaltotal			        =: 3
-NB. FinalTotal			        =: 4
-NB. average_annual_rainfall		=: 5
-NB. x
-NB. X
-NB. % 4
-NB. + / 2 3 4
-NB. * / 2 3 4
-NB. 2 > 1
-NB. 2 = 1
-NB. 2 < 1
-NB. x =: 5 4 1 9
-NB. x > 2
-NB. * / x > 2
-NB. + / x > 2
-NB. x
-NB. x = x
-NB. +/ x = x
-NB. # x
-NB. x =: 1 + 2 3 4
-NB. x = x
-NB. +/ x = x
-NB. # x
-NB. y =: 6 7 8 9 10
-NB. 1 1 0 1 0 # y
+2 + 2
+2*3
+2 * 3
+3 % 4
+3 - 2
+2 - 3
+- 3
+2 ^ 3
+*: 4
+*: 1 2 3 4
+1 2 3 + 10 20 30
+1 + 10 20 30
+1 2 3 + 10
+2 | 0 1 2 3 4 5 6 7
+3 | 0 1 2 3 4 5 6 7
+(2+1)*(2+2)
+3 * 2 + 1
+1 + 3 % 4
+x =: 100
+x - 1
+y =: x - 1
+y
+z =: 6
+z =: 8
+z
+z =: z + 1
+z
+1 + (u =: 99)
+u
+x                           =: 0
+X				            =: 1
+K9				            =: 2
+finaltotal			        =: 3
+FinalTotal			        =: 4
+average_annual_rainfall		=: 5
+x
+X
+% 4
++ / 2 3 4
+* / 2 3 4
+2 > 1
+2 = 1
+2 < 1
+x =: 5 4 1 9
+x > 2
+* / x > 2
++ / x > 2
+x
+x = x
++/ x = x
+# x
+x =: 1 + 2 3 4
+x = x
++/ x = x
+# x
+y =: 6 7 8 9 10
+1 1 0 1 0 # y
 NB. y
 NB. y > 7
 NB. NB. (y > 7) # y

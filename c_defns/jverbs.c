@@ -19,6 +19,7 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                bool is_numeric_lhs);
 struct JVal* jval_heapalloc(enum JValType type, int len);
 void jval_drop(struct JVal* jval, bool do_drop_globals);
+struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc);
 
 
 void jprint(struct JVal* val, bool newline) {
@@ -212,9 +213,47 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     exit(EXIT_FAILURE);
 }
 
+struct JVal* jflatten(struct JVal* jval) {
+
+    if (jval->type != JArrayType) {
+        printf("ERROR: jflatten: illegal attempt to flatten non-array type: %d", jval->type);
+        exit(EXIT_FAILURE);
+    }
+
+    int flatlen = 0;
+    struct JVal** arr;
+
+    // First sum up the length of the subarrays comprising the array.
+    arr = (struct JVal**)jval->ptr;
+    for (int i = 0; i < jval->len; i++) {
+        if (arr[i]->type != JArrayType) {
+            printf("ERROR: jflatten: encountered non-array type inside array being flattened; type is: %d",
+                arr[i]->type);
+            exit(EXIT_FAILURE);
+        }
+        flatlen += arr[i]->len;
+    }
+
+    // Allocate an array to hold flattened items and store each subarray's items inside.
+    struct JVal* ret;
+    ret = jval_heapalloc(JArrayType, flatlen);
+    struct JVal** jvals_out;
+    jvals_out = (struct JVal**)ret->ptr;
+    int k = 0;
+    for (int i = 0; i < jval->len; i++) {
+        for (int j = 0; j < arr[i]->len; j++) {
+            jvals_out[k] = jval_clone(((struct JVal**)(arr[i]->ptr))[j], JLocHeapLocal);
+            k += 1;
+        }
+    }
+    return ret;
+}
+
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
     struct JVal* ret;
     struct JVal* intermediate;
+    struct JVal** jvals_a;
+    struct JVal** jvals_b;
     int* iptr;
     int lhsi, rhsi;
     struct JVal** jvals_out;
@@ -244,8 +283,27 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
         exit(EXIT_FAILURE);
 
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
-        printf("ERROR: jdyad: copy: support array with array\n");
-        exit(EXIT_FAILURE);
+
+        // Array lengths must be the same.
+        if (lhs->len != rhs->len) {
+            printf("ERROR: jdyad: copy: length mismatch: lhs (type:%d,len:%d), rhs (type:%d,len:%d)\n",
+                lhs->type, lhs->len, rhs->type, rhs->len);
+            exit(EXIT_FAILURE);
+        }
+
+        jvals_a = lhs->ptr;
+        jvals_b = rhs->ptr;
+        intermediate = jval_heapalloc(JArrayType, lhs->len);
+        jvals_out = (struct JVal**)intermediate->ptr;
+
+        for (int i = 0; i < lhs->len; i++) {
+            jvals_out[i] = jdyad_internal_copy_verb(jvals_a[i], jvals_b[i]);
+        }
+
+//        // Flatten the intermediate array, then drop before returning flattened array.
+        ret = jflatten(intermediate);
+        jval_drop(intermediate, false);
+        return ret;
 
     } else {
         printf("ERROR: jdyad: copy: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
