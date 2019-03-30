@@ -43,6 +43,7 @@ matrix:
       cargo doc --verbose &&
       cargo bench &&
       cp -r target/criterion target/doc/benchmarks &&
+      git push origin --delete gh-pages &&
       cargo doc-upload
     addons:
       apt:
