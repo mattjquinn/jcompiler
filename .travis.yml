@@ -43,8 +43,14 @@ matrix:
       cargo doc --verbose &&
       cargo bench &&
       cp -r target/criterion target/doc/benchmarks &&
-      git push origin --delete gh-pages &&
-      cargo doc-upload
+    deploy:
+      provider: pages
+      skip_cleanup: true
+      github_token: $GH_TOKEN
+      keep_history: true
+      local_dir: target/doc
+      on:
+        branch: master
     addons:
       apt:
         packages:
