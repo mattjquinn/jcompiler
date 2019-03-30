@@ -52,6 +52,7 @@ matrix:
         - libdw-dev
         - binutils-dev
         - cmake
+        - gnuplot
 
 script: |
   cargo build --verbose --release &&
