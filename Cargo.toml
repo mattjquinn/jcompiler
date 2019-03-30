@@ -12,6 +12,13 @@ license = "GPL-2.0"
 name = "jcompilerlib"
 path = "src/lib/mod.rs"
 
+[[bench]]
+name = "benchmarks"
+harness = false
+
+[dev-dependencies]
+criterion = "0.2"
+
 [dependencies]
 llvm-sys = "70"
 itertools = "0.4"

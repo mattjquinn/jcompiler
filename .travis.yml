@@ -41,6 +41,9 @@ matrix:
       cargo coveralls --verbose
     - |
       cargo doc --verbose &&
+      cargo bench &&
+    # Copy the benchmarks results so they'll be picked up by doc-upload.
+      cp -r target/criterion target/doc/benchmarks &&
       cargo doc-upload
     addons:
       apt:
@@ -54,7 +57,6 @@ matrix:
 script: |
   cargo build --verbose --release &&
   cargo test --verbose -- --test-threads 1 &&
-  cargo bench --verbose &&
   cargo doc   --verbose
 
 notifications:
