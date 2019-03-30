@@ -42,7 +42,6 @@ matrix:
     - |
       cargo doc --verbose &&
       cargo bench &&
-    # Copy the benchmarks results so they'll be picked up by doc-upload.
       cp -r target/criterion target/doc/benchmarks &&
       cargo doc-upload
     addons:
