@@ -22,7 +22,7 @@ fn main() {
 
     opts.optflag("h", "help", "print usage");
     opts.optflag("v", "version", "print jcompiler version");
-    opts.optflag("", "dump-llvm", "print LLVM IR generated");
+    opts.optflag("", "verbose", "print AST, IR, etc.");
     opts.optflag("m", "mem-usage", "binary will print memory usage");
     opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LVL");
     opts.optopt("", "strip", "strip symbols from the binary (default: yes)", "yes|no");
@@ -91,6 +91,7 @@ fn main() {
                                 llvm_opt_level,
                                 do_strip,
                                 matches.opt_present("mem-usage"),
+                                matches.opt_present("verbose"),
                                 None) {
         Ok(_) => {}
         Err(e) => {

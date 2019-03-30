@@ -41,6 +41,8 @@ matrix:
       cargo coveralls --verbose
     - |
       cargo doc --verbose &&
+      cargo bench &&
+      cp -r target/criterion target/doc/benchmarks &&
       cargo doc-upload
     addons:
       apt:
@@ -50,11 +52,11 @@ matrix:
         - libdw-dev
         - binutils-dev
         - cmake
+        - gnuplot
 
 script: |
   cargo build --verbose --release &&
   cargo test --verbose -- --test-threads 1 &&
-  cargo bench --verbose &&
   cargo doc   --verbose
 
 notifications:

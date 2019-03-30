@@ -54,6 +54,7 @@ pub fn compile(path: &str,
                llvm_optimization_level : u8,
                do_strip_executable : bool,
                do_report_mem_usage : bool,
+               do_verbose: bool,
                output_path : Option<String>) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
@@ -63,8 +64,11 @@ pub fn compile(path: &str,
             panic!("{}", parse_error);
         }
     };
-    for astnode in &ast {
-        println!("{:?}", astnode);
+
+    if do_verbose {
+        for astnode in &ast {
+            println!("{:?}", astnode);
+        }
     }
 
     let mut llvm_module = llvm::compile_to_module(
@@ -77,19 +81,29 @@ pub fn compile(path: &str,
     let llvm_ir_cstr = llvm_module.to_cstring();
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
 
-    println!("LLVM IR optimized at level {}:\n{}", llvm_optimization_level, llvm_ir);
+    if do_verbose {
+        println!("LLVM IR optimized at level {}:\n{}", llvm_optimization_level, llvm_ir);
+    }
 
     // Compile the LLVM IR to a temporary object file.
     let object_file = try!(convert_io_error(NamedTempFile::new()));
     let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
-    println!("Writing object file to {}", obj_file_path);
+
+    if do_verbose {
+        println!("Writing object file to {}", obj_file_path);
+    }
+
     llvm::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
 
     let output_path = match output_path {
         Some(op) => op,
         None => executable_name(path),
     };
-    println!("Writing executable to {}", output_path);
+
+    if do_verbose {
+        println!("Writing executable to {}", output_path);
+    }
+
     let res = link_object_file(&obj_file_path, &output_path, target_triple);
     match res {
         Ok(_) => (),
@@ -99,7 +113,9 @@ pub fn compile(path: &str,
     if do_strip_executable {
         let strip_args = ["-s", &output_path[..]];
         shell::run_shell_command("strip", &strip_args[..]).unwrap();
-        println!("Stripped executable of debug symbols.");
+        if do_verbose {
+            println!("Stripped executable of debug symbols.");
+        }
     }
 
     Ok(())
