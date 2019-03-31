@@ -327,6 +327,6 @@ fn ctest_ch1_learningjbook() {
 #[test]
 fn ctest_strings() {
     let (stdout, stderr) = compile("ctest_strings.ijs");
-    assert_eq!("\n\nMy Ten Years in a Quandary\nA VERRRRRRRRRRRRRRRRRRRRRRRRY LOOOOOOOOOOOOONG STRINNNNNNNNNNNG\n", &stdout[..]);
+    assert_eq!("\n\nMy Ten Years in a Quandary\nA VERRRRRRRRRRRRRRRRRRRRRRRRY LOOOOOOOOOOOOONG STRINNNNNNNNNNNG\n0\n1\n2\n20\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }

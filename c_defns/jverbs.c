@@ -414,6 +414,18 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                     printf("ERROR: jmonad: unsupported verb on type double: %d\n", op);
                     exit(EXIT_FAILURE);
             }
+        case JStringType:
+
+            switch (op) {
+                case JTallyOp:
+                    ret = jval_heapalloc(JIntegerType, 1);
+                    // Don't count null terminating byte in length.
+                    *(int*)ret->ptr = expr->len - 1;
+                    return ret;
+                default:
+                    printf("ERROR: jmonad: unsupported verb on type string: %d\n", op);
+                    exit(EXIT_FAILURE);
+            }
 
         case JArrayType:
 
