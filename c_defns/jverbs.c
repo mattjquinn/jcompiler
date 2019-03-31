@@ -26,6 +26,7 @@ void jprint(struct JVal* val, bool newline) {
   struct JVal** jvals;
   int* iptr;
   double* dptr;
+  char* sptr;
 
   switch (val->type) {
     case JIntegerType:
@@ -37,6 +38,10 @@ void jprint(struct JVal* val, bool newline) {
       dptr = (double*) val->ptr;
       if (signbit(*dptr) && *dptr != -0.0) { printf("_%.*g", JPRINT_PRECISION, fabs(*dptr)); }
       else                                 { printf("%.*g", JPRINT_PRECISION, fabs(*dptr)); }
+      break;
+    case JStringType:
+      sptr = (char*) val->ptr;
+      printf("%s", sptr);
       break;
     case JArrayType:
       jvals = val->ptr;

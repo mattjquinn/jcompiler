@@ -5,7 +5,7 @@ program = _{ SOI ~ "\n"* ~ (stmt ~ "\n"+) * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = { insertExpr | assgmtExpr | monadicExpr | dyadicExpr | terms }
+expr = { insertExpr | assgmtExpr | monadicExpr | dyadicExpr | string | terms }
 monadicExpr = { monadicVerb ~ expr }
 dyadicExpr = { (monadicExpr | terms) ~ dyadicVerb ~ expr }
 
@@ -24,6 +24,7 @@ dyadicVerb = {   "+" | "*" | "-" | "%" | "<"
 integer = @{ "_"? ~ ASCII_DIGIT+ }
 decimal = @{ "_"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* }
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+string = @{ "'" ~ ( !"'" ~ ANY )* ~ "'" }
 
 WHITESPACE = _{ " " | "\t" }
 

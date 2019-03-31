@@ -26,16 +26,19 @@ You can find many examples of J programs in the `jlang_programs` directory.
 As one example, compiling this J program:
 
 ```j
+'Some array operations...'
 *: 1 2 3 4
 1 2 3 + 10 20 30
 1 + 10 20 30
 1 2 3 + 10
-2 | 0 1 2 3 4 5 6 7
+residues := 2 | 0 1 2 3 4 5 6 7
+residues
 ```
 
 with jcompiler and running the compiled binary will yield the following on stdout:
 
 ```j
+Some array operations...
 1 4 9 16
 11 21 31
 11 21 31

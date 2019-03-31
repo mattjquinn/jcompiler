@@ -11,6 +11,7 @@ enum JValType {
   JIntegerType = 1,
   JArrayType = 2,
   JDoublePrecisionFloatType = 3,
+  JStringType = 4,
 };
 
 enum JValLocation {

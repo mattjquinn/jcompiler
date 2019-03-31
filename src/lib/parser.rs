@@ -2,6 +2,7 @@ use self::AstNode::*;
 use itertools::Itertools;
 use pest::error::Error;
 use std::fmt;
+use std::ffi::CString;
 
 use pest::Parser;
 
@@ -46,6 +47,7 @@ pub enum AstNode {
     Reduce { verb: DyadicVerb, expr: Box<AstNode> },
     IsGlobal{ident: String, expr: Box<AstNode>},
     Ident(String),
+    Str(CString),
 }
 
 impl fmt::Display for AstNode {
@@ -126,6 +128,10 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             AstNode::IsGlobal { ident : String::from(ident.as_str()),
                                 expr : Box::new(expr) }
         },
+        Rule::string => {
+            let str = pair.as_str();
+            AstNode::Str(CString::new(&str[1..str.len()-1]).unwrap())
+        }
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr),
     }
 }

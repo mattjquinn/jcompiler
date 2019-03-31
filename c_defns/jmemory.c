@@ -13,13 +13,15 @@ static struct JVal* jglobals[JNUM_GLOBAL_SLOTS] = { NULL };
 
 // These counters keep track of heap allocations/frees.
 extern int alive_heap_jval_counter;
-extern int alive_heap_int_counter;
-extern int alive_heap_double_counter;
-extern int alive_heap_jvalptrarray_counter;
 extern int total_heap_jval_counter;
+extern int alive_heap_int_counter;
 extern int total_heap_int_counter;
+extern int alive_heap_double_counter;
 extern int total_heap_double_counter;
+extern int alive_heap_jvalptrarray_counter;
 extern int total_heap_jvalptrarray_counter;
+extern int alive_heap_string_counter;
+extern int total_heap_string_counter;
 
 // All heap memory allocations must be done using this function.
 struct JVal* jval_heapalloc(enum JValType type, int len) {
@@ -27,6 +29,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
     struct JVal** jvals;
     int* iptr;
     double* dptr;
+    char* sptr;
 
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
@@ -63,6 +66,16 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
             total_heap_double_counter += 1;
             jval->ptr = dptr;
             return jval;
+        case JStringType:
+            sptr = malloc(len * sizeof(char));
+            if (!sptr) {
+                printf("ERROR: jval_heapalloc: call to malloc new string of len %d failed.", len);
+                exit(EXIT_FAILURE);
+            }
+            alive_heap_string_counter += 1;
+            total_heap_string_counter += 1;
+            jval->ptr = sptr;
+            return jval;
         case JArrayType:
             // REMEMBER: This is just allocating space for _pointers_ to the JVals
             // that will eventually comprise the array, not the actual JVals themselves.
@@ -94,6 +107,12 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
             return ret;
         case JDoublePrecisionFloatType:
             *(double*)ret->ptr = *(double*)jval->ptr;
+            return ret;
+        case JStringType:
+            // Copy string's characters to this new string.
+            for (int i = 0; i < jval->len; i++) {
+                ((char*)ret->ptr)[i] = ((char*)jval->ptr)[i];
+            }
             return ret;
         case JArrayType:
             jvalsin = (struct JVal**) jval->ptr;
@@ -143,6 +162,10 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
         case JDoublePrecisionFloatType:
             free(jval->ptr);
             alive_heap_double_counter -= 1;
+            break;
+        case JStringType:
+            free(jval->ptr);
+            alive_heap_string_counter -= 1;
             break;
         case JArrayType:
             jvals = (struct JVal**) jval->ptr;

@@ -92,6 +92,7 @@ enum JValType {
     Integer = 1,
     Array = 2,
     DoublePrecisionFloat = 3,
+    String = 4,
 }
 
 #[derive(Clone)]
@@ -233,6 +234,37 @@ fn compile_expr(
                 alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, 1)
             }
         },
+        parser::AstNode::Str(ref str) => {
+            unsafe {
+                // Allocate an array to hold the string's characters.
+                let str_bytes = str.clone().into_bytes_with_nul();
+                let str_len = str_bytes.len();
+                let arr = LLVMBuildArrayAlloca(
+                    builder.builder,
+                    int8_type(),
+                    int64(str_bytes.len() as u64),
+                    module.new_string_ptr("string_arr")
+                );
+
+                // Load each character into the string array.
+                let mut idx = 0;
+                for byte in str_bytes {
+                    let mut char_offset = vec![int32(idx as u64)];
+                    let char_gep = LLVMBuildInBoundsGEP(
+                        builder.builder,
+                        arr,
+                        char_offset.as_mut_ptr(),
+                        char_offset.len() as u32,
+                        module.new_string_ptr("str_char_gep"),
+                    );
+                    LLVMBuildStore(builder.builder, int8(byte as u64), char_gep);
+                    idx += 1;
+                }
+
+                // Point to the string via a JVal struct.
+                alloc_jval(module, bb, arr, JValType::String, JValLocation::Stack, str_len as u64)
+            }
+        }
         parser::AstNode::Terms(ref terms) => {
 
             // Ensure we have two or more terms to assemble into an array.
@@ -658,6 +690,8 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             "total_heap_double_counter",
             "alive_heap_jvalptrarray_counter",
             "total_heap_jvalptrarray_counter",
+            "alive_heap_string_counter",
+            "total_heap_string_counter",
         ];
 
         heap_counter_names.iter().for_each(|name| {
