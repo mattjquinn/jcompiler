@@ -12,7 +12,7 @@ extern crate regex;
 extern crate tempfile;
 
 use getopts::{Options};
-use jcompilerlib::llvm;
+use jcompilerlib::compiler;
 use std::env;
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
     opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LVL");
     opts.optopt("", "strip", "strip symbols from the binary (default: yes)", "yes|no");
 
-    let default_triple_cstring = llvm::get_default_target_triple();
+    let default_triple_cstring = compiler::get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
 
     opts.optopt(

@@ -568,43 +568,6 @@ fn add_c_declarations(module: &mut Module) {
         void = LLVMVoidType();
     }
 
-//    add_function(
-//        module,
-//        "llvm.memset.p0i8.i32",
-//        &mut [
-//            int8_ptr_type(),
-//            int8_type(),
-//            int32_type(),
-//            int32_type(),
-//            int1_type(),
-//        ],
-//        void,
-//    );
-
-//    add_function(module, "malloc", &mut [int32_type()], int8_ptr_type());
-//
-//    add_function(module, "free", &mut [int8_ptr_type()], void);
-//
-//    add_function(
-//        module,
-//        "write",
-//        &mut [int32_type(), int8_ptr_type(), int32_type()],
-//        int32_type(),
-//    );
-
-//    add_function(module, "putchar", &mut [int32_type()], int32_type());
-
-//    add_function(module, "getchar", &mut [], int32_type());
-
-//    add_function(
-//        module,
-//        "printf",
-//        &mut [
-//            int8_ptr_type(), /* varargs; simply give extra args at call time. */
-//        ],
-//        int32_type(),
-//    );
-
     let jval_ptr_type = module.jval_ptr_type.clone();
     let jval_ptr_ptr_type = unsafe { LLVMPointerType(
         module.jval_ptr_type.clone(),

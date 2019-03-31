@@ -15,7 +15,7 @@ extern crate tempfile;
 extern crate pest_derive;
 extern crate core;
 
-pub mod llvm;
+pub mod compiler;
 pub mod parser;
 pub mod shell;
 
@@ -71,13 +71,13 @@ pub fn compile(path: &str,
         }
     }
 
-    let mut llvm_module = llvm::compile_to_module(
+    let mut llvm_module = compiler::compile_to_module(
         path,
         target_triple.clone(),
         do_report_mem_usage,
         &ast);
 
-    llvm::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
+    compiler::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
     let llvm_ir_cstr = llvm_module.to_cstring();
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
 
@@ -93,7 +93,7 @@ pub fn compile(path: &str,
         println!("Writing object file to {}", obj_file_path);
     }
 
-    llvm::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
+    compiler::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
 
     let output_path = match output_path {
         Some(op) => op,

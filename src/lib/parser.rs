@@ -1,5 +1,5 @@
 use self::AstNode::*;
-use itertools::Itertools;
+use itertools::{Itertools};
 use pest::error::Error;
 use std::fmt;
 use std::ffi::CString;
@@ -86,20 +86,19 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
         Rule::expr => build_ast_from_expr(pair.into_inner().next().unwrap()),
         Rule::monadicExpr => {
             let mut pair = pair.into_inner();
-            let verb = pair.next().unwrap().as_str();
+            let action = pair.next().unwrap();
             let expr = pair.next().unwrap();
-            let op = monadic_verb_as_enum(verb);
-            AstNode::MonadicOp { verb: op, expr: Box::new(build_ast_from_expr(expr))}
+            let expr = build_ast_from_expr(expr);
+            parse_monadic_action(action, expr)
         },
         Rule::dyadicExpr => {
             let mut pair = pair.into_inner();
             let lhspair = pair.next().unwrap();
             let lhs = build_ast_from_expr(lhspair);
-            let op = pair.next().unwrap();
+            let action = pair.next().unwrap();
             let rhspair = pair.next().unwrap();
             let rhs = build_ast_from_expr(rhspair);
-            let op = dyadic_verb_as_enum(op.as_str());
-            AstNode::DyadicOp { verb: op, lhs: Box::new(lhs), rhs: Box::new(rhs)}
+            parse_dyadic_action(action, lhs, rhs)
         },
         Rule::terms => {
             let terms = pair.into_inner()
@@ -111,14 +110,6 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
                 1 => terms.get(0).unwrap().clone(),
                 _ => Terms(terms),
             }
-        },
-        Rule::insertExpr => {
-            let mut pair = pair.into_inner();
-            let dyad_to_insert = pair.next().unwrap();
-            let expr = pair.next().unwrap();
-            let node = build_ast_from_expr(expr);
-            let op = dyadic_verb_as_enum(dyad_to_insert.as_str());
-            AstNode::Reduce { verb: op, expr : Box::new(node) }
         },
         Rule::assgmtExpr => {
             let mut pair = pair.into_inner();
@@ -136,33 +127,94 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
     }
 }
 
-fn dyadic_verb_as_enum(verb : &str) -> DyadicVerb {
-    match verb {
-        "+" => DyadicVerb::Plus,
-        "*" => DyadicVerb::Times,
-        "-" => DyadicVerb::Minus,
-        "<" => DyadicVerb::LessThan,
-        "=" => DyadicVerb::Equal,
-        ">" => DyadicVerb::LargerThan,
-        "%" => DyadicVerb::Divide,
-        "^" => DyadicVerb::Power,
-        "|" => DyadicVerb::Residue,
-        "#" => DyadicVerb::Copy,
-        ">." =>DyadicVerb::LargerOf,
-        ">:" =>DyadicVerb::LargerOrEqual,
+fn parse_dyadic_action(pair : pest::iterators::Pair<Rule>,
+                       lhs : AstNode,
+                       rhs : AstNode) -> AstNode {
+    let mut pair = pair.into_inner();
+    let verb = pair.next().unwrap();
+    let adverbs = pair.collect_vec();
+
+    // Adverbs not currently supported on dyadic verbs.
+    assert_eq!(adverbs.len(), 0);
+
+    let lhs = Box::new(lhs);
+    let rhs = Box::new(rhs);
+
+    match verb.as_str() {
+        "+" => AstNode::DyadicOp { verb: DyadicVerb::Plus, lhs, rhs },
+        "*" => AstNode::DyadicOp { verb: DyadicVerb::Times, lhs, rhs },
+        "-" => AstNode::DyadicOp { verb: DyadicVerb::Minus, lhs, rhs },
+        "<" => AstNode::DyadicOp { verb: DyadicVerb::LessThan, lhs, rhs },
+        "=" => AstNode::DyadicOp { verb: DyadicVerb::Equal, lhs, rhs },
+        ">" => AstNode::DyadicOp { verb: DyadicVerb::LargerThan, lhs, rhs },
+        "%" => AstNode::DyadicOp { verb: DyadicVerb::Divide, lhs, rhs },
+        "^" => AstNode::DyadicOp { verb: DyadicVerb::Power, lhs, rhs },
+        "|" => AstNode::DyadicOp { verb: DyadicVerb::Residue, lhs, rhs },
+        "#" => AstNode::DyadicOp { verb: DyadicVerb::Copy, lhs, rhs },
+        ">." => AstNode::DyadicOp { verb: DyadicVerb::LargerOf, lhs, rhs },
+        ">:" => AstNode::DyadicOp { verb: DyadicVerb::LargerOrEqual, lhs, rhs },
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }
 
-fn monadic_verb_as_enum(verb : &str) -> MonadicVerb {
-    match verb {
-        ">:" => MonadicVerb::Increment,
-        "*:" => MonadicVerb::Square,
-        "-" =>  MonadicVerb::Negate,
-        "%" =>  MonadicVerb::Reciprocal,
-        "#" =>  MonadicVerb::Tally,
-        ">." => MonadicVerb::Ceiling,
-        _ => panic!("Unsupported monadic verb: {}", verb),
+fn parse_monadic_action(pair : pest::iterators::Pair<Rule>,
+                        expr : AstNode) -> AstNode {
+    let mut pair = pair.into_inner();
+    let verb = pair.next().unwrap();
+    let adverbs = pair.collect_vec();
+
+    match verb.as_str() {
+        ">:" => {
+            assert_eq!(adverbs.len(), 0);
+            AstNode::MonadicOp { verb: MonadicVerb::Increment,
+                expr: Box::new(expr) }
+        },
+        "*:" => {
+            assert_eq!(adverbs.len(), 0);
+            AstNode::MonadicOp { verb: MonadicVerb::Square,
+                expr: Box::new(expr) }
+        },
+        "-" => {
+            match adverbs.len() {
+                0 => AstNode::MonadicOp { verb: MonadicVerb::Negate,
+                        expr: Box::new(expr) },
+                1 => AstNode::Reduce { verb: DyadicVerb::Minus,
+                        expr: Box::new(expr) },
+                _ => panic!("Unsupported number of adverbs for '-': {}", adverbs.len())
+            }
+        },
+        "%" => {
+            assert_eq!(adverbs.len(), 0);
+            AstNode::MonadicOp { verb: MonadicVerb::Reciprocal,
+                expr: Box::new(expr) }
+        },
+        "#" => {
+            assert_eq!(adverbs.len(), 0);
+            AstNode::MonadicOp { verb: MonadicVerb::Tally,
+                expr: Box::new(expr) }
+        },
+        ">." => {
+            match adverbs.len() {
+                0 => AstNode::MonadicOp { verb: MonadicVerb::Ceiling,
+                    expr: Box::new(expr) },
+                1 => AstNode::Reduce { verb: DyadicVerb::LargerOf,
+                    expr: Box::new(expr) },
+                _ => panic!("Unsupported number of adverbs for '>.': {}", adverbs.len())
+            }
+        },
+        "+" => {
+            assert_eq!(adverbs.len(), 1);
+            assert_eq!(adverbs[0].as_str(), "/");
+            AstNode::Reduce { verb: DyadicVerb::Plus,
+                expr: Box::new(expr) }
+        },
+        "*" => {
+            assert_eq!(adverbs.len(), 1);
+            assert_eq!(adverbs[0].as_str(), "/");
+            AstNode::Reduce { verb: DyadicVerb::Times,
+                expr: Box::new(expr) }
+        },
+        _ => panic!("Unsupported monadic action verb: {}", verb.as_str()),
     }
 }
 

@@ -5,20 +5,18 @@ program = _{ SOI ~ "\n"* ~ (stmt ~ "\n"+) * ~ stmt? ~ EOI }
 
 stmt = _{ expr }
 
-expr = { insertExpr | assgmtExpr | monadicExpr | dyadicExpr | string | terms }
-monadicExpr = { monadicVerb ~ expr }
-dyadicExpr = { (monadicExpr | terms) ~ dyadicVerb ~ expr }
-
-// To think: "/" is a dyad itself, can we write this more concisely?
-insertExpr = { dyadicVerb ~ "/" ~ expr }
+expr = { assgmtExpr | monadicExpr | dyadicExpr | string | terms }
+monadicExpr = { action ~ expr }
+dyadicExpr = { (monadicExpr | terms) ~ action ~ expr }
 
 assgmtExpr = { ident ~ "=:" ~ expr }
 terms = { term+ }
 term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
-monadicVerb = { ">:" | "*:" | "-" | "%" | "#" | ">." }
-dyadicVerb = {   "+" | "*" | "-" | "%" | "<"
-               | "=" | ">." | "^" | "|" | "#" | ">:" | ">" }
+action = { verb ~ adverb* }
+verb = { ">:" | "*:" | "-" | "%" | "#" | ">." |
+          "+" | "*" | "<"  | "=" | "^" | "|" | ">" }
+adverb = { "/" }
 
 // @ means "atomic": no implicit whitespace allowed.
 integer = @{ "_"? ~ ASCII_DIGIT+ }
