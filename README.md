@@ -11,7 +11,7 @@
 
 The latest API reference for the master branch is [available here](https://mattjquinn.github.io/jcompiler/master/jcompiler/index.html).
 
-## Usage
+## Compiling J
 
 You will need LLVM 7 and Rust installed.
 
@@ -20,9 +20,30 @@ You will need LLVM 7 and Rust installed.
 You can then compile and run programs as follows:
 
 ```
-$ target/release/jcompiler j_examples/test.ijs
-$ ./test
-Hello World!
+$ target/release/jcompiler <jfile>.ijs
+$ ./<jfile>
+```
+
+## Examples
+
+Compiling this J program:
+
+```j
+*: 1 2 3 4
+1 2 3 + 10 20 30
+1 + 10 20 30
+1 2 3 + 10
+2 | 0 1 2 3 4 5 6 7
+```
+
+with jcompiler and running the compiled binary will yield the following on stdout:
+
+```j
+1 4 9 16
+11 21 31
+11 21 31
+11 12 13
+0 1 0 1 0 1 0 1
 ```
 
 By default, jcompiler compiles programs to executables that run on the
@@ -30,11 +51,28 @@ current machine. You can explicitly specify architecture using LLVM
 target triples:
 
 ```
-$ target/release/jcompiler j_examples/test.ijs --target=x86_64-pc-linux-gnu
+$ target/release/jcompiler <jfile>.ijs --target=x86_64-pc-linux-gnu
 ```
 
-### Running tests
+### Tests
+
+There are two categories of tests: one for the parser, the other for the compiler. Both sets can be run with:
 
 ```
 $ cargo test
 ```
+
+### Benchmarks
+
+At present, only the compilation process itself is benchmarked. Future benchmarks
+for compiled binaries themselves are planned. Here's a look at how the compiler runs
+with optimizations off:
+
+![unoptimized](images/unoptimized_03302019.svg)
+
+compares with all optimizations turned on:
+
+![optimized](images/optimized_03302019.svg)
+
+as of March 30th, 2019.
+
