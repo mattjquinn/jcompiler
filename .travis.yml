@@ -42,15 +42,7 @@ matrix:
     - |
       cargo doc --verbose &&
       cargo bench &&
-      cp -r target/criterion target/doc/benchmarks &&
-    deploy:
-      provider: pages
-      skip_cleanup: true
-      github_token: $GH_TOKEN
-      keep_history: true
-      local_dir: target/doc
-      on:
-        branch: master
+      cp -r target/criterion target/doc/benchmarks
     addons:
       apt:
         packages:
@@ -65,6 +57,16 @@ script: |
   cargo build --verbose --release &&
   cargo test --verbose -- --test-threads 1 &&
   cargo doc   --verbose
+
+deploy:
+  provider: pages
+  skip_cleanup: true
+  github_token: $GH_TOKEN
+  local_dir: target/doc
+  keep_history: true
+  on:
+    branch: master
+    env: $NAME='nightly-publish'
 
 notifications:
   email: false
