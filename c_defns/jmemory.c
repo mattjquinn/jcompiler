@@ -23,101 +23,172 @@ extern int total_heap_jvalptrarray_counter;
 extern int alive_heap_string_counter;
 extern int total_heap_string_counter;
 
-// All heap memory allocations must be done using this function.
-struct JVal* jval_heapalloc(enum JValType type, int len) {
-    struct JVal* jval;
-    struct JVal** jvals;
+struct JVal* jval_heapalloc_int() {
     int* iptr;
-    double* dptr;
-    char* sptr;
+    struct JVal* jval;
 
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
     if (!jval) {
-        printf("ERROR: jval_heapalloc: call to malloc new JVal failed.");
+        printf("ERROR: jval_heapalloc_int: call to malloc new JVal failed.\n");
         exit(EXIT_FAILURE);
     }
     alive_heap_jval_counter += 1;
     total_heap_jval_counter += 1;
 
-    jval->type = type;
+    jval->type = JIntegerType;
     jval->loc = JLocHeapLocal;
-    jval->rank = len;
+    jval->rank = 0;
+    jval->shape = NULL;
+
+    iptr = malloc(sizeof(int));
+    if (!iptr) {
+        printf("ERROR: jval_heapalloc_int: call to malloc new int failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_int_counter += 1;
+    total_heap_int_counter += 1;
+    jval->ptr = iptr;
+    return jval;
+}
+
+struct JVal* jval_heapalloc_double() {
+    struct JVal* jval;
+    double* dptr;
+
+    // Allocate space for the JVal itself.
+    jval = malloc(sizeof(struct JVal));
+    if (!jval) {
+        printf("ERROR: jval_heapalloc_double: call to malloc new JVal failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_jval_counter += 1;
+    total_heap_jval_counter += 1;
+
+    jval->type = JDoublePrecisionFloatType;
+    jval->loc = JLocHeapLocal;
+    jval->rank = 0;
+    jval->shape = NULL;
+
+    dptr = malloc(sizeof(double));
+    if (!dptr) {
+        printf("ERROR: jval_heapalloc_double: call to malloc new double failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_double_counter += 1;
+    total_heap_double_counter += 1;
+    jval->ptr = dptr;
+    return jval;
+}
+
+struct JVal* jval_heapalloc_string(int length) {
+    struct JVal* jval;
+    char* sptr;
+
+    // Allocate space for the JVal itself.
+    jval = malloc(sizeof(struct JVal));
+    if (!jval) {
+        printf("ERROR: jval_heapalloc_string: call to malloc new JVal failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_jval_counter += 1;
+    total_heap_jval_counter += 1;
+
+    jval->type = JStringType;
+    jval->loc = JLocHeapLocal;
+    jval->rank = 1;  // strings are single dimension lists
+
+    jval->shape = malloc(jval->rank * sizeof(int));
+    if (!jval->shape) {
+        printf("ERROR: jval_heapalloc_string: call to malloc new int for shape failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_int_counter += jval->rank;
+    total_heap_int_counter += jval->rank;
+    jval->shape[0] = length;
+
+    sptr = malloc(length * sizeof(char));
+    if (!sptr) {
+        printf("ERROR: jval_heapalloc_string: call to malloc new string of length %d failed.\n", length);
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_string_counter += 1;
+    total_heap_string_counter += 1;
+    jval->ptr = sptr;
+    return jval;
+}
+
+struct JVal* jval_heapalloc_array_dim1(int length) {
+    struct JVal* jval;
+    struct JVal** jvals;
+    int* shape;
+
+    // Allocate space for the JVal itself.
+    jval = malloc(sizeof(struct JVal));
+    if (!jval) {
+        printf("ERROR: jval_heapalloc_array_dim1: call to malloc new JVal failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_jval_counter += 1;
+    total_heap_jval_counter += 1;
+
+    jval->type = JArrayType;
+    jval->loc = JLocHeapLocal;
+    jval->rank = 1;   // Hard-coded for now, this is a dimension 1 only function.
+
+    jval->shape = malloc(jval->rank * sizeof(int));
+    if (!jval->shape) {
+        printf("ERROR: jval_heapalloc_array_dim1: call to malloc new int for shape failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_int_counter += jval->rank;
+    total_heap_int_counter += jval->rank;
+    jval->shape[0] = length;
 
     // Allocate space for the type instance pointed to.
-    switch (type) {
-        case JIntegerType:
-            iptr = malloc(len * sizeof(int));
-            if (!iptr) {
-                printf("ERROR: jval_heapalloc: call to malloc %d new int(s) failed.", len);
-                exit(EXIT_FAILURE);
-            }
-            alive_heap_int_counter += 1;
-            total_heap_int_counter += 1;
-            jval->ptr = iptr;
-            return jval;
-        case JDoublePrecisionFloatType:
-            dptr = malloc(len * sizeof(double));
-            if (!dptr) {
-                printf("ERROR: jval_heapalloc: call to malloc %d new double(s) failed.", len);
-                exit(EXIT_FAILURE);
-            }
-            alive_heap_double_counter += 1;
-            total_heap_double_counter += 1;
-            jval->ptr = dptr;
-            return jval;
-        case JStringType:
-            sptr = malloc(len * sizeof(char));
-            if (!sptr) {
-                printf("ERROR: jval_heapalloc: call to malloc new string of len %d failed.", len);
-                exit(EXIT_FAILURE);
-            }
-            alive_heap_string_counter += 1;
-            total_heap_string_counter += 1;
-            jval->ptr = sptr;
-            return jval;
-        case JArrayType:
-            // REMEMBER: This is just allocating space for _pointers_ to the JVals
-            // that will eventually comprise the array, not the actual JVals themselves.
-            jvals = malloc(len * sizeof(struct JVal*));
-            if (!jvals) {
-                printf("ERROR: jval_heapalloc: call to malloc %d new JVals*(s) failed.", len);
-                exit(EXIT_FAILURE);
-            }
-            alive_heap_jvalptrarray_counter += 1;
-            total_heap_jvalptrarray_counter += 1;
-            jval->ptr = jvals;
-            return jval;
-        default:
-            printf("ERROR: jval_heapalloc: unsupported type: %d", type);
-            exit(EXIT_FAILURE);
+    // REMEMBER: This is just allocating space for _pointers_ to the JVals
+    // that will eventually comprise the array, not the actual JVals themselves.
+    jvals = malloc(length * sizeof(struct JVal*));
+    if (!jvals) {
+        printf("ERROR: jval_heapalloc_array_dim1: call to malloc %d new JVals*(s) failed.\n", length);
+        exit(EXIT_FAILURE);
     }
+    alive_heap_jvalptrarray_counter += 1;
+    total_heap_jvalptrarray_counter += 1;
+    jval->ptr = jvals;
+    return jval;
 }
 
 struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
     struct JVal* ret;
     struct JVal** jvalsout;
     struct JVal** jvalsin;
-    ret = jval_heapalloc(jval->type, jval->rank);
-    ret->loc = loc;
 
     switch (jval->type) {
         case JIntegerType:
+            ret = jval_heapalloc_int();
+            ret->loc = loc;
             *(int*)ret->ptr = *(int*)jval->ptr;
             return ret;
         case JDoublePrecisionFloatType:
+            ret = jval_heapalloc_double();
+            ret->loc = loc;
             *(double*)ret->ptr = *(double*)jval->ptr;
             return ret;
         case JStringType:
+            ret = jval_heapalloc_string(jval->shape[0]);
+            ret->loc = loc;
             // Copy string's characters to this new string.
-            for (int i = 0; i < jval->rank; i++) {
+            for (int i = 0; i < jval->shape[0]; i++) {
                 ((char*)ret->ptr)[i] = ((char*)jval->ptr)[i];
             }
             return ret;
         case JArrayType:
+            ret = jval_heapalloc_array_dim1(jval->shape[0]);
+            ret->loc = loc;
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
-            for (int i = 0; i < jval->rank; i++) {
+            for (int i = 0; i < jval->shape[0]; i++) {
                 jvalsout[i] = jval_clone(jvalsin[i], loc);
             }
             return ret;
@@ -169,7 +240,7 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             break;
         case JArrayType:
             jvals = (struct JVal**) jval->ptr;
-            for (int i = 0; i < jval->rank; i++) {
+            for (int i = 0; i < jval->shape[0]; i++) {
                 jval_drop(jvals[i], do_drop_globals);
             }
             alive_heap_jvalptrarray_counter -= 1;
@@ -179,7 +250,11 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             exit(EXIT_FAILURE);
     }
 
-    // Then free the JVal itself.
+    // Then free the internal shape array.
+    free(jval->shape);
+    alive_heap_int_counter -= jval->rank;  // Rank is # of dims, hence # of ints
+
+    // And finally free the JVal itself.
     free(jval);
     alive_heap_jval_counter -= 1;
 }
@@ -228,6 +303,8 @@ void jmemory_check(bool do_print_usage) {
             alive_heap_int_counter, total_heap_int_counter);
         printf("%d \\ %d\t\talive \\ historical doubles on heap\n",
             alive_heap_double_counter, total_heap_double_counter);
+        printf("%d \\ %d\t\talive \\ historical strings on heap\n",
+            alive_heap_string_counter, total_heap_string_counter);
         printf("%d \\ %d\t\talive \\ historical JVal pointer arrays on heap\n",
             alive_heap_jvalptrarray_counter, total_heap_jvalptrarray_counter);
         printf("==================================================================\n");
@@ -237,5 +314,6 @@ void jmemory_check(bool do_print_usage) {
     assert(alive_heap_jval_counter == 0);
     assert(alive_heap_int_counter == 0);
     assert(alive_heap_double_counter == 0);
+    assert(alive_heap_string_counter == 0);
     assert(alive_heap_jvalptrarray_counter == 0);
 }

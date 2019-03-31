@@ -106,8 +106,8 @@ enum JValLocation {
 struct JValPtr {
     // TODO: Think of compile-time optimizations for which the
     // static info recorded in this struct could be useful.
-    static_type : Option<JValType>,   // the type (if known at compile time)
-    static_len: Option<u64>,          // the length (if known at compile time)
+    //static_type : Option<JValType>,   // the type (if known at compile time)
+    //static_len: Option<u64>,          // the length (if known at compile time)
     ptr: LLVMValueRef,                // pointer to a JVal struct
 }
 
@@ -117,7 +117,7 @@ fn alloc_jval(
     val: LLVMValueRef,
     val_type: JValType,
     val_loc: JValLocation,
-    val_rank: u64) -> JValPtr {
+    val_shape: Vec<u64>) -> JValPtr {
 
     let builder = Builder::new();
     builder.position_at_end(bb);
@@ -161,10 +161,40 @@ fn alloc_jval(
             rank_offset.len() as u32,
             module.new_string_ptr("jval_rank_gep"),
         );
-        LLVMBuildStore(builder.builder, int32(val_rank), rank_gep);
+        LLVMBuildStore(builder.builder, int32(val_shape.len() as u64), rank_gep);
+
+        // Indicate the shape. First we need an arry of integers...
+        let shape_arr = LLVMBuildArrayAlloca(
+            builder.builder,
+            int32_type(),
+            int64(val_shape.len() as u64),
+            module.new_string_ptr("shape_arr")
+        );
+        // ...now fill that array with provided shape dimensions...
+        for (idx, dim) in val_shape.iter().cloned().enumerate() {
+            let mut indices = vec![int32(idx as u64)];
+            let dim_gep = LLVMBuildInBoundsGEP(
+                builder.builder,
+                shape_arr,
+                indices.as_mut_ptr(),
+                indices.len() as u32,
+                module.new_string_ptr("dim_gep"),
+            );
+            LLVMBuildStore(builder.builder, int32(dim), dim_gep);
+        }
+        //...and finally, point to the shape array from the struct:
+        let mut shape_offset = vec![int64(0), int32(3)];
+        let shape_gep = LLVMBuildInBoundsGEP(
+            builder.builder,
+            jval_ptr,
+            shape_offset.as_mut_ptr(),
+            shape_offset.len() as u32,
+            module.new_string_ptr("jval_shape_gep"),
+        );
+        LLVMBuildStore(builder.builder, shape_arr, shape_gep);
 
         // Point to the value.
-        let mut ptr_offset = vec![int64(0), int32(3)];
+        let mut ptr_offset = vec![int64(0), int32(4)];
         let ptr_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
@@ -192,7 +222,7 @@ fn alloc_jval(
         };
         LLVMBuildStore(builder.builder, val, ptr_gep);
 
-        JValPtr { static_type : Some(val_type), static_len : Some(val_rank), ptr : jval_ptr }
+        JValPtr { ptr : jval_ptr }
     }
 }
 
@@ -216,7 +246,7 @@ fn compile_expr(
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::Integer;
-                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, 1)
+                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::DoublePrecisionFloat(n) => {
@@ -231,7 +261,7 @@ fn compile_expr(
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::DoublePrecisionFloat;
-                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, 1)
+                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::Str(ref str) => {
@@ -262,7 +292,7 @@ fn compile_expr(
                 }
 
                 // Point to the string via a JVal struct.
-                alloc_jval(module, bb, arr, JValType::String, JValLocation::Stack, str_len as u64)
+                alloc_jval(module, bb, arr, JValType::String, JValLocation::Stack, vec![str_len as u64])
             }
         }
         parser::AstNode::Terms(ref terms) => {
@@ -295,7 +325,7 @@ fn compile_expr(
 
                 // Point to the array via a JVal struct.
                 let ty = JValType::Array;
-                alloc_jval(module, bb, arr, ty.clone(), JValLocation::Stack, compiled_terms.len() as u64)
+                alloc_jval(module, bb, arr, ty.clone(), JValLocation::Stack, vec![compiled_terms.len() as u64])
             }
         },
         parser::AstNode::MonadicOp {ref verb, ref expr} => {
@@ -308,7 +338,7 @@ fn compile_expr(
                 let mut args = vec![expr.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { static_type : None, static_len : None, ptr : monad_op_arr }
+                JValPtr { ptr : monad_op_arr }
             }
         },
         parser::AstNode::DyadicOp {ref verb, ref lhs, ref rhs} => {
@@ -330,7 +360,7 @@ fn compile_expr(
                 let mut args = vec![rhs.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { static_type : None, static_len : None, ptr : dyad_op_arr }
+                JValPtr { ptr : dyad_op_arr }
             }
         },
         parser::AstNode::Reduce{ ref verb, ref expr } => {
@@ -349,7 +379,7 @@ fn compile_expr(
                 let mut args = vec![expr.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { static_type : None, static_len : None, ptr : reduced_arr }
+                JValPtr { ptr : reduced_arr }
             }
         },
         parser::AstNode::IsGlobal{ ref ident, ref expr } => {
@@ -384,7 +414,7 @@ fn compile_expr(
                 add_function_call(module, bb, "jglobal_set_reference", &mut args[..], "");
             }
 
-            let global = JValPtr { static_type : None, static_len : None, ptr : global_clone };
+            let global = JValPtr { ptr : global_clone };
             global
         },
         parser::AstNode::Ident(ref ident) => {
@@ -392,7 +422,7 @@ fn compile_expr(
             unsafe {
                 let mut args = vec![int32(global_id as u64)];
                 let global_ref = add_function_call(module, bb, "jglobal_get_reference", &mut args[..], "global_ref");
-                JValPtr { static_type : None, static_len : None, ptr : global_ref}
+                JValPtr { ptr : global_ref}
             }
         },
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
@@ -533,6 +563,10 @@ fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
 }
 
+fn int32_ptr_type() -> LLVMTypeRef {
+    unsafe { LLVMPointerType(LLVMInt32Type(), 0) }
+}
+
 fn f64_type() -> LLVMTypeRef {
     unsafe { LLVMDoubleType() }
 }
@@ -634,8 +668,9 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
         let mut members = vec![
             int8_type(),        // the value's type
             int8_type(),        // the value's location
-            int32_type(),       // the value's length
-            void_ptr_type()    // a pointer to the value
+            int32_type(),       // the value's rank (number of dimensions)
+            int32_ptr_type(),   // the value's shape (list of dimensions)
+            void_ptr_type()     // a pointer to the value
         ];
         LLVMStructSetBody(
             jval_struct_type,
