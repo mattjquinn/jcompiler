@@ -32,6 +32,7 @@ enum JDyadicVerb {
   JCopyOp = 10,
   JLargerOfOp = 11,
   JLargerOrEqual = 12,
+  JShapeOp = 13,
 };
 
 enum JMonadicVerb {

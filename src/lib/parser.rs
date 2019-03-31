@@ -34,6 +34,7 @@ pub enum DyadicVerb {
     Copy = 10,
     LargerOf = 11,
     LargerOrEqual = 12,
+    Shape = 13,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -153,6 +154,7 @@ fn parse_dyadic_action(pair : pest::iterators::Pair<Rule>,
         "#" => AstNode::DyadicOp { verb: DyadicVerb::Copy, lhs, rhs },
         ">." => AstNode::DyadicOp { verb: DyadicVerb::LargerOf, lhs, rhs },
         ">:" => AstNode::DyadicOp { verb: DyadicVerb::LargerOrEqual, lhs, rhs },
+        "$" => AstNode::DyadicOp { verb: DyadicVerb::Shape, lhs, rhs },
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }

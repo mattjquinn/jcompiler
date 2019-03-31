@@ -13,6 +13,7 @@
 static int JPRINT_PRECISION = 6;
 
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
+struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs);
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                struct JVal* numeric,
                                                struct JVal* arr,
@@ -77,6 +78,9 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
     if (op == JCopyOp) {
         return jdyad_internal_copy_verb(lhs, rhs);
+    }
+    if (op == JShapeOp) {
+        return jdyad_internal_shape_verb(lhs, rhs);
     }
 
     if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
@@ -262,6 +266,22 @@ struct JVal* jflatten(struct JVal* jval) {
         }
     }
     return ret;
+}
+
+struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
+
+    if (lhs->type != JArrayType || rhs->type != JArrayType) {
+        printf("ERROR: jdyad_internal_shape_verb: expected two arrays, got: (lhs type:%d, rhs type:%d)",
+            lhs->type, rhs->type);
+        exit(EXIT_FAILURE);
+    }
+
+    if (rhs->rank != 1) {
+        printf("ERROR: Expected rhs array of rank 1, got rank: %d", rhs->rank);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("TODO: Implement shape.\n");
 }
 
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
@@ -480,8 +500,6 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
             i = expr->shape[0] - 2;
             ret = jvals_in[i + 1];
             do {
-                // TODO: Free the intermediate values that are
-                // returned by jdyad but never used beyond this function.
                 intermediate = jdyad(verb, jvals_in[i], ret);
                 if (i != expr->shape[0] -2) {
                     // On the first iteration of the loop, ret points to

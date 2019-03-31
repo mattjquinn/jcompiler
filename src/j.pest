@@ -15,7 +15,7 @@ term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
 action = { verb ~ adverb* }
 verb = { ">:" | "*:" | "-" | "%" | "#" | ">." |
-          "+" | "*" | "<"  | "=" | "^" | "|" | ">" }
+          "+" | "*" | "<"  | "=" | "^" | "|" | ">" | "$" }
 adverb = { "/" }
 
 // @ means "atomic": no implicit whitespace allowed.
