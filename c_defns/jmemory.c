@@ -42,7 +42,7 @@ struct JVal* jval_heapalloc(enum JValType type, int len) {
 
     jval->type = type;
     jval->loc = JLocHeapLocal;
-    jval->len = len;
+    jval->rank = len;
 
     // Allocate space for the type instance pointed to.
     switch (type) {
@@ -98,7 +98,7 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
     struct JVal* ret;
     struct JVal** jvalsout;
     struct JVal** jvalsin;
-    ret = jval_heapalloc(jval->type, jval->len);
+    ret = jval_heapalloc(jval->type, jval->rank);
     ret->loc = loc;
 
     switch (jval->type) {
@@ -110,14 +110,14 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
             return ret;
         case JStringType:
             // Copy string's characters to this new string.
-            for (int i = 0; i < jval->len; i++) {
+            for (int i = 0; i < jval->rank; i++) {
                 ((char*)ret->ptr)[i] = ((char*)jval->ptr)[i];
             }
             return ret;
         case JArrayType:
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
-            for (int i = 0; i < jval->len; i++) {
+            for (int i = 0; i < jval->rank; i++) {
                 jvalsout[i] = jval_clone(jvalsin[i], loc);
             }
             return ret;
@@ -169,7 +169,7 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             break;
         case JArrayType:
             jvals = (struct JVal**) jval->ptr;
-            for (int i = 0; i < jval->len; i++) {
+            for (int i = 0; i < jval->rank; i++) {
                 jval_drop(jvals[i], do_drop_globals);
             }
             alive_heap_jvalptrarray_counter -= 1;

@@ -117,7 +117,7 @@ fn alloc_jval(
     val: LLVMValueRef,
     val_type: JValType,
     val_loc: JValLocation,
-    val_len: u64) -> JValPtr {
+    val_rank: u64) -> JValPtr {
 
     let builder = Builder::new();
     builder.position_at_end(bb);
@@ -152,16 +152,16 @@ fn alloc_jval(
         );
         LLVMBuildStore(builder.builder, int8(val_loc.clone() as u64), loc_gep);
 
-        // Indicate the length.
-        let mut len_offset = vec![int64(0), int32(2)];
-        let len_gep = LLVMBuildInBoundsGEP(
+        // Indicate the rank.
+        let mut rank_offset = vec![int64(0), int32(2)];
+        let rank_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
-            len_offset.as_mut_ptr(),
-            len_offset.len() as u32,
-            module.new_string_ptr("jval_len_gep"),
+            rank_offset.as_mut_ptr(),
+            rank_offset.len() as u32,
+            module.new_string_ptr("jval_rank_gep"),
         );
-        LLVMBuildStore(builder.builder, int32(val_len), len_gep);
+        LLVMBuildStore(builder.builder, int32(val_rank), rank_gep);
 
         // Point to the value.
         let mut ptr_offset = vec![int64(0), int32(3)];
@@ -192,7 +192,7 @@ fn alloc_jval(
         };
         LLVMBuildStore(builder.builder, val, ptr_gep);
 
-        JValPtr { static_type : Some(val_type), static_len : Some(val_len), ptr : jval_ptr }
+        JValPtr { static_type : Some(val_type), static_len : Some(val_rank), ptr : jval_ptr }
     }
 }
 

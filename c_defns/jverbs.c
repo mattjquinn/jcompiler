@@ -45,14 +45,14 @@ void jprint(struct JVal* val, bool newline) {
       break;
     case JArrayType:
       jvals = val->ptr;
-      for (int i = 0; i < val->len; i++) {
+      for (int i = 0; i < val->rank; i++) {
         jprint(jvals[i], false);
-        if (i < (val->len - 1)) { printf(" "); }
+        if (i < (val->rank - 1)) { printf(" "); }
       }
       break;
     default:
       printf("ERROR: jprint: unsupported JVal (loc:%d, type:%d, len:%d)\n",
-        val->loc, val->type, val->len);
+        val->loc, val->type, val->rank);
       exit(EXIT_FAILURE);
   }
 
@@ -203,18 +203,18 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
 
         // Array lengths must be the same.
-        if (lhs->len != rhs->len) {
+        if (lhs->rank != rhs->rank) {
             printf("ERROR: jdyad: length mismatch: lhs (type:%d,len:%d), rhs (type:%d,len:%d)\n",
-                lhs->type, lhs->len, rhs->type, rhs->len);
+                lhs->type, lhs->rank, rhs->type, rhs->rank);
             exit(EXIT_FAILURE);
         }
 
         jvals_a = lhs->ptr;
         jvals_b = rhs->ptr;
-        ret = jval_heapalloc(JArrayType, lhs->len);
+        ret = jval_heapalloc(JArrayType, lhs->rank);
         jvals_out = (struct JVal**)ret->ptr;
 
-        for (int i = 0; i < lhs->len; i++) {
+        for (int i = 0; i < lhs->rank; i++) {
             jvals_out[i] = jdyad(op, jvals_a[i], jvals_b[i]);
         }
 
@@ -222,7 +222,7 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     }
 
     printf("ERROR: jdyad: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
-        lhs->type, lhs->len, rhs->type, rhs->len);
+        lhs->type, lhs->rank, rhs->type, rhs->rank);
     exit(EXIT_FAILURE);
 }
 
@@ -238,13 +238,13 @@ struct JVal* jflatten(struct JVal* jval) {
 
     // First sum up the length of the subarrays comprising the array.
     arr = (struct JVal**)jval->ptr;
-    for (int i = 0; i < jval->len; i++) {
+    for (int i = 0; i < jval->rank; i++) {
         if (arr[i]->type != JArrayType) {
             printf("ERROR: jflatten: encountered non-array type inside array being flattened; type is: %d",
                 arr[i]->type);
             exit(EXIT_FAILURE);
         }
-        flatlen += arr[i]->len;
+        flatlen += arr[i]->rank;
     }
 
     // Allocate an array to hold flattened items and store each subarray's items inside.
@@ -253,8 +253,8 @@ struct JVal* jflatten(struct JVal* jval) {
     struct JVal** jvals_out;
     jvals_out = (struct JVal**)ret->ptr;
     int k = 0;
-    for (int i = 0; i < jval->len; i++) {
-        for (int j = 0; j < arr[i]->len; j++) {
+    for (int i = 0; i < jval->rank; i++) {
+        for (int j = 0; j < arr[i]->rank; j++) {
             jvals_out[k] = jval_clone(((struct JVal**)(arr[i]->ptr))[j], JLocHeapLocal);
             k += 1;
         }
@@ -298,18 +298,18 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
 
         // Array lengths must be the same.
-        if (lhs->len != rhs->len) {
+        if (lhs->rank != rhs->rank) {
             printf("ERROR: jdyad: copy: length mismatch: lhs (type:%d,len:%d), rhs (type:%d,len:%d)\n",
-                lhs->type, lhs->len, rhs->type, rhs->len);
+                lhs->type, lhs->rank, rhs->type, rhs->rank);
             exit(EXIT_FAILURE);
         }
 
         jvals_a = lhs->ptr;
         jvals_b = rhs->ptr;
-        intermediate = jval_heapalloc(JArrayType, lhs->len);
+        intermediate = jval_heapalloc(JArrayType, lhs->rank);
         jvals_out = (struct JVal**)intermediate->ptr;
 
-        for (int i = 0; i < lhs->len; i++) {
+        for (int i = 0; i < lhs->rank; i++) {
             jvals_out[i] = jdyad_internal_copy_verb(jvals_a[i], jvals_b[i]);
         }
 
@@ -320,7 +320,7 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
 
     } else {
         printf("ERROR: jdyad: copy: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
-            lhs->type, lhs->len, rhs->type, rhs->len);
+            lhs->type, lhs->rank, rhs->type, rhs->rank);
         exit(EXIT_FAILURE);
     }
 }
@@ -334,10 +334,10 @@ struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
     struct JVal** jvals_out;
 
     jvals = arr->ptr;
-    ret = jval_heapalloc(JArrayType, arr->len);
+    ret = jval_heapalloc(JArrayType, arr->rank);
     jvals_out = (struct JVal**)ret->ptr;
 
-    for (int i = 0; i < arr->len; i++) {
+    for (int i = 0; i < arr->rank; i++) {
         // Must preserve order of operands as some operations are not commutative.
         if (is_numeric_lhs)     { jvals_out[i] = jdyad(op, numeric, jvals[i]); }
         else                    { jvals_out[i] = jdyad(op, jvals[i], numeric); }
@@ -378,7 +378,7 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                     return ret;
                 case JTallyOp:
                     ret = jval_heapalloc(JIntegerType, 1);
-                    *(int*)ret->ptr = expr->len;
+                    *(int*)ret->ptr = expr->rank;
                     return ret;
                 case JCeilingOp:
                     // ceil(int) is the int itself:
@@ -419,8 +419,8 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
             switch (op) {
                 case JTallyOp:
                     ret = jval_heapalloc(JIntegerType, 1);
-                    // Don't count null terminating byte in length.
-                    *(int*)ret->ptr = expr->len - 1;
+                    // Don't count null terminating byte.
+                    *(int*)ret->ptr = expr->rank - 1;
                     return ret;
                 default:
                     printf("ERROR: jmonad: unsupported verb on type string: %d\n", op);
@@ -433,22 +433,22 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                 // The tally monad is not distributed over arrays;
                 // return the length of the array itself.
                 ret = jval_heapalloc(JIntegerType, 1);
-                *(int*)ret->ptr = expr->len;
+                *(int*)ret->ptr = expr->rank;
                 return ret;
             }
 
             jvals_in = expr->ptr;
-            ret = jval_heapalloc(JArrayType, expr->len);
+            ret = jval_heapalloc(JArrayType, expr->rank);
             jvals_out = (struct JVal**)ret->ptr;
 
-            for (int i = 0; i < expr->len; i++) {
+            for (int i = 0; i < expr->rank; i++) {
                 jvals_out[i] = jmonad(op, jvals_in[i]);
             }
 
             return ret;
         default:
             printf("ERROR: jmonad: unsupported expr (type:%d,len:%d)\n",
-                expr->type, expr->len);
+                expr->type, expr->rank);
             exit(EXIT_FAILURE);
     }
 }
@@ -456,7 +456,7 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
 
     // Reducing over a zero length or single expression has no effect.
-    if (expr->len < 2) { return expr; }
+    if (expr->rank < 2) { return expr; }
 
     struct JVal** jvals_in;
     struct JVal* lhs;
@@ -473,13 +473,13 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
             // the output array (remember: some operations like
             // subtraction are not commutative).
             jvals_in = expr->ptr;
-            i = expr->len - 2;
+            i = expr->rank - 2;
             ret = jvals_in[i + 1];
             do {
                 // TODO: Free the intermediate values that are
                 // returned by jdyad but never used beyond this function.
                 intermediate = jdyad(verb, jvals_in[i], ret);
-                if (i != expr->len -2) {
+                if (i != expr->rank -2) {
                     // On the first iteration of the loop, ret points to
                     // the last element of the array. On all other iterations,
                     // ret points to an intermediate computation from the previous
@@ -494,7 +494,7 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
 
         default:
             printf("ERROR: jreduce: unsupported expr (type:%d,len:%d)\n",
-                expr->type, expr->len);
+                expr->type, expr->rank);
             exit(EXIT_FAILURE);
     }
 }
