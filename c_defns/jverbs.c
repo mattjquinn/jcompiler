@@ -12,6 +12,33 @@
 // Default print precision is 6; can be changed within J.
 static int JPRINT_PRECISION = 6;
 
+void jprint_recur_dimensions(struct JVal* arr, int dim_idx, int window_start, int window_end) {
+
+    if (arr->type != JArrayNDimensionalType) {
+        printf("ERROR: jprint_recur_dimensions: Expected n-dim array type, got %d", arr->type);
+        exit(EXIT_FAILURE);
+    }
+
+    struct JVal** jvals;
+
+    if (dim_idx == arr->rank - 1) {
+      jvals = arr->ptr;
+      for (int i = window_start; i < window_end; i++) {
+        jprint(jvals[i], false);
+        if (i < window_end - 1) { printf(" "); }
+      }
+      return;
+    }
+
+    struct JVal** shape = (struct JVal**)arr->shape_fut->ptr;
+    int num_dim_at_idx = *(int*)shape[dim_idx]->ptr;
+    int offset = (window_end - window_start) / num_dim_at_idx;
+    for (int i = 0; i < num_dim_at_idx; i++)  {
+        jprint_recur_dimensions(arr, dim_idx + 1,
+                                window_start + i*offset, window_start + (i+1)*offset);
+        if (i < num_dim_at_idx - 1) { printf("\n"); }
+    }
+}
 void jprint(struct JVal* val, bool newline) {
   struct JVal* reduce_intermediate;
   struct JVal** jvals;
@@ -36,16 +63,13 @@ void jprint(struct JVal* val, bool newline) {
       printf("%s", sptr);
       break;
     case JArrayNDimensionalType:
-      jvals = val->ptr;
 
       reduce_intermediate = jreduce(JTimesOp, val->shape_fut);
       length = *(int*)reduce_intermediate->ptr;
       jval_drop(reduce_intermediate, false);
 
-      for (int i = 0; i < length; i++) {
-        jprint(jvals[i], false);
-        if (i < length - 1) { printf(" "); }
-      }
+      jprint_recur_dimensions(val, 0, 0, length);
+
       break;
     case JArrayType:
       jvals = val->ptr;

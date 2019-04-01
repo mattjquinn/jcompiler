@@ -61,3 +61,4 @@ struct JVal* jval_heapalloc_double();
 void jval_drop(struct JVal* jval, bool do_drop_globals);
 struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc);
 struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr);
+void jprint(struct JVal* val, bool newline);
