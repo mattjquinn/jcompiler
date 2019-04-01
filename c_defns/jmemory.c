@@ -204,6 +204,8 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
     struct JVal* ret;
     struct JVal** jvalsout;
     struct JVal** jvalsin;
+    struct JVal* reduce_intermediate;
+    int length;
 
     switch (jval->type) {
         case JIntegerType:
@@ -230,6 +232,20 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
             for (int i = 0; i < jval->shape[0]; i++) {
+                jvalsout[i] = jval_clone(jvalsin[i], loc);
+            }
+            return ret;
+        case JArrayNDimensionalType:
+            ret = jval_heapalloc_array_dim_n(jval->shape_fut);
+            ret->loc = loc;
+            jvalsin = (struct JVal**) jval->ptr;
+            jvalsout = (struct JVal**) ret->ptr;
+
+            reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+            length = *(int*)reduce_intermediate->ptr;
+            jval_drop(reduce_intermediate, false);
+
+            for (int i = 0; i < length; i++) {
                 jvalsout[i] = jval_clone(jvalsin[i], loc);
             }
             return ret;
