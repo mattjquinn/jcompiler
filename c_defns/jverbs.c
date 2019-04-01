@@ -231,6 +231,11 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
         return jdyad_internal_numeric_with_array(op, rhs, lhs, false);
 
+    } else if ( (lhs->type == JIntegerType || lhs->type == JDoublePrecisionFloatType)
+               && rhs->type == JArrayNDimensionalType) {
+
+        return jdyad_internal_numeric_with_ndim_array(op, lhs, rhs, true);
+
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
 
         // Array lengths must be the same.
@@ -387,7 +392,7 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
             jvals_out[i] = jdyad_internal_copy_verb(jvals_a[i], jvals_b[i]);
         }
 
-//        // Flatten the intermediate array, then drop before returning flattened array.
+        // Flatten the intermediate array, then drop before returning flattened array.
         ret = jflatten(intermediate);
         jval_drop(intermediate, false);
         return ret;
@@ -397,6 +402,27 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
             lhs->type, lhs->shape[0], rhs->type, rhs->shape[0]);
         exit(EXIT_FAILURE);
     }
+}
+
+struct JVal* jdyad_internal_numeric_with_ndim_array(enum JDyadicVerb op,
+                                                    struct JVal* numeric,
+                                                    struct JVal* arr,
+                                                    bool is_numeric_lhs) {
+    struct JVal* ret;
+    struct JVal* reduce_intermediate;
+    int length;
+
+    ret = jval_heapalloc_array_dim_n(arr->shape_fut);
+
+    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    length = *(int*)reduce_intermediate->ptr;
+    jval_drop(reduce_intermediate, false);
+
+    for (int i = 0; i < length; i++) {
+        ((struct JVal**)ret->ptr)[i] = jdyad(op, numeric, ((struct JVal**)arr->ptr)[i]);
+    }
+
+    return ret;
 }
 
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,

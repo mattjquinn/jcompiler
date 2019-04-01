@@ -50,6 +50,10 @@ enum JMonadicVerb {
 
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs);
+struct JVal* jdyad_internal_numeric_with_ndim_array(enum JDyadicVerb op,
+                                                    struct JVal* numeric,
+                                                    struct JVal* arr,
+                                                    bool is_numeric_lhs);
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
                                                struct JVal* numeric,
                                                struct JVal* arr,
