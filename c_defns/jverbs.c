@@ -12,24 +12,13 @@
 // Default print precision is 6; can be changed within J.
 static int JPRINT_PRECISION = 6;
 
-struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
-struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs);
-struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
-                                               struct JVal* numeric,
-                                               struct JVal* arr,
-                                               bool is_numeric_lhs);
-struct JVal* jval_heapalloc_array_dim1(int length);
-struct JVal* jval_heapalloc_int();
-struct JVal* jval_heapalloc_double();
-void jval_drop(struct JVal* jval, bool do_drop_globals);
-struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc);
-
-
 void jprint(struct JVal* val, bool newline) {
+  struct JVal* reduce_intermediate;
   struct JVal** jvals;
   int* iptr;
   double* dptr;
   char* sptr;
+  int length;
 
   switch (val->type) {
     case JIntegerType:
@@ -45,6 +34,18 @@ void jprint(struct JVal* val, bool newline) {
     case JStringType:
       sptr = (char*) val->ptr;
       printf("%s", sptr);
+      break;
+    case JArrayNDimensionalType:
+      jvals = val->ptr;
+
+      reduce_intermediate = jreduce(JTimesOp, val->shape_fut);
+      length = *(int*)reduce_intermediate->ptr;
+      jval_drop(reduce_intermediate, false);
+
+      for (int i = 0; i < length; i++) {
+        jprint(jvals[i], false);
+        if (i < length - 1) { printf(" "); }
+      }
       break;
     case JArrayType:
       jvals = val->ptr;
@@ -269,6 +270,9 @@ struct JVal* jflatten(struct JVal* jval) {
 }
 
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
+    struct JVal* ret;
+    struct JVal* reduce_intermediate;
+    int src_length, dst_length;
 
     if (lhs->type != JArrayType || rhs->type != JArrayType) {
         printf("ERROR: jdyad_internal_shape_verb: expected two arrays, got: (lhs type:%d, rhs type:%d)",
@@ -281,7 +285,22 @@ struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
         exit(EXIT_FAILURE);
     }
 
-    printf("TODO: Implement shape.\n");
+    ret = jval_heapalloc_array_dim_n(lhs);
+
+    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    dst_length = *(int*)reduce_intermediate->ptr;
+    jval_drop(reduce_intermediate, false);
+
+    src_length = rhs->shape[0];
+    int src_i = 0;
+    for (int dst_i = 0; dst_i < dst_length; dst_i++) {
+        ((struct JVal**)ret->ptr)[dst_i] = jval_clone(((struct JVal**)rhs->ptr)[src_i],
+                                                      JLocHeapLocal);
+        src_i += 1;
+        // If there's not enough source operands, wrap back around to start of array.
+        if (src_i == src_length) { src_i = 0; }
+    }
+    return ret;
 }
 
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
