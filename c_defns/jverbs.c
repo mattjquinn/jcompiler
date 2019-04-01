@@ -296,16 +296,16 @@ struct JVal* jflatten(struct JVal* jval) {
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
     struct JVal* ret;
     struct JVal* reduce_intermediate;
-    int src_length, dst_length;
+    int dst_length;
 
-    if (lhs->type != JArrayType || rhs->type != JArrayType) {
-        printf("ERROR: jdyad_internal_shape_verb: expected two arrays, got: (lhs type:%d, rhs type:%d)",
-            lhs->type, rhs->type);
+    if (lhs->type != JArrayType) {
+        printf("ERROR: jdyad_internal_shape_verb: lhs must be an array, got type:%d",
+            lhs->type);
         exit(EXIT_FAILURE);
     }
 
-    if (rhs->rank != 1) {
-        printf("ERROR: Expected rhs array of rank 1, got rank: %d", rhs->rank);
+    if (rhs->type == JArrayType && rhs->rank != 1) {
+        printf("ERROR: Only rhs arrays of rank 1 are supported, got rank: %d", rhs->rank);
         exit(EXIT_FAILURE);
     }
 
@@ -315,14 +315,23 @@ struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
     dst_length = *(int*)reduce_intermediate->ptr;
     jval_drop(reduce_intermediate, false);
 
-    src_length = rhs->shape[0];
     int src_i = 0;
     for (int dst_i = 0; dst_i < dst_length; dst_i++) {
-        ((struct JVal**)ret->ptr)[dst_i] = jval_clone(((struct JVal**)rhs->ptr)[src_i],
-                                                      JLocHeapLocal);
-        src_i += 1;
-        // If there's not enough source operands, wrap back around to start of array.
-        if (src_i == src_length) { src_i = 0; }
+        switch (rhs->type) {
+            case JArrayType:
+                ((struct JVal**)ret->ptr)[dst_i] = jval_clone(
+                        ((struct JVal**)rhs->ptr)[src_i], JLocHeapLocal);
+                src_i += 1;
+                // If there's not enough source operands, wrap back around to start of array.
+                if (src_i == rhs->shape[0]) { src_i = 0; }
+                break;
+            case JIntegerType:
+                ((struct JVal**)ret->ptr)[dst_i] = jval_clone(rhs, JLocHeapLocal);
+                break;
+            default:
+                printf("ERROR: jdyad_internal_shape_verb: unexpected rhs type: %d", rhs->type);
+                exit(EXIT_FAILURE);
+        }
     }
     return ret;
 }
