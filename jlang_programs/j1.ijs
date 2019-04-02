@@ -1,10 +1,9 @@
-NB. table =: 2 3 $ 5 6 7 8 9 10
-NB. table
-NB. 2 4 $ 5 6 7 8 9
-NB. 2 2 $ 1
-NB. NB. add these as tests
-NB. 10 * table
-NB. NB. table + table
+table =: 2 3 $ 5 6 7 8 9 10
+table
+2 4 $ 5 6 7 8 9
+2 2 $ 1
+10 * table
+table + table
 NB. NB. 0 1 * table     NB. Can't support until all arrays are n-dimensional
 NB. NB. 3 $ 1           NB. add this as a test to ctest_dyadic_shape.ijs
 NB. 2 3 $ 5 6 7

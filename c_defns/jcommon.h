@@ -68,3 +68,4 @@ struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr);
 void jprint(struct JVal* val, bool newline);
 int* heapalloc_ndim_col_widths_arr(int length);
 void heapfree_ndim_col_widths_arr(int* arr, int length);
+bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs);

@@ -98,13 +98,6 @@ void jprint(struct JVal* val, bool newline) {
       length = *(int*)reduce_intermediate->ptr;
       jval_drop(reduce_intermediate, false);
 
-      // TODO: If rank is >=2, malloc an integer array
-      // with same # of elements as shape_fut[0].
-      // Then go i..length, modulo shape_fut[0], and
-      // snscanf to a buffer. Take the max of the length
-      // of the string in that buffer with the highest
-      // column width seen so far.
-
       // Arrays of dimension two or higher must have their cells padded
       // to a fixed width defined by the widest value in their column.
       if (val->rank >= 2) {
@@ -112,7 +105,6 @@ void jprint(struct JVal* val, bool newline) {
         dimint = *(int*)dimjval->ptr;
         ndim_col_widths = heapalloc_ndim_col_widths_arr(dimint);
 
-//        printf("dimint:%d\n", dimint);
         for (int i = 0; i < length; i++) {
             elem = ((struct JVal**)val->ptr)[i];
 
@@ -127,11 +119,8 @@ void jprint(struct JVal* val, bool newline) {
                     exit(EXIT_FAILURE);
             }
 
-//            printf("width: %d\n", width);
             if (width > ndim_col_widths[i % dimint]) { ndim_col_widths[i % dimint] = width; }
         }
-//        printf("Widths: %d %d %d\n", ndim_col_widths[0], ndim_col_widths[1],
-//                                   ndim_col_widths[2]);
       } else {
         ndim_col_widths = NULL;
       }
@@ -311,6 +300,30 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
         return jdyad_internal_numeric_with_ndim_array(op, lhs, rhs, true);
 
+    } else if (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType) {
+
+        // Arrays must have same rank and shape.
+        if (!jinternal_same_rank_and_shape(lhs, rhs)) {
+            printf("ERROR: jdyad: rank/shape mismatch between supplied ndim arrays.");
+            exit(EXIT_FAILURE);
+        }
+
+        struct JVal* reduce_intermediate;
+        int length;
+
+        ret = jval_heapalloc_array_dim_n(lhs->shape_fut);
+
+        reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+        length = *(int*)reduce_intermediate->ptr;
+        jval_drop(reduce_intermediate, false);
+
+        for (int i = 0; i < length; i++) {
+            ((struct JVal**)ret->ptr)[i] = jdyad(op, ((struct JVal**)lhs->ptr)[i],
+                                                     ((struct JVal**)rhs->ptr)[i]);
+        }
+
+        return ret;
+
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
 
         // Array lengths must be the same.
@@ -330,12 +343,34 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
         }
 
         return ret;
+    } else {
+        printf("ERROR: jdyad: unsupported lhs type:%d and rhs type:%d\n",
+            lhs->type, rhs->type);
+        exit(EXIT_FAILURE);
+    }
+}
+
+bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs) {
+
+    if (lhs->rank != rhs->rank) {
+        return false;
     }
 
-    printf("ERROR: jdyad: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
-        lhs->type, lhs->shape[0], rhs->type, rhs->shape[0]);
-    exit(EXIT_FAILURE);
+    struct JVal** lhs_shape = (struct JVal**)lhs->shape_fut->ptr;
+    struct JVal** rhs_shape = (struct JVal**)rhs->shape_fut->ptr;
+
+    int lhs_dim, rhs_dim;
+
+    for (int i = 0; i < lhs->rank; i++) {
+        lhs_dim = *(int*)lhs_shape[i]->ptr;
+        rhs_dim = *(int*)rhs_shape[i]->ptr;
+        if (lhs_dim != rhs_dim) {
+            return false;
+        }
+    }
+    return true;
 }
+
 
 struct JVal* jflatten(struct JVal* jval) {
 
