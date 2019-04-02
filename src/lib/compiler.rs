@@ -563,10 +563,6 @@ fn int32_type() -> LLVMTypeRef {
     unsafe { LLVMInt32Type() }
 }
 
-fn int32_ptr_type() -> LLVMTypeRef {
-    unsafe { LLVMPointerType(LLVMInt32Type(), 0) }
-}
-
 fn f64_type() -> LLVMTypeRef {
     unsafe { LLVMDoubleType() }
 }
@@ -663,14 +659,17 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             global_ctx,
             jval_struct_name_char_ptr,
         );
+
+        let jval_ptr_type = LLVMPointerType(jval_struct_type, 0);
+
         // IMPORTANT: Be sure this matches up with the corresponding definition
         // in jverbs.c.
         let mut members = vec![
             int8_type(),        // the value's type
             int8_type(),        // the value's location
             int32_type(),       // the value's rank (number of dimensions)
-            int32_ptr_type(),   // the value's shape (list of dimensions)
-            void_ptr_type()     // a pointer to the value
+            void_ptr_type(),    // a pointer to the value
+            jval_ptr_type,      // the value's shape (list of dimensions)
         ];
         LLVMStructSetBody(
             jval_struct_type,
@@ -708,7 +707,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             strings,
             global_scope_idents: HashMap::new(),
             jval_struct_type,
-            jval_ptr_type : LLVMPointerType(jval_struct_type, 0),
+            jval_ptr_type : jval_ptr_type,
         }
     };
 

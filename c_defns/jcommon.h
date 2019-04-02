@@ -4,13 +4,16 @@ struct JVal {
   int rank;   // number of dimensions: 0 for scalars, 1 for lists, 2 for tables, etc.
   int* shape; // list of dimensions: [] for scalars, [a] for lists, [a b] for tables, etc.
   void* ptr;   // a pointer to the value
+  struct JVal* shape_fut;  // TODO: Replace shape above with this one.
 };
 
 enum JValType {
   JIntegerType = 1,
+  // TODO: Get rid of this array type, replace with NDimensional
   JArrayType = 2,
   JDoublePrecisionFloatType = 3,
   JStringType = 4,
+  JArrayNDimensionalType = 5,
 };
 
 enum JValLocation {
@@ -44,3 +47,25 @@ enum JMonadicVerb {
   JCeilingOp = 6,
 };
 
+
+struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
+struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs);
+struct JVal* jdyad_internal_numeric_with_ndim_array(enum JDyadicVerb op,
+                                                    struct JVal* numeric,
+                                                    struct JVal* arr,
+                                                    bool is_numeric_lhs);
+struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
+                                               struct JVal* numeric,
+                                               struct JVal* arr,
+                                               bool is_numeric_lhs);
+struct JVal* jval_heapalloc_array_dim1(int length);
+struct JVal* jval_heapalloc_array_dim_n(struct JVal* shape_arr);
+struct JVal* jval_heapalloc_int();
+struct JVal* jval_heapalloc_double();
+void jval_drop(struct JVal* jval, bool do_drop_globals);
+struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc);
+struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr);
+void jprint(struct JVal* val, bool newline);
+int* heapalloc_ndim_col_widths_arr(int length);
+void heapfree_ndim_col_widths_arr(int* arr, int length);
+bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs);

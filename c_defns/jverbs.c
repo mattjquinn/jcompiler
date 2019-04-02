@@ -12,24 +12,76 @@
 // Default print precision is 6; can be changed within J.
 static int JPRINT_PRECISION = 6;
 
-struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs);
-struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs);
-struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
-                                               struct JVal* numeric,
-                                               struct JVal* arr,
-                                               bool is_numeric_lhs);
-struct JVal* jval_heapalloc_array_dim1(int length);
-struct JVal* jval_heapalloc_int();
-struct JVal* jval_heapalloc_double();
-void jval_drop(struct JVal* jval, bool do_drop_globals);
-struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc);
+void jprint_padded(struct JVal* val, int width) {
+  int* iptr;
 
+  switch (val->type) {
+    case JIntegerType:
+      iptr = (int*) val->ptr;
+      if (*iptr < 0)         { printf("_%*d", width, abs(*iptr)); }
+      else                   { printf("%*d", width, *iptr);       }
+      break;
+    default:
+      printf("ERROR: jprint_padded: unsupported type: %d", val->type);
+      exit(EXIT_FAILURE);
+  }
+}
+
+void jprint_recur_dimensions(struct JVal* arr,
+                             int dim_idx, int window_start, int window_end,
+                             int* ndim_col_widths) {
+
+    if (arr->type != JArrayNDimensionalType) {
+        printf("ERROR: jprint_recur_dimensions: Expected n-dim array type, got %d", arr->type);
+        exit(EXIT_FAILURE);
+    }
+
+    struct JVal** jvals;
+    struct JVal** shape = (struct JVal**)arr->shape_fut->ptr;
+    int num_dim_at_idx = *(int*)shape[dim_idx]->ptr;
+
+    // Last dimension is a single "row" of numbers; i.e., "3" in "4 2 3"
+    if (dim_idx == arr->rank - 1) {
+      jvals = arr->ptr;
+      for (int i = window_start; i < window_end; i++) {
+        if (arr->rank > 1) {
+            // Two-dimensional arrays and above have padded column widths
+            jprint_padded(jvals[i], ndim_col_widths[i % num_dim_at_idx]);
+        } else {
+            // One-dimensional arrays have only single spaces between columns.
+            jprint(jvals[i], false);
+        }
+        if (i < window_end - 1) { printf(" "); }
+      }
+      return;
+    }
+
+    // All other dimensions are higher (i.e./, "4" and "2" in "4 3 2")
+    int offset = (window_end - window_start) / num_dim_at_idx;
+    for (int i = 0; i < num_dim_at_idx; i++)  {
+        jprint_recur_dimensions(arr, dim_idx + 1,
+                                window_start + i*offset, window_start + (i+1)*offset,
+                                ndim_col_widths);
+        if (i < num_dim_at_idx - 1) {
+            for (int j = dim_idx; j < arr->rank - 1; j++) {
+                printf("\n");
+            }
+        }
+    }
+}
 
 void jprint(struct JVal* val, bool newline) {
+  struct JVal* reduce_intermediate;
   struct JVal** jvals;
   int* iptr;
   double* dptr;
   char* sptr;
+  int length;
+  struct JVal* dimjval;
+  struct JVal* elem;
+  int dimint;
+  int* ndim_col_widths;
+  int width;
 
   switch (val->type) {
     case JIntegerType:
@@ -45,6 +97,49 @@ void jprint(struct JVal* val, bool newline) {
     case JStringType:
       sptr = (char*) val->ptr;
       printf("%s", sptr);
+      break;
+    case JArrayNDimensionalType:
+
+      reduce_intermediate = jreduce(JTimesOp, val->shape_fut);
+      length = *(int*)reduce_intermediate->ptr;
+      jval_drop(reduce_intermediate, false);
+
+      // Arrays of dimension two or higher must have their cells padded
+      // to a fixed width defined by the widest value in their column.
+      if (val->rank >= 2) {
+        dimjval = ((struct JVal**)val->shape_fut->ptr)[val->rank - 1];
+        dimint = *(int*)dimjval->ptr;
+        ndim_col_widths = heapalloc_ndim_col_widths_arr(dimint);
+
+        for (int i = 0; i < length; i++) {
+            elem = ((struct JVal**)val->ptr)[i];
+
+            switch (elem->type) {
+                case JIntegerType:
+                   iptr = (int*) elem->ptr;
+                   if (*iptr < 0)  { width = snprintf(NULL, 0, "_%d", abs(*iptr)); }
+                   else            { width = snprintf(NULL, 0, "%d", *iptr); }
+                   break;
+                default:
+                    printf("jprint: unexpected type for width detection: %d", elem->type);
+                    exit(EXIT_FAILURE);
+            }
+
+            if (width > ndim_col_widths[i % dimint]) { ndim_col_widths[i % dimint] = width; }
+        }
+      } else {
+        ndim_col_widths = NULL;
+      }
+
+      jprint_recur_dimensions(val, 0, 0, length, ndim_col_widths);
+
+      // Free the column width array.
+      if (val->rank >= 2) {
+        dimjval = ((struct JVal**)val->shape_fut->ptr)[val->rank - 1];
+        dimint = *(int*)dimjval->ptr;
+        heapfree_ndim_col_widths_arr(ndim_col_widths, dimint);
+      }
+
       break;
     case JArrayType:
       jvals = val->ptr;
@@ -206,6 +301,35 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
         return jdyad_internal_numeric_with_array(op, rhs, lhs, false);
 
+    } else if ( (lhs->type == JIntegerType || lhs->type == JDoublePrecisionFloatType)
+               && rhs->type == JArrayNDimensionalType) {
+
+        return jdyad_internal_numeric_with_ndim_array(op, lhs, rhs, true);
+
+    } else if (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType) {
+
+        // Arrays must have same rank and shape.
+        if (!jinternal_same_rank_and_shape(lhs, rhs)) {
+            printf("ERROR: jdyad: rank/shape mismatch between supplied ndim arrays.");
+            exit(EXIT_FAILURE);
+        }
+
+        struct JVal* reduce_intermediate;
+        int length;
+
+        ret = jval_heapalloc_array_dim_n(lhs->shape_fut);
+
+        reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+        length = *(int*)reduce_intermediate->ptr;
+        jval_drop(reduce_intermediate, false);
+
+        for (int i = 0; i < length; i++) {
+            ((struct JVal**)ret->ptr)[i] = jdyad(op, ((struct JVal**)lhs->ptr)[i],
+                                                     ((struct JVal**)rhs->ptr)[i]);
+        }
+
+        return ret;
+
     } else if (lhs->type == JArrayType && rhs->type == JArrayType) {
 
         // Array lengths must be the same.
@@ -225,12 +349,34 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
         }
 
         return ret;
+    } else {
+        printf("ERROR: jdyad: unsupported lhs type:%d and rhs type:%d\n",
+            lhs->type, rhs->type);
+        exit(EXIT_FAILURE);
+    }
+}
+
+bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs) {
+
+    if (lhs->rank != rhs->rank) {
+        return false;
     }
 
-    printf("ERROR: jdyad: unsupported lhs (type:%d,len:%d) and rhs (type:%d,len:%d)\n",
-        lhs->type, lhs->shape[0], rhs->type, rhs->shape[0]);
-    exit(EXIT_FAILURE);
+    struct JVal** lhs_shape = (struct JVal**)lhs->shape_fut->ptr;
+    struct JVal** rhs_shape = (struct JVal**)rhs->shape_fut->ptr;
+
+    int lhs_dim, rhs_dim;
+
+    for (int i = 0; i < lhs->rank; i++) {
+        lhs_dim = *(int*)lhs_shape[i]->ptr;
+        rhs_dim = *(int*)rhs_shape[i]->ptr;
+        if (lhs_dim != rhs_dim) {
+            return false;
+        }
+    }
+    return true;
 }
+
 
 struct JVal* jflatten(struct JVal* jval) {
 
@@ -269,19 +415,55 @@ struct JVal* jflatten(struct JVal* jval) {
 }
 
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
+    struct JVal* ret;
+    struct JVal* lhs_boxed;
+    struct JVal* reduce_intermediate;
+    int dst_length;
 
-    if (lhs->type != JArrayType || rhs->type != JArrayType) {
-        printf("ERROR: jdyad_internal_shape_verb: expected two arrays, got: (lhs type:%d, rhs type:%d)",
-            lhs->type, rhs->type);
+    if (rhs->type == JArrayType && rhs->rank != 1) {
+        printf("ERROR: Only rhs arrays of rank 1 are supported, got rank: %d", rhs->rank);
         exit(EXIT_FAILURE);
     }
 
-    if (rhs->rank != 1) {
-        printf("ERROR: Expected rhs array of rank 1, got rank: %d", rhs->rank);
-        exit(EXIT_FAILURE);
+    switch (lhs->type) {
+        case JIntegerType:
+            lhs_boxed = jval_heapalloc_array_dim1(1);
+            ((struct JVal**)lhs_boxed->ptr)[0] = jval_clone(lhs, JLocHeapLocal);
+            ret = jval_heapalloc_array_dim_n(lhs_boxed);
+            jval_drop(lhs_boxed, false);
+            break;
+        case JArrayType:
+            ret = jval_heapalloc_array_dim_n(lhs);
+            break;
+        default:
+            printf("ERROR: jdyad_internal_shape_verb: lhs must be an array, got type:%d",
+                lhs->type);
+            exit(EXIT_FAILURE);
     }
 
-    printf("TODO: Implement shape.\n");
+    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    dst_length = *(int*)reduce_intermediate->ptr;
+    jval_drop(reduce_intermediate, false);
+
+    int src_i = 0;
+    for (int dst_i = 0; dst_i < dst_length; dst_i++) {
+        switch (rhs->type) {
+            case JArrayType:
+                ((struct JVal**)ret->ptr)[dst_i] = jval_clone(
+                        ((struct JVal**)rhs->ptr)[src_i], JLocHeapLocal);
+                src_i += 1;
+                // If there's not enough source operands, wrap back around to start of array.
+                if (src_i == rhs->shape[0]) { src_i = 0; }
+                break;
+            case JIntegerType:
+                ((struct JVal**)ret->ptr)[dst_i] = jval_clone(rhs, JLocHeapLocal);
+                break;
+            default:
+                printf("ERROR: jdyad_internal_shape_verb: unexpected rhs type: %d", rhs->type);
+                exit(EXIT_FAILURE);
+        }
+    }
+    return ret;
 }
 
 struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
@@ -335,7 +517,7 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
             jvals_out[i] = jdyad_internal_copy_verb(jvals_a[i], jvals_b[i]);
         }
 
-//        // Flatten the intermediate array, then drop before returning flattened array.
+        // Flatten the intermediate array, then drop before returning flattened array.
         ret = jflatten(intermediate);
         jval_drop(intermediate, false);
         return ret;
@@ -345,6 +527,27 @@ struct JVal* jdyad_internal_copy_verb(struct JVal* lhs, struct JVal* rhs) {
             lhs->type, lhs->shape[0], rhs->type, rhs->shape[0]);
         exit(EXIT_FAILURE);
     }
+}
+
+struct JVal* jdyad_internal_numeric_with_ndim_array(enum JDyadicVerb op,
+                                                    struct JVal* numeric,
+                                                    struct JVal* arr,
+                                                    bool is_numeric_lhs) {
+    struct JVal* ret;
+    struct JVal* reduce_intermediate;
+    int length;
+
+    ret = jval_heapalloc_array_dim_n(arr->shape_fut);
+
+    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    length = *(int*)reduce_intermediate->ptr;
+    jval_drop(reduce_intermediate, false);
+
+    for (int i = 0; i < length; i++) {
+        ((struct JVal**)ret->ptr)[i] = jdyad(op, numeric, ((struct JVal**)arr->ptr)[i]);
+    }
+
+    return ret;
 }
 
 struct JVal* jdyad_internal_numeric_with_array(enum JDyadicVerb op,
@@ -479,13 +682,21 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 
 struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
 
-    // Reducing over a zero length or single expression has no effect.
-    if (expr->rank == 0 || expr->shape[0] == 1) { return expr; }
+    struct JVal* ret;
+
+    // Reducing over a scalar has no effect.
+    if (expr->rank == 0) { return expr; }
+
+    // Reducing over a single element list has no effect,
+    // but we must return a clone of *the single element*,
+    // not the list itself.
+     if (expr->rank == 1 && expr->shape[0] == 1) {
+        return jval_clone(((struct JVal**)expr->ptr)[0], JLocHeapLocal);
+     }
 
     struct JVal** jvals_in;
     struct JVal* lhs;
     struct JVal* rhs;
-    struct JVal* ret;
     struct JVal* intermediate;
     int i;
 

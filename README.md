@@ -40,7 +40,7 @@ with jcompiler and running the compiled binary will yield the following on stdou
 ```j
 Some array operations...
 1 4 9 16
-11 21 31
+11 22 33
 11 21 31
 11 12 13
 0 1 0 1 0 1 0 1
