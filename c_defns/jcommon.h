@@ -23,28 +23,28 @@ enum JValLocation {
 };
 
 enum JDyadicVerb {
-  JPlusOp = 1,
-  JTimesOp = 2,
-  JLessThanOp = 3,
-  JLargerThanOp = 4,
-  JEqualOp = 5,
-  JMinusOp = 6,
-  JDivideOp = 7,
-  JPowerOp = 8,
-  JResidueOp = 9,
-  JCopyOp = 10,
-  JLargerOfOp = 11,
+  JPlus = 1,
+  JTimes = 2,
+  JLessThan = 3,
+  JLargerThan = 4,
+  JEqual = 5,
+  JMinus = 6,
+  JDivide = 7,
+  JPower = 8,
+  JResidue = 9,
+  JCopy = 10,
+  JLargerOf = 11,
   JLargerOrEqual = 12,
-  JShapeOp = 13,
+  JShape = 13,
 };
 
 enum JMonadicVerb {
-  JIncrementOp = 1,
-  JSquareOp = 2,
-  JNegateOp = 3,
-  JReciprocalOp = 4,
-  JTallyOp = 5,
-  JCeilingOp = 6,
+  JIncrement = 1,
+  JSquare = 2,
+  JNegate = 3,
+  JReciprocal = 4,
+  JTally = 5,
+  JCeiling = 6,
 };
 
 

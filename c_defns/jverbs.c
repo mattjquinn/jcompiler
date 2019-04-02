@@ -100,7 +100,7 @@ void jprint(struct JVal* val, bool newline) {
       break;
     case JArrayNDimensionalType:
 
-      reduce_intermediate = jreduce(JTimesOp, val->shape_fut);
+      reduce_intermediate = jreduce(JTimes, val->shape_fut);
       length = *(int*)reduce_intermediate->ptr;
       jval_drop(reduce_intermediate, false);
 
@@ -171,10 +171,10 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     int lhsi, rhsi;
     double lhsd, rhsd;
 
-    if (op == JCopyOp) {
+    if (op == JCopy) {
         return jdyad_internal_copy_verb(lhs, rhs);
     }
-    if (op == JShapeOp) {
+    if (op == JShape) {
         return jdyad_internal_shape_verb(lhs, rhs);
     }
 
@@ -183,32 +183,32 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
         rhsi = *((int*) rhs->ptr);
 
         switch(op) {
-            case JPlusOp:
+            case JPlus:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = lhsi + rhsi;
                 return ret;
-            case JMinusOp:
+            case JMinus:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = lhsi - rhsi;
                 return ret;
-            case JTimesOp:
+            case JTimes:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = lhsi * rhsi;
                 return ret;
-            case JDivideOp:
+            case JDivide:
                 // Division always produces a double.
                 ret = jval_heapalloc_double();
                 *(double*)ret->ptr = (double) lhsi / (double) rhsi;
                 return ret;
-            case JPowerOp:
+            case JPower:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = pow(lhsi, rhsi);
                 return ret;
-            case JLessThanOp:
+            case JLessThan:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsi < rhsi) ? 1 : 0;
                 return ret;
-            case JLargerThanOp:
+            case JLargerThan:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsi > rhsi) ? 1 : 0;
                 return ret;
@@ -216,15 +216,15 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsi >= rhsi) ? 1 : 0;
                 return ret;
-            case JLargerOfOp:
+            case JLargerOf:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsi > rhsi) ? lhsi : rhsi;
                 return ret;
-            case JEqualOp:
+            case JEqual:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsi == rhsi) ? 1 : 0;
                 return ret;
-            case JResidueOp:
+            case JResidue:
                 ret = jval_heapalloc_int();
                 // IMPORTANT: In J the operands to Residue are opposite of "%";
                 // i.e., 5 | 2 means 2 % 5
@@ -258,31 +258,31 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
         }
 
         switch(op) {
-            case JPlusOp:
+            case JPlus:
                 ret = jval_heapalloc_double();
                 *(double*)ret->ptr = lhsd + rhsd;
                 return ret;
-            case JMinusOp:
+            case JMinus:
                 ret = jval_heapalloc_double();
                 *(double*)ret->ptr = lhsd - rhsd;
                 return ret;
-            case JTimesOp:
+            case JTimes:
                 ret = jval_heapalloc_double();
                 *(double*)ret->ptr = lhsd * rhsd;
                 return ret;
-            case JDivideOp:
+            case JDivide:
                 ret = jval_heapalloc_double();
                 *(double*)ret->ptr = lhsd / rhsd;
                 return ret;
-            case JLessThanOp:
+            case JLessThan:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsd < rhsd) ? 1 : 0;
                 return ret;
-            case JLargerThanOp:
+            case JLargerThan:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsd > rhsd) ? 1 : 0;
                 return ret;
-            case JEqualOp:
+            case JEqual:
                 ret = jval_heapalloc_int();
                 *(int*)ret->ptr = (lhsd == rhsd) ? 1 : 0;
                 return ret;
@@ -319,7 +319,7 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
         ret = jval_heapalloc_array_dim_n(lhs->shape_fut);
 
-        reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+        reduce_intermediate = jreduce(JTimes, ret->shape_fut);
         length = *(int*)reduce_intermediate->ptr;
         jval_drop(reduce_intermediate, false);
 
@@ -441,7 +441,7 @@ struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
             exit(EXIT_FAILURE);
     }
 
-    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    reduce_intermediate = jreduce(JTimes, ret->shape_fut);
     dst_length = *(int*)reduce_intermediate->ptr;
     jval_drop(reduce_intermediate, false);
 
@@ -539,7 +539,7 @@ struct JVal* jdyad_internal_numeric_with_ndim_array(enum JDyadicVerb op,
 
     ret = jval_heapalloc_array_dim_n(arr->shape_fut);
 
-    reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+    reduce_intermediate = jreduce(JTimes, ret->shape_fut);
     length = *(int*)reduce_intermediate->ptr;
     jval_drop(reduce_intermediate, false);
 
@@ -585,28 +585,28 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
             expri = *((int*) expr->ptr);
 
             switch (op) {
-                case JIncrementOp:
+                case JIncrement:
                     ret = jval_heapalloc_int();
                     *(int*)ret->ptr = expri + 1;
                     return ret;
-                case JNegateOp:
+                case JNegate:
                     ret = jval_heapalloc_int();
                     *(int*)ret->ptr = expri * -1;
                     return ret;
-                case JSquareOp:
+                case JSquare:
                     ret = jval_heapalloc_int();
                     *(int*)ret->ptr = pow(expri, 2);
                     return ret;
-                case JReciprocalOp:
+                case JReciprocal:
                     ret = jval_heapalloc_double();
                     *(double*)ret->ptr = 1.0 / (float) expri;
                     return ret;
-                case JTallyOp:
+                case JTally:
                     ret = jval_heapalloc_int();
                     // An integer always has a length/tally of 1.
                     *(int*)ret->ptr = 1;
                     return ret;
-                case JCeilingOp:
+                case JCeiling:
                     // ceil(int) is the int itself:
                     ret = jval_heapalloc_int();
                     *(int*)ret->ptr = expri;
@@ -620,19 +620,19 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
             exprd = *((double*) expr->ptr);
 
             switch (op) {
-                case JIncrementOp:
+                case JIncrement:
                     ret = jval_heapalloc_double();
                     *(double*)ret->ptr = exprd + 1.0;
                     return ret;
-                case JNegateOp:
+                case JNegate:
                     ret = jval_heapalloc_double();
                     *(double*)ret->ptr = exprd * -1.0;
                     return ret;
-                case JSquareOp:
+                case JSquare:
                     ret = jval_heapalloc_double();
                     *(double*)ret->ptr = pow(exprd, 2.0);
                     return ret;
-                case JCeilingOp:
+                case JCeiling:
                     ret = jval_heapalloc_int();
                     *(int*)ret->ptr = ceil(exprd);
                     return ret;
@@ -643,7 +643,7 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
         case JStringType:
 
             switch (op) {
-                case JTallyOp:
+                case JTally:
                     ret = jval_heapalloc_int();
                     // A string has one dimension; shape[0] get that dimension's size.
                     // 1 is subtracted to disregard null terminating byte.
@@ -656,7 +656,7 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 
         case JArrayType:
 
-            if (op == JTallyOp) {
+            if (op == JTally) {
                 // The tally monad is not distributed over arrays;
                 // return the length of the array itself.
                 ret = jval_heapalloc_int();

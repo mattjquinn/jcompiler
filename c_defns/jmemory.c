@@ -205,7 +205,7 @@ struct JVal* jval_heapalloc_array_dim_n(struct JVal* shape_arr) {
     jval->rank = shape_arr->shape[0];
     jval->shape_fut = jval_clone(shape_arr, JLocHeapLocal);
 
-    reduce_intermediate = jreduce(JTimesOp, shape_arr);
+    reduce_intermediate = jreduce(JTimes, shape_arr);
     length = *(int*)reduce_intermediate->ptr;
     jval_drop(reduce_intermediate, false);
 
@@ -262,7 +262,7 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
 
-            reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
+            reduce_intermediate = jreduce(JTimes, ret->shape_fut);
             length = *(int*)reduce_intermediate->ptr;
             jval_drop(reduce_intermediate, false);
 
@@ -321,7 +321,7 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
         case JArrayNDimensionalType:
             jvals = (struct JVal**) jval->ptr;
 
-            reduce_intermediate = jreduce(JTimesOp, jval->shape_fut);
+            reduce_intermediate = jreduce(JTimes, jval->shape_fut);
             length = *(int*)reduce_intermediate->ptr;
             jval_drop(reduce_intermediate, false);
 
