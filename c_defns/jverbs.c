@@ -44,7 +44,13 @@ void jprint_recur_dimensions(struct JVal* arr,
     if (dim_idx == arr->rank - 1) {
       jvals = arr->ptr;
       for (int i = window_start; i < window_end; i++) {
-        jprint_padded(jvals[i], ndim_col_widths[i % num_dim_at_idx]);
+        if (arr->rank > 1) {
+            // Two-dimensional arrays and above have padded column widths
+            jprint_padded(jvals[i], ndim_col_widths[i % num_dim_at_idx]);
+        } else {
+            // One-dimensional arrays have only single spaces between columns.
+            jprint(jvals[i], false);
+        }
         if (i < window_end - 1) { printf(" "); }
       }
       return;
@@ -410,21 +416,30 @@ struct JVal* jflatten(struct JVal* jval) {
 
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
     struct JVal* ret;
+    struct JVal* lhs_boxed;
     struct JVal* reduce_intermediate;
     int dst_length;
-
-    if (lhs->type != JArrayType) {
-        printf("ERROR: jdyad_internal_shape_verb: lhs must be an array, got type:%d",
-            lhs->type);
-        exit(EXIT_FAILURE);
-    }
 
     if (rhs->type == JArrayType && rhs->rank != 1) {
         printf("ERROR: Only rhs arrays of rank 1 are supported, got rank: %d", rhs->rank);
         exit(EXIT_FAILURE);
     }
 
-    ret = jval_heapalloc_array_dim_n(lhs);
+    switch (lhs->type) {
+        case JIntegerType:
+            lhs_boxed = jval_heapalloc_array_dim1(1);
+            ((struct JVal**)lhs_boxed->ptr)[0] = jval_clone(lhs, JLocHeapLocal);
+            ret = jval_heapalloc_array_dim_n(lhs_boxed);
+            jval_drop(lhs_boxed, false);
+            break;
+        case JArrayType:
+            ret = jval_heapalloc_array_dim_n(lhs);
+            break;
+        default:
+            printf("ERROR: jdyad_internal_shape_verb: lhs must be an array, got type:%d",
+                lhs->type);
+            exit(EXIT_FAILURE);
+    }
 
     reduce_intermediate = jreduce(JTimesOp, ret->shape_fut);
     dst_length = *(int*)reduce_intermediate->ptr;
@@ -667,13 +682,21 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 
 struct JVal* jreduce(enum JDyadicVerb verb, struct JVal* expr) {
 
-    // Reducing over a zero length or single expression has no effect.
-    if (expr->rank == 0 || expr->shape[0] == 1) { return expr; }
+    struct JVal* ret;
+
+    // Reducing over a scalar has no effect.
+    if (expr->rank == 0) { return expr; }
+
+    // Reducing over a single element list has no effect,
+    // but we must return a clone of *the single element*,
+    // not the list itself.
+     if (expr->rank == 1 && expr->shape[0] == 1) {
+        return jval_clone(((struct JVal**)expr->ptr)[0], JLocHeapLocal);
+     }
 
     struct JVal** jvals_in;
     struct JVal* lhs;
     struct JVal* rhs;
-    struct JVal* ret;
     struct JVal* intermediate;
     int i;
 
