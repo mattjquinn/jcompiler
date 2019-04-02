@@ -28,7 +28,8 @@ As one example, compiling this J program:
 ```j
 'Some array operations...'
 *: 1 2 3 4
-1 2 3 + 10 20 30
+matrix =: 2 3 $ 5 + 2 3 4 5 6 7
+10 * matrix
 1 + 10 20 30
 1 2 3 + 10
 residues =: 2 | 0 1 2 3 4 5 6 7
@@ -40,7 +41,8 @@ with jcompiler and running the compiled binary will yield the following on stdou
 ```j
 Some array operations...
 1 4 9 16
-11 22 33
+ 70  80  90
+100 110 120
 11 21 31
 11 12 13
 0 1 0 1 0 1 0 1
