@@ -330,3 +330,18 @@ fn ctest_strings() {
     assert_eq!("\n\nMy Ten Years in a Quandary\nA VERRRRRRRRRRRRRRRRRRRRRRRRY LOOOOOOOOOOOOONG STRINNNNNNNNNNNG\n0\n1\n2\n20\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_dyadic_shape() {
+    let (stdout, stderr) = compile("ctest_dyadic_shape.ijs");
+    let expected = format!(
+        "{}{}{}{}{}",
+        "1 1\n1 1\n1 2\n0 1\n1 2\n3 4\n1 2\n3 4\n10   1\n 1 100\n 10  1 9000\n100 10    1\n",
+        "  10    1 9000\n 100   10    1\n\n9000  100   10\n   1 9000  100\n\n  10    1 9000\n 100   10    1\n\n9000  100   10\n   1 9000  100\n",
+        "  50    1 8000\n 400    5   50\n\n   1 8000  400\n   5   50    1\n\n8000  400    5\n  50    1 8000\n\n\n 400    5   50\n   1 8000  400\n\n   5   50    1\n8000  400    5\n\n  50    1 8000\n 400    5   50\n",
+        "9 99 999\n9 99 999\n\n9 99 999\n9 99 999\n\n9 99 999\n9 99 999\n\n\n9 99 999\n9 99 999\n\n9 99 999\n9 99 999\n\n9 99 999\n9 99 999\n",
+        "   8   88  888\n8888    8   88\n\n 888 8888    8\n  88  888 8888\n\n   8   88  888\n8888    8   88\n\n\n 888 8888    8\n  88  888 8888\n\n   8   88  888\n8888    8   88\n\n 888 8888    8\n  88  888 8888\n\n\n\n   8   88  888\n8888    8   88\n\n 888 8888    8\n  88  888 8888\n\n   8   88  888\n8888    8   88\n\n\n 888 8888    8\n  88  888 8888\n\n   8   88  888\n8888    8   88\n\n 888 8888    8\n  88  888 8888\n"
+    );
+    assert_eq!(expected, &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

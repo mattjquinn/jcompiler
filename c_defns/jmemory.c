@@ -23,6 +23,27 @@ extern int total_heap_jvalptrarray_counter;
 extern int alive_heap_string_counter;
 extern int total_heap_string_counter;
 
+int* heapalloc_ndim_col_widths_arr(int length) {
+    int* arr;
+
+    // Using clear-alloc to initialize all widths to zero.
+    arr = calloc(length, sizeof(int));
+    if (!arr) {
+        printf("ERROR: heapalloc_ndim_col_widths_arr: call to malloc new int array failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    alive_heap_int_counter += length;
+    total_heap_int_counter += length;
+
+    return arr;
+}
+
+void heapfree_ndim_col_widths_arr(int* arr, int length) {
+    free(arr);
+    alive_heap_int_counter -= length;
+    total_heap_int_counter -= length;
+}
+
 struct JVal* jval_heapalloc_int() {
     int* iptr;
     struct JVal* jval;

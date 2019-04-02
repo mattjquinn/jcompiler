@@ -12,7 +12,24 @@
 // Default print precision is 6; can be changed within J.
 static int JPRINT_PRECISION = 6;
 
-void jprint_recur_dimensions(struct JVal* arr, int dim_idx, int window_start, int window_end) {
+void jprint_padded(struct JVal* val, int width) {
+  int* iptr;
+
+  switch (val->type) {
+    case JIntegerType:
+      iptr = (int*) val->ptr;
+      if (*iptr < 0)         { printf("_%*d", width, abs(*iptr)); }
+      else                   { printf("%*d", width, *iptr);       }
+      break;
+    default:
+      printf("ERROR: jprint_padded: unsupported type: %d", val->type);
+      exit(EXIT_FAILURE);
+  }
+}
+
+void jprint_recur_dimensions(struct JVal* arr,
+                             int dim_idx, int window_start, int window_end,
+                             int* ndim_col_widths) {
 
     if (arr->type != JArrayNDimensionalType) {
         printf("ERROR: jprint_recur_dimensions: Expected n-dim array type, got %d", arr->type);
@@ -20,25 +37,33 @@ void jprint_recur_dimensions(struct JVal* arr, int dim_idx, int window_start, in
     }
 
     struct JVal** jvals;
+    struct JVal** shape = (struct JVal**)arr->shape_fut->ptr;
+    int num_dim_at_idx = *(int*)shape[dim_idx]->ptr;
 
+    // Last dimension is a single "row" of numbers; i.e., "3" in "4 2 3"
     if (dim_idx == arr->rank - 1) {
       jvals = arr->ptr;
       for (int i = window_start; i < window_end; i++) {
-        jprint(jvals[i], false);
+        jprint_padded(jvals[i], ndim_col_widths[i % num_dim_at_idx]);
         if (i < window_end - 1) { printf(" "); }
       }
       return;
     }
 
-    struct JVal** shape = (struct JVal**)arr->shape_fut->ptr;
-    int num_dim_at_idx = *(int*)shape[dim_idx]->ptr;
+    // All other dimensions are higher (i.e./, "4" and "2" in "4 3 2")
     int offset = (window_end - window_start) / num_dim_at_idx;
     for (int i = 0; i < num_dim_at_idx; i++)  {
         jprint_recur_dimensions(arr, dim_idx + 1,
-                                window_start + i*offset, window_start + (i+1)*offset);
-        if (i < num_dim_at_idx - 1) { printf("\n"); }
+                                window_start + i*offset, window_start + (i+1)*offset,
+                                ndim_col_widths);
+        if (i < num_dim_at_idx - 1) {
+            for (int j = dim_idx; j < arr->rank - 1; j++) {
+                printf("\n");
+            }
+        }
     }
 }
+
 void jprint(struct JVal* val, bool newline) {
   struct JVal* reduce_intermediate;
   struct JVal** jvals;
@@ -46,6 +71,11 @@ void jprint(struct JVal* val, bool newline) {
   double* dptr;
   char* sptr;
   int length;
+  struct JVal* dimjval;
+  struct JVal* elem;
+  int dimint;
+  int* ndim_col_widths;
+  int width;
 
   switch (val->type) {
     case JIntegerType:
@@ -68,7 +98,52 @@ void jprint(struct JVal* val, bool newline) {
       length = *(int*)reduce_intermediate->ptr;
       jval_drop(reduce_intermediate, false);
 
-      jprint_recur_dimensions(val, 0, 0, length);
+      // TODO: If rank is >=2, malloc an integer array
+      // with same # of elements as shape_fut[0].
+      // Then go i..length, modulo shape_fut[0], and
+      // snscanf to a buffer. Take the max of the length
+      // of the string in that buffer with the highest
+      // column width seen so far.
+
+      // Arrays of dimension two or higher must have their cells padded
+      // to a fixed width defined by the widest value in their column.
+      if (val->rank >= 2) {
+        dimjval = ((struct JVal**)val->shape_fut->ptr)[val->rank - 1];
+        dimint = *(int*)dimjval->ptr;
+        ndim_col_widths = heapalloc_ndim_col_widths_arr(dimint);
+
+//        printf("dimint:%d\n", dimint);
+        for (int i = 0; i < length; i++) {
+            elem = ((struct JVal**)val->ptr)[i];
+
+            switch (elem->type) {
+                case JIntegerType:
+                   iptr = (int*) elem->ptr;
+                   if (*iptr < 0)  { width = snprintf(NULL, 0, "_%d", abs(*iptr)); }
+                   else            { width = snprintf(NULL, 0, "%d", *iptr); }
+                   break;
+                default:
+                    printf("jprint: unexpected type for width detection: %d", elem->type);
+                    exit(EXIT_FAILURE);
+            }
+
+//            printf("width: %d\n", width);
+            if (width > ndim_col_widths[i % dimint]) { ndim_col_widths[i % dimint] = width; }
+        }
+//        printf("Widths: %d %d %d\n", ndim_col_widths[0], ndim_col_widths[1],
+//                                   ndim_col_widths[2]);
+      } else {
+        ndim_col_widths = NULL;
+      }
+
+      jprint_recur_dimensions(val, 0, 0, length, ndim_col_widths);
+
+      // Free the column width array.
+      if (val->rank >= 2) {
+        dimjval = ((struct JVal**)val->shape_fut->ptr)[val->rank - 1];
+        dimint = *(int*)dimjval->ptr;
+        heapfree_ndim_col_widths_arr(ndim_col_widths, dimint);
+      }
 
       break;
     case JArrayType:
