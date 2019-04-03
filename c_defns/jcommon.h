@@ -42,6 +42,7 @@ enum JMonadicVerb {
   JReciprocal = 4,
   JTally = 5,
   JCeiling = 6,
+  JShapeOf = 7,
 };
 
 

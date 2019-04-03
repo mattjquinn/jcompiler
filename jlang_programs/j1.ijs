@@ -11,86 +11,33 @@ NB. 2 3 $ 5 6 7
 NB. 2 2 3 $ 5 6 7 8
 NB. # 6 7
 NB. # 6 7 8
-NB. NB. L =: 5 6 7
-NB. NB. NB. $ L
-NB. NB. NB. T =: 2 3 $ 1
-NB. NB. NB. $ T
-NB. NB.
-NB. NB. NB. NB. a =: 2 3 $ 1.2323 4.43435 9.23333333333333 8.32 9.1121111111111 5
-NB. NB. NB. NB. a
-
-2 + 2
-2*3
-2 * 3
-3 % 4
-3 - 2
-2 - 3
-- 3
-2 ^ 3
-*: 4
-*: 1 2 3 4
-1 2 3 + 10 20 30
-1 + 10 20 30
-1 2 3 + 10
-2 | 0 1 2 3 4 5 6 7
-3 | 0 1 2 3 4 5 6 7
-(2+1)*(2+2)
-3 * 2 + 1
-1 + 3 % 4
-x =: 100
-x - 1
-y =: x - 1
-y
-z =: 6
-z =: 8
-z
-z =: z + 1
-z
-1 + (u =: 99)
-u
-x                           =: 0
-X				            =: 1
-K9				            =: 2
-finaltotal			        =: 3
-FinalTotal			        =: 4
-average_annual_rainfall		=: 5
-x
-X
-% 4
-+ / 2 3 4
-* / 2 3 4
-2 > 1
-2 = 1
-2 < 1
-x =: 5 4 1 9
-x > 2
-* / x > 2
-+ / x > 2
-x
-x = x
-+/ x = x
-# x
-x =: 1 + 2 3 4
-x
-x = x
-+/ x = x
-# x
-y =: 6 7 8 9 10
-y
-1 1 0 1 0 # y
-y       NB. here
-y > 7
-(y > 7) # y
-NB.   this is a whole line of annotation
-6 + 6  NB. ought to produce 12
->. _1.7 1 1.7
-3 >. 1 3 5
->. / 1 6 5
-1 >. 6 >. 5 NB. by the meaning of /
-1 >. (6 >. 5) NB. by rightmost-first rule
-1 >. (6) NB. by the meaning of >.
-1 >. 6 NB. by the meaning of ()
-6 NB. by the meaning of >.
->: _2 3 5 6.3
-3 >: 1 3 5
+NB. L =: 5 6 7
+NB. $ L
+NB. T =: 2 3 $ 1
+NB. $ T
+NB. L
+NB. $ L
+NB. # $ L
+NB. T
+NB. $ T
+NB. # $ T
+NB. # $ 17
+NB. 2 $ 99
+NB. 0 $ 99
+NB. $ 17
+NB. S =: 17
+NB. L =: 1 $ 17
+NB. T =: 1 1 $ 17
+NB. S
+NB. L
+NB. T
+NB. # $ S
+NB. # $ L
+NB. # $ T
+NB. t =: 3 1 $ 5 6 7
+NB. t
+NB. $ t
+NB. # $ t
+NB. NB. a =: 2 3 $ 1.2323 4.43435 9.23333333333333 8.32 9.1121111111111 5
+NB. NB. a
 

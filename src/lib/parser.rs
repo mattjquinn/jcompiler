@@ -18,6 +18,7 @@ pub enum MonadicVerb {
     Reciprocal = 4,
     Tally = 5,
     Ceiling = 6,
+    ShapeOf = 7,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -214,6 +215,11 @@ fn parse_monadic_action(pair : pest::iterators::Pair<Rule>,
             assert_eq!(adverbs.len(), 1);
             assert_eq!(adverbs[0].as_str(), "/");
             AstNode::Reduce { verb: DyadicVerb::Times,
+                expr: Box::new(expr) }
+        },
+        "$" => {
+            assert_eq!(adverbs.len(), 0);
+            AstNode::MonadicOp { verb: MonadicVerb::ShapeOf,
                 expr: Box::new(expr) }
         },
         _ => panic!("Unsupported monadic action verb: {}", verb.as_str()),

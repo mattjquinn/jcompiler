@@ -497,6 +497,20 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
     double exprd;
     int length;
 
+    if (op == JShapeOf) {
+        // For monadic "$", we wrap the expr's shape array (int*)
+        // into a JVal* n-dimensional array.
+        ret = jval_heapalloc_array_dim_n(1, &expr->rank);
+        struct JVal* dim;
+        struct JVal** jvals_out = (struct JVal**)ret->ptr;
+        for (int i = 0; i < expr->rank; i++) {
+            dim = jval_heapalloc_int();
+            *(int*)dim->ptr = expr->shape[i];
+            jvals_out[i] = dim;
+        }
+        return ret;
+    }
+
     switch (expr->type) {
         case JIntegerType:
             expri = *((int*) expr->ptr);
@@ -585,6 +599,7 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
             ret = jval_heapalloc_array_dim_n(expr->rank, expr->shape);
             jvals_out = (struct JVal**)ret->ptr;
 
+            // Distribute the monadic verb over the RHS array.
             length = jarray_length(ret);
             for (int i = 0; i < length; i++) {
                 jvals_out[i] = jmonad(op, jvals_in[i]);

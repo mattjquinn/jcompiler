@@ -180,18 +180,6 @@ struct JVal* jval_heapalloc_array_dim_n(int rank, int* shape) {
     struct JVal** jvals;
     int length;
 
-    // Clone the shape array.
-    int* shape_clone = malloc(rank * sizeof(int));
-    if (!shape_clone) {
-        printf("ERROR: jval_heapalloc_array_dim_n: call to malloc for cloning shape failed.\n");
-        exit(EXIT_FAILURE);
-    }
-    for (int i = 0; i < rank; i++) {
-        shape_clone[i] = shape[i];
-    }
-    alive_heap_int_counter += rank;
-    total_heap_int_counter += rank;
-
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
     if (!jval) {
@@ -204,6 +192,18 @@ struct JVal* jval_heapalloc_array_dim_n(int rank, int* shape) {
     jval->type = JArrayNDimensionalType;
     jval->loc = JLocHeapLocal;
     jval->rank = rank;
+
+    // Make a clone of the shape array for attachment to this JVal.
+    int* shape_clone = malloc(rank * sizeof(int));
+    if (!shape_clone) {
+        printf("ERROR: jval_heapalloc_array_dim_n: call to malloc for cloning shape failed.\n");
+        exit(EXIT_FAILURE);
+    }
+    for (int i = 0; i < rank; i++) {
+        shape_clone[i] = shape[i];
+    }
+    alive_heap_int_counter += rank;
+    total_heap_int_counter += rank;
     jval->shape = shape_clone;
 
     length = jarray_length(jval);

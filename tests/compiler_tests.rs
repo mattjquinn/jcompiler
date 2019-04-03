@@ -346,3 +346,10 @@ fn ctest_dyadic_shape() {
     assert_eq!(expected, &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_monadic_shapeof() {
+    let (stdout, stderr) = compile("ctest_monadic_shapeof.ijs");
+    assert_eq!("\n0\n3\n4\n1\n2 4\n2\n5 4 2\n3\n9 3 4 1\n4\n1 10 14 8 9\n5\n1 10 1 8 1\n5\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
