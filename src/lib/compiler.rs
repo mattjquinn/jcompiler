@@ -90,7 +90,7 @@ pub fn compile_to_module(
 #[derive(Clone)]
 enum JValType {
     Integer = 1,
-    Array = 2,
+    NDimensionalArray = 2,
     DoublePrecisionFloat = 3,
     String = 4,
 }
@@ -324,8 +324,7 @@ fn compile_expr(
                 }
 
                 // Point to the array via a JVal struct.
-                let ty = JValType::Array;
-                alloc_jval(module, bb, arr, ty.clone(), JValLocation::Stack, vec![compiled_terms.len() as u64])
+                alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValLocation::Stack, vec![compiled_terms.len() as u64])
             }
         },
         parser::AstNode::MonadicOp {ref verb, ref expr} => {

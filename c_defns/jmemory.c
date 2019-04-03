@@ -139,56 +139,58 @@ struct JVal* jval_heapalloc_string(int length) {
     return jval;
 }
 
-struct JVal* jval_heapalloc_array_dim1(int length) {
-    struct JVal* jval;
-    struct JVal** jvals;
-    int* shape;
+struct JVal* jval_heapalloc_array_dim_n_nonprimshape(int rank, struct JVal* shape_arr) {
 
-    // Allocate space for the JVal itself.
-    jval = malloc(sizeof(struct JVal));
-    if (!jval) {
-        printf("ERROR: jval_heapalloc_array_dim1: call to malloc new JVal failed.\n");
+    if (shape_arr->type != JArrayNDimensionalType || shape_arr->rank != 1) {
+        printf("ERROR: jval_heapalloc_array_dim_n_nonprimshape: expected 1-dim array, got type:%d, rank:%d\n",
+                shape_arr->type, shape_arr->rank);
         exit(EXIT_FAILURE);
     }
-    alive_heap_jval_counter += 1;
-    total_heap_jval_counter += 1;
 
-    jval->type = JArrayType;
-    jval->loc = JLocHeapLocal;
-    jval->rank = 1;   // Hard-coded for now, this is a dimension 1 only function.
-
-    jval->shape = malloc(jval->rank * sizeof(int));
-    if (!jval->shape) {
-        printf("ERROR: jval_heapalloc_array_dim1: call to malloc new int for shape failed.\n");
+    int* ints = malloc(shape_arr->shape[0] * sizeof(int));
+    if (!ints) {
+        printf("ERROR: jval_heapalloc_array_dim_n_nonprimshape: call to malloc new ints failed.\n");
         exit(EXIT_FAILURE);
     }
-    alive_heap_int_counter += jval->rank;
-    total_heap_int_counter += jval->rank;
-    jval->shape[0] = length;
+    alive_heap_int_counter += shape_arr->shape[0];
+    total_heap_int_counter += shape_arr->shape[0];
 
-    // Allocate space for *pointers* to the JVals that will comprise this array.
-    jvals = malloc(length * sizeof(struct JVal*));
-    if (!jvals) {
-        printf("ERROR: jval_heapalloc_array_dim1: call to malloc %d new JVals*(s) failed.\n", length);
-        exit(EXIT_FAILURE);
+    struct JVal* elem;
+    for (int i = 0; i < shape_arr->shape[0]; i++) {
+        elem = ((struct JVal**)shape_arr->ptr)[i];
+        if (elem->type != JIntegerType) {
+            printf("ERROR: jval_heapalloc_array_dim_n_nonprimshape: expected integer, got type: %d\n", elem->type);
+            exit(EXIT_FAILURE);
+        }
+        ints[i] = *(int*)((struct JVal**)shape_arr->ptr)[i]->ptr;
     }
-    alive_heap_jvalptrarray_counter += 1;
-    total_heap_jvalptrarray_counter += 1;
-    jval->ptr = jvals;
-    return jval;
+
+    struct JVal* ndim_arr = jval_heapalloc_array_dim_n(rank, ints);
+    // The primitive array was cloned by the callee, free our copy now.
+    free(ints);
+    alive_heap_int_counter -= shape_arr->shape[0];
+    total_heap_int_counter -= shape_arr->shape[0];
+    return ndim_arr;
+
 }
 
-struct JVal* jval_heapalloc_array_dim_n(struct JVal* shape_arr) {
+struct JVal* jval_heapalloc_array_dim_n(int rank, int* shape) {
     struct JVal* jval;
     struct JVal* reduce_intermediate;
     struct JVal** jvals;
     int length;
 
-    if (shape_arr->type != JArrayType || shape_arr->rank != 1) {
-        printf("ERROR: jval_heapalloc_array_dim_n: expected array of rank 1, got: (type:%d, rank:%d)",
-            shape_arr->type, shape_arr->rank);
+    // Clone the shape array.
+    int* shape_clone = malloc(rank * sizeof(int));
+    if (!shape_clone) {
+        printf("ERROR: jval_heapalloc_array_dim_n: call to malloc for cloning shape failed.\n");
         exit(EXIT_FAILURE);
     }
+    for (int i = 0; i < rank; i++) {
+        shape_clone[i] = shape[i];
+    }
+    alive_heap_int_counter += rank;
+    total_heap_int_counter += rank;
 
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
@@ -201,13 +203,10 @@ struct JVal* jval_heapalloc_array_dim_n(struct JVal* shape_arr) {
 
     jval->type = JArrayNDimensionalType;
     jval->loc = JLocHeapLocal;
-    // TODO: This will need to be changed over to use shape_fut
-    jval->rank = shape_arr->shape[0];
-    jval->shape_fut = jval_clone(shape_arr, JLocHeapLocal);
+    jval->rank = rank;
+    jval->shape = shape_clone;
 
-    reduce_intermediate = jreduce(JTimes, shape_arr);
-    length = *(int*)reduce_intermediate->ptr;
-    jval_drop(reduce_intermediate, false);
+    length = jarray_length(jval);
 
     // Allocate space for *pointers* to the JVals that will comprise this array.
     jvals = malloc(length * sizeof(struct JVal*));
@@ -219,6 +218,20 @@ struct JVal* jval_heapalloc_array_dim_n(struct JVal* shape_arr) {
     total_heap_jvalptrarray_counter += 1;
     jval->ptr = jvals;
     return jval;
+}
+
+int jarray_length(struct JVal* jval) {
+
+    if (jval->type != JArrayNDimensionalType) {
+        printf("ERROR: jarray_length: expected N-dimensional array, got: %d", jval->type);
+        exit(EXIT_FAILURE);
+    }
+
+    int len = 1;
+    for (int i = 0; i < jval->rank; i++) {
+        len *= jval->shape[i];
+    }
+    return len;
 }
 
 struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
@@ -247,25 +260,13 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
                 ((char*)ret->ptr)[i] = ((char*)jval->ptr)[i];
             }
             return ret;
-        case JArrayType:
-            ret = jval_heapalloc_array_dim1(jval->shape[0]);
-            ret->loc = loc;
-            jvalsin = (struct JVal**) jval->ptr;
-            jvalsout = (struct JVal**) ret->ptr;
-            for (int i = 0; i < jval->shape[0]; i++) {
-                jvalsout[i] = jval_clone(jvalsin[i], loc);
-            }
-            return ret;
         case JArrayNDimensionalType:
-            ret = jval_heapalloc_array_dim_n(jval->shape_fut);
+            ret = jval_heapalloc_array_dim_n(jval->rank, jval->shape);
             ret->loc = loc;
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
 
-            reduce_intermediate = jreduce(JTimes, ret->shape_fut);
-            length = *(int*)reduce_intermediate->ptr;
-            jval_drop(reduce_intermediate, false);
-
+            length = jarray_length(ret);
             for (int i = 0; i < length; i++) {
                 jvalsout[i] = jval_clone(jvalsin[i], loc);
             }
@@ -279,7 +280,6 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
 // When JVals go out of scope, use this function to free them
 // (will only free JVals on the heap, not on the stack or in global scope).
 void jval_drop(struct JVal* jval, bool do_drop_globals) {
-    struct JVal* reduce_intermediate;
     int length;
 
     switch (jval->loc) {
@@ -303,7 +303,6 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
 
     struct JVal** jvals;
 
-//    printf("DROPPING type %d\n", jval->type);
     // First free the pointed-to value.
     switch (jval->type) {
         case JIntegerType:
@@ -320,24 +319,8 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             break;
         case JArrayNDimensionalType:
             jvals = (struct JVal**) jval->ptr;
-
-            reduce_intermediate = jreduce(JTimes, jval->shape_fut);
-            length = *(int*)reduce_intermediate->ptr;
-            jval_drop(reduce_intermediate, false);
-
+            length = jarray_length(jval);
             for (int i = 0; i < length; i++) {
-                jval_drop(jvals[i], do_drop_globals);
-            }
-
-            alive_heap_jvalptrarray_counter -= 1;
-
-            // Must free the shape_fut array
-            jval_drop(jval->shape_fut, do_drop_globals);
-
-            break;
-        case JArrayType:
-            jvals = (struct JVal**) jval->ptr;
-            for (int i = 0; i < jval->shape[0]; i++) {
                 jval_drop(jvals[i], do_drop_globals);
             }
             alive_heap_jvalptrarray_counter -= 1;
@@ -347,11 +330,9 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             exit(EXIT_FAILURE);
     }
 
-    if (jval->type != JArrayNDimensionalType) {
-        // Then free the internal shape array.
-        free(jval->shape);
-        alive_heap_int_counter -= jval->rank;  // Rank is # of dims, hence # of ints
-    }
+    // Then free the internal shape array.
+    free(jval->shape);
+    alive_heap_int_counter -= jval->rank;  // Rank is # of dims, hence # of ints
 
     // And finally free the JVal itself.
     free(jval);
