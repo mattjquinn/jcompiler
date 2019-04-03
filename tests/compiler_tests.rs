@@ -353,3 +353,17 @@ fn ctest_monadic_shapeof() {
     assert_eq!("\n0\n3\n4\n1\n2 4\n2\n5 4 2\n3\n9 3 4 1\n4\n1 10 14 8 9\n5\n1 10 1 8 1\n5\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn ctest_ch2_learningjbook() {
+    let (stdout, stderr) = compile("ctest_ch2_learningjbook.ijs");
+    let expected = format!(
+        "{}{}{}",
+        "5 6  7\n8 9 10\n5 6 7 8\n9 5 6 7\n1 1\n1 1\n50 60  70\n80 90 100\n10 12 14\n16 18 20\n0 0  0\n8 9 10\n1 1 1\n5 6 7\n5 6 7\n5 6 7\n8 5 6\n\n7 8 5\n6 7 8\n",
+        "2\n3\n3\n1 1 1\n1 1 1\n2 3\n5 6 7\n3\n1\n1 1 1\n1 1 1\n2 3\n2\n0\n99 99\n\n\n17\n17\n17\n0\n1\n2\n5\n6\n7\n3 1\n2\n",
+        "6\n\n0\n4 5 6\n3\n1\n0 1 2\n3 4 5\n2 3\n2\n0  1  2\n3  4  5\n\n6  7  8\n9 10 11\n2 2 3\n3\n"
+    );
+    assert_eq!(expected, &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+

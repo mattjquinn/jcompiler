@@ -288,25 +288,44 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
 
     } else if (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType) {
 
-        // Arrays must have same rank and shape.
-        if (!jinternal_same_rank_and_shape(lhs, rhs)) {
-            printf("ERROR: jdyad: rank/shape mismatch between supplied ndim arrays.");
+        if (jinternal_same_rank_and_shape(lhs, rhs)) {
+            // If LHS and RHS have same rank and shape, distribute the dyadic verb
+            // over corresponding elements of both arrays.
+
+            int length;
+            ret = jval_heapalloc_array_dim_n(lhs->rank, lhs->shape);
+            length = jarray_length(ret);
+
+            for (int i = 0; i < length; i++) {
+                ((struct JVal**)ret->ptr)[i] = jdyad(op, ((struct JVal**)lhs->ptr)[i],
+                                                         ((struct JVal**)rhs->ptr)[i]);
+            }
+
+            return ret;
+        } else if (lhs->rank == 1 && lhs->shape[0] == rhs->rank) {
+            // If LHS is a list with the same number of elements as the rank of the RHS
+            // (i.e., each element on left matches with the number of rows/planes on the right),
+            // distribute each element on the left with each row/plane on the right.
+
+            // The resultant array will have the same rank and shape as the right-hand side array.
+            int length;
+            ret = jval_heapalloc_array_dim_n(rhs->rank, rhs->shape);
+            length = jarray_length(ret);
+
+            int rows_or_planes = rhs->shape[0];
+            int row_or_plane_len = length / rows_or_planes;
+            for (int i = 0; i < rows_or_planes; i++) {
+                for (int j = 0; j < row_or_plane_len; j++) {
+                    ((struct JVal**)ret->ptr)[(i*row_or_plane_len) + j] = jdyad(op,
+                                                               ((struct JVal**)lhs->ptr)[i],
+                                                               ((struct JVal**)rhs->ptr)[(i*row_or_plane_len) + j]);
+                }
+            }
+            return ret;
+        } else {
+            printf("ERROR: jdyad: rank/shape mismatch between supplied ndim arrays.\n");
             exit(EXIT_FAILURE);
         }
-
-        struct JVal* reduce_intermediate;
-        int length;
-
-        ret = jval_heapalloc_array_dim_n(lhs->rank, lhs->shape);
-        length = jarray_length(ret);
-
-        for (int i = 0; i < length; i++) {
-            ((struct JVal**)ret->ptr)[i] = jdyad(op, ((struct JVal**)lhs->ptr)[i],
-                                                     ((struct JVal**)rhs->ptr)[i]);
-        }
-
-        return ret;
-
     } else {
         printf("ERROR: jdyad: unsupported lhs type:%d and rhs type:%d\n",
             lhs->type, rhs->type);
