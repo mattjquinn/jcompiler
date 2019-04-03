@@ -145,10 +145,6 @@ void jprint(struct JVal* val, bool newline) {
   if (newline) { printf("\n"); }
 }
 
-void jexpand(struct JVal** arr, struct JVal* val, int dest_idx) {
-  arr[dest_idx] = val;
-}
-
 struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     struct JVal* ret;
     struct JVal** jvals_a;

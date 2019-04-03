@@ -319,8 +319,15 @@ fn compile_expr(
 
                 // Load pointers to each JVal into the array.
                 for (idx, jval) in compiled_terms.iter().enumerate() {
-                      let mut args = vec![arr, jval.ptr, int32(idx as u64)];
-                      add_function_call(module, bb, "jexpand", &mut args[..], "");
+                    let mut term_offset = vec![int32(idx as u64)];
+                    let term_gep = LLVMBuildInBoundsGEP(
+                        builder.builder,
+                        arr,
+                        term_offset.as_mut_ptr(),
+                        term_offset.len() as u32,
+                        module.new_string_ptr("term_gep"),
+                    );
+                    LLVMBuildStore(builder.builder, jval.ptr, term_gep);
                 }
 
                 // Point to the array via a JVal struct.
@@ -604,7 +611,6 @@ fn add_c_declarations(module: &mut Module) {
     )};
 
     add_function(module, "jprint", & mut [jval_ptr_type, int1_type()], void);
-    add_function(module, "jexpand", &mut [jval_ptr_ptr_type, jval_ptr_type, int32_type()], void);
     add_function(module, "jmonad", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
     add_function(module, "jdyad", & mut [int8_type(), jval_ptr_type, jval_ptr_type], jval_ptr_type);
     add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
