@@ -22,7 +22,7 @@ adverb = { "/" }
 integer = @{ "_"? ~ ASCII_DIGIT+ }
 decimal = @{ "_"? ~ ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT* }
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-string = @{ "'" ~ ( !"'" ~ ANY )* ~ "'" }
+string = @{ "'" ~ ( "''" | (!"'" ~ ANY) )* ~ "'" }
 
 WHITESPACE = _{ " " | "\t" }
 

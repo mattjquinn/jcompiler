@@ -8,4 +8,6 @@ long
 # ''
 # 'a'
 # 'ab'
-# 'Party like its 1999.'
+str =: 'Party like it''s 1999.'
+str
+# str
