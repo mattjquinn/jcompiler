@@ -122,8 +122,12 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
                                 expr : Box::new(expr) }
         },
         Rule::string => {
-            let str = pair.as_str();
-            AstNode::Str(CString::new(&str[1..str.len()-1]).unwrap())
+            let str = &pair.as_str();
+            // Strip leading and ending quotes.
+            let str = &str[1..str.len() - 1];
+            // Escaped string quotes become single quotes here.
+            let str = str.replace("''", "'");
+            AstNode::Str(CString::new(&str[..]).unwrap())
         }
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr),
     }

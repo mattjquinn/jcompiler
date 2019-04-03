@@ -1,3 +1,8 @@
-NB. NB. a =: 2 3 $ 1.2323 4.43435 9.23333333333333 8.32 9.1121111111111 5
-NB. NB. a
-
+title =: 'My Ten Years in a Quandary'
+title
+'What''s new?'
+''
+# ''
+a =: 'rear'
+b =: 'ranged'
+NB. a,b
