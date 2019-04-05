@@ -2,7 +2,7 @@ use self::AstNode::*;
 use itertools::{Itertools};
 use pest::error::Error;
 use std::fmt;
-use std::ffi::CString;
+use ascii::AsciiString;
 
 use pest::Parser;
 
@@ -36,6 +36,7 @@ pub enum DyadicVerb {
     LargerOf = 11,
     LargerOrEqual = 12,
     Shape = 13,
+    Append = 14,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -49,7 +50,7 @@ pub enum AstNode {
     Reduce { verb: DyadicVerb, expr: Box<AstNode> },
     IsGlobal{ident: String, expr: Box<AstNode>},
     Ident(String),
-    Str(CString),
+    Str(AsciiString),
 }
 
 impl fmt::Display for AstNode {
@@ -127,7 +128,7 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let str = &str[1..str.len() - 1];
             // Escaped string quotes become single quotes here.
             let str = str.replace("''", "'");
-            AstNode::Str(CString::new(&str[..]).unwrap())
+            AstNode::Str(AsciiString::from_ascii(&str[..]).unwrap())
         }
         unknown_expr => panic!("Unexpected expression: {:?}", unknown_expr),
     }
@@ -160,6 +161,7 @@ fn parse_dyadic_action(pair : pest::iterators::Pair<Rule>,
         ">." => AstNode::DyadicOp { verb: DyadicVerb::LargerOf, lhs, rhs },
         ">:" => AstNode::DyadicOp { verb: DyadicVerb::LargerOrEqual, lhs, rhs },
         "$" => AstNode::DyadicOp { verb: DyadicVerb::Shape, lhs, rhs },
+        "," => AstNode::DyadicOp { verb: DyadicVerb::Append, lhs, rhs },
         _ => panic!("Unexpected dyadic verb: {}", verb)
     }
 }

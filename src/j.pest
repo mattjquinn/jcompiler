@@ -14,7 +14,7 @@ terms = { term+ }
 term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
 action = { verb ~ adverb* }
-verb = { ">:" | "*:" | "-" | "%" | "#" | ">." |
+verb = { ">:" | "*:" | "-" | "%" | "#" | ">." | "," |
           "+" | "*" | "<"  | "=" | "^" | "|" | ">" | "$" }
 adverb = { "/" }
 

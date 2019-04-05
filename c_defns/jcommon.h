@@ -1,16 +1,22 @@
 struct JVal {
-  char type;  // the value's type, as J defines it.
-  char loc;   // the value's location in memory (stack, heap, global, etc.)
-  int rank;   // number of dimensions: 0 for scalars, 1 for lists, 2 for tables, etc.
-  int* shape; // list of dimensions: [] for scalars, [a] for lists, [a b] for tables, etc.
-  void* ptr;   // a pointer to the value
+  char type;    // the value's type, as J defines it.
+  char typaram; // an optional type parameter, i.e. numeric array, string array, etc.
+  char loc;     // the value's location in memory (stack, heap, global, etc.)
+  int rank;     // number of dimensions: 0 for scalars, 1 for lists, 2 for tables, etc.
+  int* shape;   // list of dimensions: [] for scalars, [a] for lists, [a b] for tables, etc.
+  void* ptr;    // a pointer to the value
 };
 
 enum JValType {
   JIntegerType = 1,
-  JArrayNDimensionalType = 2,
-  JDoublePrecisionFloatType = 3,
-  JStringType = 4,
+  JDoublePrecisionFloatType = 2,
+  JCharacterType = 3,
+  JArrayNDimensionalType = 4,
+};
+
+enum JValTypeParam {
+  JNumeric = 1,
+  JString = 2,
 };
 
 enum JValLocation {
@@ -33,6 +39,7 @@ enum JDyadicVerb {
   JLargerOf = 11,
   JLargerOrEqual = 12,
   JShape = 13,
+  JAppend = 14,
 };
 
 enum JMonadicVerb {
@@ -70,3 +77,4 @@ bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs);
 int jarray_length(struct JVal* jval);
 struct JVal* jval_heapalloc_array_dim_n_nonprimshape(int rank, struct JVal* shape_arr);
 int* jvalarray_as_primarray(struct JVal* arr);
+struct JVal* jdyad_internal_append_verb(struct JVal* lhs, struct JVal* rhs);

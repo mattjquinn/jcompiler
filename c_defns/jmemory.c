@@ -18,10 +18,10 @@ extern int alive_heap_int_counter;
 extern int total_heap_int_counter;
 extern int alive_heap_double_counter;
 extern int total_heap_double_counter;
+extern int alive_heap_char_counter;
+extern int total_heap_char_counter;
 extern int alive_heap_jvalptrarray_counter;
 extern int total_heap_jvalptrarray_counter;
-extern int alive_heap_string_counter;
-extern int total_heap_string_counter;
 
 int* heapalloc_ndim_col_widths_arr(int length) {
     int* arr;
@@ -102,40 +102,32 @@ struct JVal* jval_heapalloc_double() {
     return jval;
 }
 
-struct JVal* jval_heapalloc_string(int length) {
+struct JVal* jval_heapalloc_char() {
+    char* cptr;
     struct JVal* jval;
-    char* sptr;
 
     // Allocate space for the JVal itself.
     jval = malloc(sizeof(struct JVal));
     if (!jval) {
-        printf("ERROR: jval_heapalloc_string: call to malloc new JVal failed.\n");
+        printf("ERROR: jval_heapalloc_char: call to malloc new JVal failed.\n");
         exit(EXIT_FAILURE);
     }
     alive_heap_jval_counter += 1;
     total_heap_jval_counter += 1;
 
-    jval->type = JStringType;
+    jval->type = JCharacterType;
     jval->loc = JLocHeapLocal;
-    jval->rank = 1;  // strings are single dimension lists
+    jval->rank = 0;
+    jval->shape = NULL;
 
-    jval->shape = malloc(jval->rank * sizeof(int));
-    if (!jval->shape) {
-        printf("ERROR: jval_heapalloc_string: call to malloc new int for shape failed.\n");
+    cptr = malloc(sizeof(char));
+    if (!cptr) {
+        printf("ERROR: jval_heapalloc_char: call to malloc new char failed.\n");
         exit(EXIT_FAILURE);
     }
-    alive_heap_int_counter += jval->rank;
-    total_heap_int_counter += jval->rank;
-    jval->shape[0] = length;
-
-    sptr = malloc(length * sizeof(char));
-    if (!sptr) {
-        printf("ERROR: jval_heapalloc_string: call to malloc new string of length %d failed.\n", length);
-        exit(EXIT_FAILURE);
-    }
-    alive_heap_string_counter += 1;
-    total_heap_string_counter += 1;
-    jval->ptr = sptr;
+    alive_heap_char_counter += 1;
+    total_heap_char_counter += 1;
+    jval->ptr = cptr;
     return jval;
 }
 
@@ -190,6 +182,7 @@ struct JVal* jval_heapalloc_array_dim_n(int rank, int* shape) {
     total_heap_jval_counter += 1;
 
     jval->type = JArrayNDimensionalType;
+    jval->typaram = JNumeric;
     jval->loc = JLocHeapLocal;
     jval->rank = rank;
 
@@ -252,16 +245,14 @@ struct JVal* jval_clone(struct JVal* jval, enum JValLocation loc) {
             ret->loc = loc;
             *(double*)ret->ptr = *(double*)jval->ptr;
             return ret;
-        case JStringType:
-            ret = jval_heapalloc_string(jval->shape[0]);
+        case JCharacterType:
+            ret = jval_heapalloc_char();
             ret->loc = loc;
-            // Copy string's characters to this new string.
-            for (int i = 0; i < jval->shape[0]; i++) {
-                ((char*)ret->ptr)[i] = ((char*)jval->ptr)[i];
-            }
+            *(char*)ret->ptr = *(char*)jval->ptr;
             return ret;
         case JArrayNDimensionalType:
             ret = jval_heapalloc_array_dim_n(jval->rank, jval->shape);
+            ret->typaram = jval->typaram;
             ret->loc = loc;
             jvalsin = (struct JVal**) jval->ptr;
             jvalsout = (struct JVal**) ret->ptr;
@@ -313,9 +304,9 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             free(jval->ptr);
             alive_heap_double_counter -= 1;
             break;
-        case JStringType:
+        case JCharacterType:
             free(jval->ptr);
-            alive_heap_string_counter -= 1;
+            alive_heap_char_counter -= 1;
             break;
         case JArrayNDimensionalType:
             jvals = (struct JVal**) jval->ptr;
@@ -326,7 +317,7 @@ void jval_drop(struct JVal* jval, bool do_drop_globals) {
             alive_heap_jvalptrarray_counter -= 1;
             break;
         default:
-            printf("ERROR: jval_drop: unsupported type: %d", jval->type);
+            printf("ERROR: jval_drop: unsupported type: %d\n", jval->type);
             exit(EXIT_FAILURE);
     }
 
@@ -356,7 +347,7 @@ struct JVal* jglobal_get_reference(int global_id) {
 
     // ID must be within bounds of static global slot bank.
     if (global_id < 0 || global_id >= JNUM_GLOBAL_SLOTS) {
-        printf("ERROR: get_global: illegal global_id: %d", global_id);
+        printf("ERROR: get_global: illegal global_id: %d\n", global_id);
         exit(EXIT_FAILURE);
     }
 
@@ -383,8 +374,8 @@ void jmemory_check(bool do_print_usage) {
             alive_heap_int_counter, total_heap_int_counter);
         printf("%d \\ %d\t\talive \\ historical doubles on heap\n",
             alive_heap_double_counter, total_heap_double_counter);
-        printf("%d \\ %d\t\talive \\ historical strings on heap\n",
-            alive_heap_string_counter, total_heap_string_counter);
+        printf("%d \\ %d\t\talive \\ historical chars on heap\n",
+            alive_heap_char_counter, total_heap_char_counter);
         printf("%d \\ %d\t\talive \\ historical JVal pointer arrays on heap\n",
             alive_heap_jvalptrarray_counter, total_heap_jvalptrarray_counter);
         printf("==================================================================\n");
@@ -394,6 +385,6 @@ void jmemory_check(bool do_print_usage) {
     assert(alive_heap_jval_counter == 0);
     assert(alive_heap_int_counter == 0);
     assert(alive_heap_double_counter == 0);
-    assert(alive_heap_string_counter == 0);
+    assert(alive_heap_char_counter == 0);
     assert(alive_heap_jvalptrarray_counter == 0);
 }
