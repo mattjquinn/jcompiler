@@ -5,4 +5,4 @@ title
 # ''
 a =: 'rear'
 b =: 'ranged'
-NB. a,b
+a,b

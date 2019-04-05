@@ -90,9 +90,15 @@ pub fn compile_to_module(
 #[derive(Clone)]
 enum JValType {
     Integer = 1,
-    NDimensionalArray = 2,
-    DoublePrecisionFloat = 3,
-    String = 4,
+    DoublePrecisionFloat = 2,
+    Character = 3,
+    NDimensionalArray = 4,
+}
+
+#[derive(Clone)]
+enum JValTypeParam {
+    Numeric = 1,
+    String = 2,
 }
 
 #[derive(Clone)]
@@ -116,6 +122,7 @@ fn alloc_jval(
     bb: LLVMBasicBlockRef,
     val: LLVMValueRef,
     val_type: JValType,
+    val_type_param: Option<JValTypeParam>,
     val_loc: JValLocation,
     val_shape: Vec<u64>) -> JValPtr {
 
@@ -141,8 +148,23 @@ fn alloc_jval(
         );
         LLVMBuildStore(builder.builder, int8(val_type.clone() as u64), type_gep);
 
+        // Specify type parameter if present.
+        let tp = match val_type_param {
+            Some(type_param) => type_param as u64,
+            None => 0,
+        };
+        let mut typaram_offset = vec![int64(0), int32(1)];
+        let type_param_gep = LLVMBuildInBoundsGEP(
+            builder.builder,
+            jval_ptr,
+            typaram_offset.as_mut_ptr(),
+            typaram_offset.len() as u32,
+            module.new_string_ptr("jval_typeparam_gep"),
+        );
+        LLVMBuildStore(builder.builder, int8(tp), type_param_gep);
+
         // Indicate the location.
-        let mut loc_offset = vec![int64(0), int32(1)];
+        let mut loc_offset = vec![int64(0), int32(2)];
         let loc_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
@@ -153,7 +175,7 @@ fn alloc_jval(
         LLVMBuildStore(builder.builder, int8(val_loc.clone() as u64), loc_gep);
 
         // Indicate the rank.
-        let mut rank_offset = vec![int64(0), int32(2)];
+        let mut rank_offset = vec![int64(0), int32(3)];
         let rank_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
@@ -163,7 +185,7 @@ fn alloc_jval(
         );
         LLVMBuildStore(builder.builder, int32(val_shape.len() as u64), rank_gep);
 
-        // Indicate the shape. First we need an arry of integers...
+        // Indicate the shape. First we need an array of integers...
         let shape_arr = LLVMBuildArrayAlloca(
             builder.builder,
             int32_type(),
@@ -183,7 +205,7 @@ fn alloc_jval(
             LLVMBuildStore(builder.builder, int32(dim), dim_gep);
         }
         //...and finally, point to the shape array from the struct:
-        let mut shape_offset = vec![int64(0), int32(3)];
+        let mut shape_offset = vec![int64(0), int32(4)];
         let shape_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
@@ -194,7 +216,7 @@ fn alloc_jval(
         LLVMBuildStore(builder.builder, shape_arr, shape_gep);
 
         // Point to the value.
-        let mut ptr_offset = vec![int64(0), int32(4)];
+        let mut ptr_offset = vec![int64(0), int32(5)];
         let ptr_gep = LLVMBuildInBoundsGEP(
             builder.builder,
             jval_ptr,
@@ -216,6 +238,14 @@ fn alloc_jval(
                     builder.builder,
                     ptr_gep,
                     f64_ptr_ptr_type(),
+                    module.new_string_ptr("jval_ptr_cast")
+                )
+            ,
+            JValType::Character =>
+                LLVMBuildPointerCast(
+                    builder.builder,
+                    ptr_gep,
+                    int8_ptr_ptr_type(),
                     module.new_string_ptr("jval_ptr_cast")
                 )
             , _ => ptr_gep
@@ -246,7 +276,7 @@ fn compile_expr(
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::Integer;
-                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, vec![])
+                alloc_jval(module, bb, num, ty.clone(), None, JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::DoublePrecisionFloat(n) => {
@@ -260,39 +290,63 @@ fn compile_expr(
                 LLVMBuildStore(builder.builder, f64(n), num);
 
                 // Point to the number via a JVal struct.
-                let ty = JValType::DoublePrecisionFloat;
-                alloc_jval(module, bb, num, ty.clone(), JValLocation::Stack, vec![])
+                alloc_jval(module, bb, num, JValType::DoublePrecisionFloat, None, JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::Str(ref str) => {
             unsafe {
-                // Allocate an array to hold the string's characters.
-                let str_bytes = str.clone().into_bytes_with_nul();
-                let str_len = str_bytes.len();
-                let arr = LLVMBuildArrayAlloca(
-                    builder.builder,
-                    int8_type(),
-                    int64(str_bytes.len() as u64),
-                    module.new_string_ptr("string_arr")
-                );
 
-                // Load each character into the string array.
-                let mut idx = 0;
-                for byte in str_bytes {
-                    let mut char_offset = vec![int32(idx as u64)];
-                    let char_gep = LLVMBuildInBoundsGEP(
+                if str.len() == 1 {
+                    // Single characters are scalars, not stored in an array.
+                    // Allocate space for the character.
+                    let char_alloc = LLVMBuildAlloca(
                         builder.builder,
-                        arr,
-                        char_offset.as_mut_ptr(),
-                        char_offset.len() as u32,
-                        module.new_string_ptr("str_char_gep"),
+                        int8_type(),
+                        module.new_string_ptr("char_alloc")
                     );
-                    LLVMBuildStore(builder.builder, int8(byte as u64), char_gep);
-                    idx += 1;
-                }
+                    LLVMBuildStore(builder.builder, int8(str.as_bytes()[0] as u64), char_alloc);
+                    // Point to the number via a JVal struct.
+                    alloc_jval(module, bb, char_alloc, JValType::Character, None, JValLocation::Stack, vec![])
 
-                // Point to the string via a JVal struct.
-                alloc_jval(module, bb, arr, JValType::String, JValLocation::Stack, vec![str_len as u64])
+                } else {
+                    // Allocate an array to hold the string's characters.
+                    let arr = LLVMBuildArrayAlloca(
+                        builder.builder,
+                        module.jval_ptr_type,
+                        int64(str.as_bytes().len() as u64),
+                        module.new_string_ptr("string_arr")
+                    );
+
+                    // Load each character into the string array.
+                    let mut idx = 0;
+                    for byte in str.as_bytes() {
+
+                        // Allocate space for the character.
+                        let char_alloc = LLVMBuildAlloca(
+                            builder.builder,
+                            int8_type(),
+                            module.new_string_ptr("char_alloc")
+                        );
+                        LLVMBuildStore(builder.builder, int8(*byte as u64), char_alloc);
+
+                        // Point to the character via a JVal struct.
+                        let char_jval = alloc_jval(module, bb, char_alloc, JValType::Character, None, JValLocation::Stack, vec![]);
+
+                        // Store the JVal char at the appropriate offset in the array.
+                        let mut char_offset = vec![int32(idx)];
+                        let char_gep = LLVMBuildInBoundsGEP(
+                            builder.builder,
+                            arr,
+                            char_offset.as_mut_ptr(),
+                            char_offset.len() as u32,
+                            module.new_string_ptr("char_gep"),
+                        );
+                        LLVMBuildStore(builder.builder, char_jval.ptr, char_gep);
+                        idx += 1;
+                    }
+                    // Point to the string via a JVal struct.
+                    alloc_jval(module, bb, arr, JValType::NDimensionalArray, Some(JValTypeParam::String), JValLocation::Stack, vec![str.len() as u64])
+                }
             }
         }
         parser::AstNode::Terms(ref terms) => {
@@ -331,7 +385,7 @@ fn compile_expr(
                 }
 
                 // Point to the array via a JVal struct.
-                alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValLocation::Stack, vec![compiled_terms.len() as u64])
+                alloc_jval(module, bb, arr, JValType::NDimensionalArray, Some(JValTypeParam::Numeric), JValLocation::Stack, vec![compiled_terms.len() as u64])
             }
         },
         parser::AstNode::MonadicOp {ref verb, ref expr} => {
@@ -577,6 +631,10 @@ fn f64_ptr_ptr_type() -> LLVMTypeRef {
     unsafe { LLVMPointerType(LLVMPointerType(LLVMDoubleType(), 0), 0) }
 }
 
+fn int8_ptr_ptr_type() -> LLVMTypeRef {
+    unsafe { LLVMPointerType(LLVMPointerType(LLVMInt8Type(), 0), 0) }
+}
+
 fn int32_ptr_ptr_type() -> LLVMTypeRef {
     unsafe { LLVMPointerType(LLVMPointerType(LLVMInt32Type(), 0), 0) }
 }
@@ -671,6 +729,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
         // in jverbs.c.
         let mut members = vec![
             int8_type(),        // the value's type
+            int8_type(),        // the value's type parameters
             int8_type(),        // the value's location
             int32_type(),       // the value's rank (number of dimensions)
             void_ptr_type(),    // a pointer to the value
@@ -690,10 +749,10 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             "total_heap_int_counter",
             "alive_heap_double_counter",
             "total_heap_double_counter",
+            "alive_heap_char_counter",
+            "total_heap_char_counter",
             "alive_heap_jvalptrarray_counter",
             "total_heap_jvalptrarray_counter",
-            "alive_heap_string_counter",
-            "total_heap_string_counter",
         ];
 
         heap_counter_names.iter().for_each(|name| {

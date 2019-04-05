@@ -50,7 +50,8 @@ void jprint_recur_dimensions(struct JVal* arr,
             // One-dimensional arrays have only single spaces between columns.
             jprint(jvals[i], false);
         }
-        if (i < window_end - 1) { printf(" "); }
+        // Numeric arrays have spaces between each column; strings don't.
+        if (arr->typaram == JNumeric && i < window_end - 1) { printf(" "); }
       }
       return;
     }
@@ -93,9 +94,8 @@ void jprint(struct JVal* val, bool newline) {
       if (signbit(*dptr) && *dptr != -0.0) { printf("_%.*g", JPRINT_PRECISION, fabs(*dptr)); }
       else                                 { printf("%.*g", JPRINT_PRECISION, fabs(*dptr)); }
       break;
-    case JStringType:
-      sptr = (char*) val->ptr;
-      printf("%s", sptr);
+    case JCharacterType:
+      putchar((int) (*(char*) val->ptr));
       break;
     case JArrayNDimensionalType:
 
@@ -160,6 +160,9 @@ struct JVal* jdyad(enum JDyadicVerb op, struct JVal* lhs, struct JVal* rhs) {
     }
     if (op == JShape) {
         return jdyad_internal_shape_verb(lhs, rhs);
+    }
+    if (op == JAppend) {
+        return jdyad_internal_append_verb(lhs, rhs);
     }
 
     if (lhs->type == JIntegerType && rhs->type == JIntegerType) {
@@ -345,6 +348,34 @@ bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs) {
         }
     }
     return true;
+}
+
+struct JVal* jdyad_internal_append_verb(struct JVal* lhs, struct JVal* rhs) {
+
+    if (! (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType
+            && lhs->typaram == JString && rhs->typaram == JString
+            && lhs->rank == 1 && rhs->rank == 1) ) {
+        printf("ERROR: jdyad_internal_append_verb: expected two string lists, got type:%d, type:%d.\n",
+            lhs->type, rhs->type);
+        exit(EXIT_FAILURE);
+    }
+
+    int sum_length = jarray_length(lhs) + jarray_length(rhs);
+    struct JVal* ret = jval_heapalloc_array_dim_n(1, &sum_length);
+    ret->typaram = JString;
+    int length = jarray_length(ret);
+
+    for (int i = 0; i < lhs->shape[0]; i++) {
+        ((struct JVal**)ret->ptr)[i] = jval_clone(
+            ((struct JVal**)lhs->ptr)[i], JLocHeapLocal);
+    }
+
+    for (int i = 0; i < rhs->shape[0]; i++) {
+        ((struct JVal**)ret->ptr)[i+lhs->shape[0]] = jval_clone(
+            ((struct JVal**)rhs->ptr)[i], JLocHeapLocal);
+    }
+
+    return ret;
 }
 
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
@@ -586,17 +617,15 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
                     printf("ERROR: jmonad: unsupported verb on type double: %d\n", op);
                     exit(EXIT_FAILURE);
             }
-        case JStringType:
 
+        case JCharacterType:
             switch (op) {
                 case JTally:
                     ret = jval_heapalloc_int();
-                    // A string has one dimension; shape[0] get that dimension's size.
-                    // 1 is subtracted to disregard null terminating byte.
-                    *(int*)ret->ptr = expr->shape[0] - 1;
+                    *(int*)ret->ptr = 1;
                     return ret;
                 default:
-                    printf("ERROR: jmonad: unsupported verb on type string: %d\n", op);
+                    printf("ERROR: jmonad: unsupported op on char expr: %d\n", op);
                     exit(EXIT_FAILURE);
             }
 
@@ -622,8 +651,8 @@ struct JVal* jmonad(enum JMonadicVerb op, struct JVal* expr) {
 
             return ret;
         default:
-            printf("ERROR: jmonad: unsupported expr (type:%d,len:%d)\n",
-                expr->type, expr->shape[0]);
+            printf("ERROR: jmonad: unsupported expr (type:%d,len:%d,op:%d)\n",
+                expr->type, expr->shape[0], op);
             exit(EXIT_FAILURE);
     }
 }
