@@ -367,3 +367,10 @@ fn ctest_ch2_learningjbook() {
     assert_eq!("", &stderr[..]);
 }
 
+#[test]
+fn ctest_dyadic_append() {
+    let (stdout, stderr) = compile("ctest_dyadic_append.ijs");
+    assert_eq!("0 0\n_1.4 0\n_3 _8.9\n0 1 2 3 4 5\n0 1 2 3 4 5\n0 1 2 3 4 5\n_1 2 3 4 5 8 10 11 12 13 14 15\n500\n1010\n100 100 100 100 100 100 100 100 100 100\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+

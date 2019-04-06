@@ -122,7 +122,7 @@ fn alloc_jval(
     bb: LLVMBasicBlockRef,
     val: LLVMValueRef,
     val_type: JValType,
-    val_type_param: Option<JValTypeParam>,
+    val_type_param: JValTypeParam,
     val_loc: JValLocation,
     val_shape: Vec<u64>) -> JValPtr {
 
@@ -148,11 +148,7 @@ fn alloc_jval(
         );
         LLVMBuildStore(builder.builder, int8(val_type.clone() as u64), type_gep);
 
-        // Specify type parameter if present.
-        let tp = match val_type_param {
-            Some(type_param) => type_param as u64,
-            None => 0,
-        };
+        // Specify type parameter.
         let mut typaram_offset = vec![int64(0), int32(1)];
         let type_param_gep = LLVMBuildInBoundsGEP(
             builder.builder,
@@ -161,7 +157,7 @@ fn alloc_jval(
             typaram_offset.len() as u32,
             module.new_string_ptr("jval_typeparam_gep"),
         );
-        LLVMBuildStore(builder.builder, int8(tp), type_param_gep);
+        LLVMBuildStore(builder.builder, int8(val_type_param as u64), type_param_gep);
 
         // Indicate the location.
         let mut loc_offset = vec![int64(0), int32(2)];
@@ -276,7 +272,7 @@ fn compile_expr(
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::Integer;
-                alloc_jval(module, bb, num, ty.clone(), None, JValLocation::Stack, vec![])
+                alloc_jval(module, bb, num, ty.clone(), JValTypeParam::Numeric, JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::DoublePrecisionFloat(n) => {
@@ -290,7 +286,7 @@ fn compile_expr(
                 LLVMBuildStore(builder.builder, f64(n), num);
 
                 // Point to the number via a JVal struct.
-                alloc_jval(module, bb, num, JValType::DoublePrecisionFloat, None, JValLocation::Stack, vec![])
+                alloc_jval(module, bb, num, JValType::DoublePrecisionFloat, JValTypeParam::Numeric, JValLocation::Stack, vec![])
             }
         },
         parser::AstNode::Str(ref str) => {
@@ -306,7 +302,7 @@ fn compile_expr(
                     );
                     LLVMBuildStore(builder.builder, int8(str.as_bytes()[0] as u64), char_alloc);
                     // Point to the number via a JVal struct.
-                    alloc_jval(module, bb, char_alloc, JValType::Character, None, JValLocation::Stack, vec![])
+                    alloc_jval(module, bb, char_alloc, JValType::Character, JValTypeParam::String, JValLocation::Stack, vec![])
 
                 } else {
                     // Allocate an array to hold the string's characters.
@@ -330,7 +326,7 @@ fn compile_expr(
                         LLVMBuildStore(builder.builder, int8(*byte as u64), char_alloc);
 
                         // Point to the character via a JVal struct.
-                        let char_jval = alloc_jval(module, bb, char_alloc, JValType::Character, None, JValLocation::Stack, vec![]);
+                        let char_jval = alloc_jval(module, bb, char_alloc, JValType::Character, JValTypeParam::String, JValLocation::Stack, vec![]);
 
                         // Store the JVal char at the appropriate offset in the array.
                         let mut char_offset = vec![int32(idx)];
@@ -345,7 +341,7 @@ fn compile_expr(
                         idx += 1;
                     }
                     // Point to the string via a JVal struct.
-                    alloc_jval(module, bb, arr, JValType::NDimensionalArray, Some(JValTypeParam::String), JValLocation::Stack, vec![str.len() as u64])
+                    alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValTypeParam::String, JValLocation::Stack, vec![str.len() as u64])
                 }
             }
         }
@@ -385,7 +381,7 @@ fn compile_expr(
                 }
 
                 // Point to the array via a JVal struct.
-                alloc_jval(module, bb, arr, JValType::NDimensionalArray, Some(JValTypeParam::Numeric), JValLocation::Stack, vec![compiled_terms.len() as u64])
+                alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValTypeParam::Numeric, JValLocation::Stack, vec![compiled_terms.len() as u64])
             }
         },
         parser::AstNode::MonadicOp {ref verb, ref expr} => {

@@ -351,31 +351,65 @@ bool jinternal_same_rank_and_shape(struct JVal* lhs, struct JVal* rhs) {
 }
 
 struct JVal* jdyad_internal_append_verb(struct JVal* lhs, struct JVal* rhs) {
+    struct JVal* ret;
 
-    if (! (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType
-            && lhs->typaram == JString && rhs->typaram == JString
-            && lhs->rank == 1 && rhs->rank == 1) ) {
-        printf("ERROR: jdyad_internal_append_verb: expected two string lists, got type:%d, type:%d.\n",
-            lhs->type, rhs->type);
+    // TODO: This implementation innefficiently copies both arguments to a new array,
+    // Consider adding a linked-list representation
+    // to JArrayNDimensionalType arrays such that appending is O(1).
+
+    if ( lhs->rank == 0 && rhs->rank == 0 && lhs->typaram == rhs->typaram) {
+        int sum_length = 2;
+        ret = jval_heapalloc_array_dim_n(1, &sum_length);
+        ret->typaram = lhs->typaram;
+        ((struct JVal**)ret->ptr)[0] = jval_clone(lhs, JLocHeapLocal);
+        ((struct JVal**)ret->ptr)[1] = jval_clone(rhs, JLocHeapLocal);
+        return ret;
+    }
+    else if ( ((lhs->rank == 0 && rhs->rank == 1) || (lhs->rank == 1 && rhs->rank == 0))
+            && lhs->typaram == rhs->typaram) {
+
+        int sum_length = 1 + (lhs->rank == 0 ? jarray_length(rhs) : jarray_length(lhs));
+        ret = jval_heapalloc_array_dim_n(1, &sum_length);
+        ret->typaram = lhs->typaram;
+
+        // Place the scalar first.
+        int scalar_i = (lhs->rank == 0) ? 0 : sum_length - 1;
+        struct JVal* scalar = (lhs->rank == 0) ? lhs : rhs;
+        ((struct JVal**)ret->ptr)[scalar_i] = jval_clone(scalar, JLocHeapLocal);
+
+        // Place remaining items from array.
+        int offset = (lhs->rank == 0) ? 1 : 0;
+        struct JVal* array = (lhs->rank == 0) ? rhs : lhs;
+        for (int i = 0; i < array->shape[0]; i++) {
+            ((struct JVal**)ret->ptr)[i+offset] = jval_clone(
+                ((struct JVal**)array->ptr)[i], JLocHeapLocal);
+        }
+
+        return ret;
+    }
+    else if (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType
+            && lhs->rank == 1 && rhs->rank == 1
+            && lhs->typaram == rhs->typaram) {
+        int sum_length = jarray_length(lhs) + jarray_length(rhs);
+        ret = jval_heapalloc_array_dim_n(1, &sum_length);
+        ret->typaram = lhs->typaram;
+
+        for (int i = 0; i < lhs->shape[0]; i++) {
+            ((struct JVal**)ret->ptr)[i] = jval_clone(
+                ((struct JVal**)lhs->ptr)[i], JLocHeapLocal);
+        }
+
+        for (int i = 0; i < rhs->shape[0]; i++) {
+            ((struct JVal**)ret->ptr)[i+lhs->shape[0]] = jval_clone(
+                ((struct JVal**)rhs->ptr)[i], JLocHeapLocal);
+        }
+
+        return ret;
+    } else {
+        printf("ERROR: jdyad_internal_append_verb: unsupported args, got lhs (type:%d,typaram:%d), rhs (type:%d,typaram:%d).\n",
+            lhs->type, lhs->typaram, rhs->type, rhs->typaram);
         exit(EXIT_FAILURE);
     }
-
-    int sum_length = jarray_length(lhs) + jarray_length(rhs);
-    struct JVal* ret = jval_heapalloc_array_dim_n(1, &sum_length);
-    ret->typaram = JString;
-    int length = jarray_length(ret);
-
-    for (int i = 0; i < lhs->shape[0]; i++) {
-        ((struct JVal**)ret->ptr)[i] = jval_clone(
-            ((struct JVal**)lhs->ptr)[i], JLocHeapLocal);
-    }
-
-    for (int i = 0; i < rhs->shape[0]; i++) {
-        ((struct JVal**)ret->ptr)[i+lhs->shape[0]] = jval_clone(
-            ((struct JVal**)rhs->ptr)[i], JLocHeapLocal);
-    }
-
-    return ret;
 }
 
 struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
