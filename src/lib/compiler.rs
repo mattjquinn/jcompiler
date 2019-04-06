@@ -1,14 +1,14 @@
 use itertools::Itertools;
-use std::collections::HashMap;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 use llvm_sys::target::*;
 use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
 use llvm_sys::{LLVMBuilder, LLVMModule};
+use std::collections::HashMap;
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_uint, c_ulonglong, c_double};
+use std::os::raw::{c_double, c_uint, c_ulonglong};
 use std::ptr::null_mut;
 use std::str;
 
@@ -28,7 +28,6 @@ pub fn compile_to_module(
 
     unsafe {
         for astnode in ast {
-
             // Each top-level statement gets its own function,
             // as each statement gets its own stack frame.
             let (stmt_fn, stmt_bb) = add_stmt_fn(&mut module);
@@ -38,7 +37,7 @@ pub fn compile_to_module(
                     let c_expr = compile_expr(expr, &mut module, stmt_bb);
                     match expr.as_ref() {
                         // Top level global assignments aren't printed to console...
-                        parser::AstNode::IsGlobal {ident: _, expr: _} => (),
+                        parser::AstNode::IsGlobal { ident: _, expr: _ } => (),
                         // ... all other statements are:
                         _ => {
                             let mut args = vec![c_expr.ptr, int1(1)];
@@ -104,7 +103,7 @@ enum JValTypeParam {
 #[derive(Clone)]
 enum JValLocation {
     Stack = 1,
-//    HeapLocal = 2,
+    //    HeapLocal = 2,
     HeapGlobal = 3,
 }
 
@@ -114,7 +113,7 @@ struct JValPtr {
     // static info recorded in this struct could be useful.
     //static_type : Option<JValType>,   // the type (if known at compile time)
     //static_len: Option<u64>,          // the length (if known at compile time)
-    ptr: LLVMValueRef,                // pointer to a JVal struct
+    ptr: LLVMValueRef, // pointer to a JVal struct
 }
 
 fn alloc_jval(
@@ -124,8 +123,8 @@ fn alloc_jval(
     val_type: JValType,
     val_type_param: JValTypeParam,
     val_loc: JValLocation,
-    val_shape: Vec<u64>) -> JValPtr {
-
+    val_shape: Vec<u64>,
+) -> JValPtr {
     let builder = Builder::new();
     builder.position_at_end(bb);
 
@@ -134,7 +133,7 @@ fn alloc_jval(
         let jval_ptr = LLVMBuildAlloca(
             builder.builder,
             module.jval_struct_type,
-            module.new_string_ptr("jval")
+            module.new_string_ptr("jval"),
         );
 
         // Indicate the type.
@@ -186,7 +185,7 @@ fn alloc_jval(
             builder.builder,
             int32_type(),
             int64(val_shape.len() as u64),
-            module.new_string_ptr("shape_arr")
+            module.new_string_ptr("shape_arr"),
         );
         // ...now fill that array with provided shape dimensions...
         for (idx, dim) in val_shape.iter().cloned().enumerate() {
@@ -221,42 +220,33 @@ fn alloc_jval(
             module.new_string_ptr("jval_ptr_gep"),
         );
         let ptr_gep = match val_type {
-            JValType::Integer =>
-                LLVMBuildPointerCast(
-                    builder.builder,
-                    ptr_gep,
-                    int32_ptr_ptr_type(),
-                    module.new_string_ptr("jval_ptr_cast")
-                )
-            ,
-            JValType::DoublePrecisionFloat =>
-                LLVMBuildPointerCast(
-                    builder.builder,
-                    ptr_gep,
-                    f64_ptr_ptr_type(),
-                    module.new_string_ptr("jval_ptr_cast")
-                )
-            ,
-            JValType::Character =>
-                LLVMBuildPointerCast(
-                    builder.builder,
-                    ptr_gep,
-                    int8_ptr_ptr_type(),
-                    module.new_string_ptr("jval_ptr_cast")
-                )
-            , _ => ptr_gep
+            JValType::Integer => LLVMBuildPointerCast(
+                builder.builder,
+                ptr_gep,
+                int32_ptr_ptr_type(),
+                module.new_string_ptr("jval_ptr_cast"),
+            ),
+            JValType::DoublePrecisionFloat => LLVMBuildPointerCast(
+                builder.builder,
+                ptr_gep,
+                f64_ptr_ptr_type(),
+                module.new_string_ptr("jval_ptr_cast"),
+            ),
+            JValType::Character => LLVMBuildPointerCast(
+                builder.builder,
+                ptr_gep,
+                int8_ptr_ptr_type(),
+                module.new_string_ptr("jval_ptr_cast"),
+            ),
+            _ => ptr_gep,
         };
         LLVMBuildStore(builder.builder, val, ptr_gep);
 
-        JValPtr { ptr : jval_ptr }
+        JValPtr { ptr: jval_ptr }
     }
 }
 
-fn compile_expr(
-    expr: &parser::AstNode,
-    module: &mut Module,
-    bb: LLVMBasicBlockRef,
-) -> JValPtr {
+fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockRef) -> JValPtr {
     let builder = Builder::new();
     builder.position_at_end(bb);
     match *expr {
@@ -266,67 +256,96 @@ fn compile_expr(
                 let num = LLVMBuildAlloca(
                     builder.builder,
                     int32_type(),
-                    module.new_string_ptr("int_alloc")
+                    module.new_string_ptr("int_alloc"),
                 );
                 LLVMBuildStore(builder.builder, int32(n as u64), num);
 
                 // Point to the number via a JVal struct.
                 let ty = JValType::Integer;
-                alloc_jval(module, bb, num, ty.clone(), JValTypeParam::Numeric, JValLocation::Stack, vec![])
+                alloc_jval(
+                    module,
+                    bb,
+                    num,
+                    ty.clone(),
+                    JValTypeParam::Numeric,
+                    JValLocation::Stack,
+                    vec![],
+                )
             }
-        },
+        }
         parser::AstNode::DoublePrecisionFloat(n) => {
             unsafe {
                 // Allocate space for the number.
                 let num = LLVMBuildAlloca(
                     builder.builder,
                     f64_type(),
-                    module.new_string_ptr("dblfp_alloc")
+                    module.new_string_ptr("dblfp_alloc"),
                 );
                 LLVMBuildStore(builder.builder, f64(n), num);
 
                 // Point to the number via a JVal struct.
-                alloc_jval(module, bb, num, JValType::DoublePrecisionFloat, JValTypeParam::Numeric, JValLocation::Stack, vec![])
+                alloc_jval(
+                    module,
+                    bb,
+                    num,
+                    JValType::DoublePrecisionFloat,
+                    JValTypeParam::Numeric,
+                    JValLocation::Stack,
+                    vec![],
+                )
             }
-        },
+        }
         parser::AstNode::Str(ref str) => {
             unsafe {
-
                 if str.len() == 1 {
                     // Single characters are scalars, not stored in an array.
                     // Allocate space for the character.
                     let char_alloc = LLVMBuildAlloca(
                         builder.builder,
                         int8_type(),
-                        module.new_string_ptr("char_alloc")
+                        module.new_string_ptr("char_alloc"),
                     );
                     LLVMBuildStore(builder.builder, int8(str.as_bytes()[0] as u64), char_alloc);
                     // Point to the number via a JVal struct.
-                    alloc_jval(module, bb, char_alloc, JValType::Character, JValTypeParam::String, JValLocation::Stack, vec![])
-
+                    alloc_jval(
+                        module,
+                        bb,
+                        char_alloc,
+                        JValType::Character,
+                        JValTypeParam::String,
+                        JValLocation::Stack,
+                        vec![],
+                    )
                 } else {
                     // Allocate an array to hold the string's characters.
                     let arr = LLVMBuildArrayAlloca(
                         builder.builder,
                         module.jval_ptr_type,
                         int64(str.as_bytes().len() as u64),
-                        module.new_string_ptr("string_arr")
+                        module.new_string_ptr("string_arr"),
                     );
 
                     // Load each character into the string array.
                     let mut idx = 0;
                     for byte in str.as_bytes() {
-
                         // Allocate space for the character.
                         let char_alloc = LLVMBuildAlloca(
                             builder.builder,
                             int8_type(),
-                            module.new_string_ptr("char_alloc")
+                            module.new_string_ptr("char_alloc"),
                         );
                         LLVMBuildStore(builder.builder, int8(*byte as u64), char_alloc);
 
                         // Point to the character via a JVal struct.
-                        let char_jval = alloc_jval(module, bb, char_alloc, JValType::Character, JValTypeParam::String, JValLocation::Stack, vec![]);
+                        let char_jval = alloc_jval(
+                            module,
+                            bb,
+                            char_alloc,
+                            JValType::Character,
+                            JValTypeParam::String,
+                            JValLocation::Stack,
+                            vec![],
+                        );
 
                         // Store the JVal char at the appropriate offset in the array.
                         let mut char_offset = vec![int32(idx)];
@@ -341,12 +360,19 @@ fn compile_expr(
                         idx += 1;
                     }
                     // Point to the string via a JVal struct.
-                    alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValTypeParam::String, JValLocation::Stack, vec![str.len() as u64])
+                    alloc_jval(
+                        module,
+                        bb,
+                        arr,
+                        JValType::NDimensionalArray,
+                        JValTypeParam::String,
+                        JValLocation::Stack,
+                        vec![str.len() as u64],
+                    )
                 }
             }
         }
         parser::AstNode::Terms(ref terms) => {
-
             // Ensure we have two or more terms to assemble into an array.
             // Zero terms should be syntactically impossible;
             // single terms should be unwrapped by the parser.
@@ -364,7 +390,7 @@ fn compile_expr(
                     builder.builder,
                     module.jval_ptr_type,
                     int64(compiled_terms.len() as u64),
-                    module.new_string_ptr("terms_arr")
+                    module.new_string_ptr("terms_arr"),
                 );
 
                 // Load pointers to each JVal into the array.
@@ -381,24 +407,36 @@ fn compile_expr(
                 }
 
                 // Point to the array via a JVal struct.
-                alloc_jval(module, bb, arr, JValType::NDimensionalArray, JValTypeParam::Numeric, JValLocation::Stack, vec![compiled_terms.len() as u64])
+                alloc_jval(
+                    module,
+                    bb,
+                    arr,
+                    JValType::NDimensionalArray,
+                    JValTypeParam::Numeric,
+                    JValLocation::Stack,
+                    vec![compiled_terms.len() as u64],
+                )
             }
-        },
-        parser::AstNode::MonadicOp {ref verb, ref expr} => {
+        }
+        parser::AstNode::MonadicOp { ref verb, ref expr } => {
             let expr = compile_expr(expr, module, bb);
             unsafe {
                 let mut args = vec![int8(verb.clone() as u64), expr.ptr];
-                let monad_op_arr = add_function_call(module, bb, "jmonad", &mut args[..], "monad_op_arr");
+                let monad_op_arr =
+                    add_function_call(module, bb, "jmonad", &mut args[..], "monad_op_arr");
 
                 // Drop the operand.
                 let mut args = vec![expr.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { ptr : monad_op_arr }
+                JValPtr { ptr: monad_op_arr }
             }
-        },
-        parser::AstNode::DyadicOp {ref verb, ref lhs, ref rhs} => {
-
+        }
+        parser::AstNode::DyadicOp {
+            ref verb,
+            ref lhs,
+            ref rhs,
+        } => {
             let mut rhs = compile_expr(rhs, module, bb);
             let mut lhs = compile_expr(lhs, module, bb);
 
@@ -407,8 +445,8 @@ fn compile_expr(
             // optimize by performing additions without function call overhead.
             unsafe {
                 let mut args = vec![int8(verb.clone() as u64), lhs.ptr, rhs.ptr];
-                let dyad_op_arr = add_function_call(
-                    module, bb, "jdyad", &mut args[..], "dyad_op_arr");
+                let dyad_op_arr =
+                    add_function_call(module, bb, "jdyad", &mut args[..], "dyad_op_arr");
 
                 // Drop the operands.
                 let mut args = vec![lhs.ptr, int1(0)];
@@ -416,11 +454,10 @@ fn compile_expr(
                 let mut args = vec![rhs.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { ptr : dyad_op_arr }
+                JValPtr { ptr: dyad_op_arr }
             }
-        },
-        parser::AstNode::Reduce{ ref verb, ref expr } => {
-
+        }
+        parser::AstNode::Reduce { ref verb, ref expr } => {
             let mut expr = compile_expr(expr, module, bb);
 
             // Pass args to dynamic library function; types/lengths will be resolved there.
@@ -428,17 +465,20 @@ fn compile_expr(
             // optimize by performing additions without function call overhead.
             unsafe {
                 let mut args = vec![int8(verb.clone() as u64), expr.ptr];
-                let reduced_arr = add_function_call(
-                    module, bb, "jreduce", &mut args[..], "reduced_arr");
+                let reduced_arr =
+                    add_function_call(module, bb, "jreduce", &mut args[..], "reduced_arr");
 
                 // Drop the operand.
                 let mut args = vec![expr.ptr, int1(0)];
                 add_function_call(module, bb, "jval_drop", &mut args[..], "");
 
-                JValPtr { ptr : reduced_arr }
+                JValPtr { ptr: reduced_arr }
             }
-        },
-        parser::AstNode::IsGlobal{ ref ident, ref expr } => {
+        }
+        parser::AstNode::IsGlobal {
+            ref ident,
+            ref expr,
+        } => {
             let mut expr = compile_expr(expr, module, bb);
 
             // IMPORTANT: For an assignment sequence such as:
@@ -450,7 +490,8 @@ fn compile_expr(
 
             // Clone the JVal into the global heap space.
             let mut args = vec![expr.ptr, int64(JValLocation::HeapGlobal as u64)];
-            let global_clone = unsafe { add_function_call(module, bb, "jval_clone", &mut args[..], "") };
+            let global_clone =
+                unsafe { add_function_call(module, bb, "jval_clone", &mut args[..], "") };
 
             // Drop the underlying expression
             unsafe {
@@ -470,17 +511,23 @@ fn compile_expr(
                 add_function_call(module, bb, "jglobal_set_reference", &mut args[..], "");
             }
 
-            let global = JValPtr { ptr : global_clone };
+            let global = JValPtr { ptr: global_clone };
             global
-        },
+        }
         parser::AstNode::Ident(ref ident) => {
             let global_id = module.get_or_assign_id_to_global_ident(ident);
             unsafe {
                 let mut args = vec![int32(global_id as u64)];
-                let global_ref = add_function_call(module, bb, "jglobal_get_reference", &mut args[..], "global_ref");
-                JValPtr { ptr : global_ref}
+                let global_ref = add_function_call(
+                    module,
+                    bb,
+                    "jglobal_get_reference",
+                    &mut args[..],
+                    "global_ref",
+                );
+                JValPtr { ptr: global_ref }
             }
-        },
+        }
         _ => unimplemented!("Not ready to compile expr: {:?}", expr),
     }
 }
@@ -530,10 +577,11 @@ impl Module {
 
     fn get_or_assign_id_to_global_ident(&mut self, ident: &str) -> u32 {
         let current_len = self.global_scope_idents.len() as u32;
-        *self.global_scope_idents.entry(String::from(ident))
+        *self
+            .global_scope_idents
+            .entry(String::from(ident))
             .or_insert(current_len)
     }
-
 }
 
 impl Drop for Module {
@@ -651,7 +699,6 @@ fn add_function(
     }
 }
 
-
 fn add_c_declarations(module: &mut Module) {
     let void;
     unsafe {
@@ -659,22 +706,49 @@ fn add_c_declarations(module: &mut Module) {
     }
 
     let jval_ptr_type = module.jval_ptr_type.clone();
-    let jval_ptr_ptr_type = unsafe { LLVMPointerType(
-        module.jval_ptr_type.clone(),
-        0
-    )};
+    let jval_ptr_ptr_type = unsafe { LLVMPointerType(module.jval_ptr_type.clone(), 0) };
 
-    add_function(module, "jprint", & mut [jval_ptr_type, int1_type()], void);
-    add_function(module, "jmonad", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
-    add_function(module, "jdyad", & mut [int8_type(), jval_ptr_type, jval_ptr_type], jval_ptr_type);
-    add_function(module, "jreduce", & mut [int8_type(), jval_ptr_type], jval_ptr_type);
-    add_function(module, "jval_drop", & mut [jval_ptr_type, int1_type()], void);
-    add_function(module, "jval_clone", & mut [jval_ptr_type, int8_type()], jval_ptr_type);
-    add_function(module, "jmemory_check", & mut [int1_type()], void);
+    add_function(module, "jprint", &mut [jval_ptr_type, int1_type()], void);
+    add_function(
+        module,
+        "jmonad",
+        &mut [int8_type(), jval_ptr_type],
+        jval_ptr_type,
+    );
+    add_function(
+        module,
+        "jdyad",
+        &mut [int8_type(), jval_ptr_type, jval_ptr_type],
+        jval_ptr_type,
+    );
+    add_function(
+        module,
+        "jreduce",
+        &mut [int8_type(), jval_ptr_type],
+        jval_ptr_type,
+    );
+    add_function(module, "jval_drop", &mut [jval_ptr_type, int1_type()], void);
+    add_function(
+        module,
+        "jval_clone",
+        &mut [jval_ptr_type, int8_type()],
+        jval_ptr_type,
+    );
+    add_function(module, "jmemory_check", &mut [int1_type()], void);
 
-    add_function(module, "jglobal_set_reference", & mut [int32_type(), jval_ptr_ptr_type], void);
-    add_function(module, "jglobal_get_reference", & mut [int32_type()], jval_ptr_type);
-    add_function(module, "jglobals_dropall", & mut [], void);
+    add_function(
+        module,
+        "jglobal_set_reference",
+        &mut [int32_type(), jval_ptr_ptr_type],
+        void,
+    );
+    add_function(
+        module,
+        "jglobal_get_reference",
+        &mut [int32_type()],
+        jval_ptr_type,
+    );
+    add_function(module, "jglobals_dropall", &mut [], void);
 }
 
 unsafe fn add_function_call(
@@ -699,7 +773,6 @@ unsafe fn add_function_call(
 }
 
 fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
-
     let mut strings = Vec::new();
 
     let c_module_name = CString::new(module_name).unwrap();
@@ -714,28 +787,25 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
         let llvm_module = LLVMModuleCreateWithName(module_name_char_ptr);
 
         let global_ctx = LLVMGetGlobalContext();
-        let jval_struct_type = LLVMStructCreateNamed(
-            global_ctx,
-            jval_struct_name_char_ptr,
-        );
+        let jval_struct_type = LLVMStructCreateNamed(global_ctx, jval_struct_name_char_ptr);
 
         let jval_ptr_type = LLVMPointerType(jval_struct_type, 0);
 
         // IMPORTANT: Be sure this matches up with the corresponding definition
         // in jverbs.c.
         let mut members = vec![
-            int8_type(),        // the value's type
-            int8_type(),        // the value's type parameters
-            int8_type(),        // the value's location
-            int32_type(),       // the value's rank (number of dimensions)
-            void_ptr_type(),    // a pointer to the value
-            jval_ptr_type,      // the value's shape (list of dimensions)
+            int8_type(),     // the value's type
+            int8_type(),     // the value's type parameters
+            int8_type(),     // the value's location
+            int32_type(),    // the value's rank (number of dimensions)
+            void_ptr_type(), // a pointer to the value
+            jval_ptr_type,   // the value's shape (list of dimensions)
         ];
         LLVMStructSetBody(
             jval_struct_type,
             members.as_mut_ptr(),
             members.len() as u32,
-            0
+            0,
         );
 
         let heap_counter_names = vec![
@@ -756,7 +826,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             let counter = LLVMAddGlobal(
                 llvm_module,
                 int32_type(),
-                cstr_name.to_bytes_with_nul().as_ptr() as * const _
+                cstr_name.to_bytes_with_nul().as_ptr() as *const _,
             );
             LLVMSetInitializer(counter, int32(0));
             strings.push(cstr_name);
@@ -767,7 +837,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             strings,
             global_scope_idents: HashMap::new(),
             jval_struct_type,
-            jval_ptr_type : jval_ptr_type,
+            jval_ptr_type: jval_ptr_type,
         }
     };
 

@@ -39,15 +39,15 @@ void jprint_recur_dimensions(struct JVal* arr,
     struct JVal** jvals;
     int num_dim_at_idx = arr->shape[dim_idx];
 
-    // Last dimension is a single "row" of numbers; i.e., "3" in "4 2 3"
+    // Last dimension represents a single "row"; i.e., "3" in "4 2 3"
     if (dim_idx == arr->rank - 1) {
       jvals = arr->ptr;
       for (int i = window_start; i < window_end; i++) {
-        if (arr->rank > 1) {
-            // Two-dimensional arrays and above have padded column widths
+        if (arr->typaram == JNumeric && arr->rank >= 2) {
+            // Two-dimensional and above numeric arrays have padded column widths
             jprint_padded(jvals[i], ndim_col_widths[i % num_dim_at_idx]);
         } else {
-            // One-dimensional arrays have only single spaces between columns.
+            // One-dimensional arrays are padded/not padded as usual.
             jprint(jvals[i], false);
         }
         // Numeric arrays have spaces between each column; strings don't.
@@ -101,9 +101,9 @@ void jprint(struct JVal* val, bool newline) {
 
       length = jarray_length(val);
 
-      // Arrays of dimension two or higher must have their cells padded
+      // Numeric arrays of dimension two or higher must have their cells padded
       // to a fixed width defined by the widest value in their column.
-      if (val->rank >= 2) {
+      if (val->typaram == JNumeric && val->rank >= 2) {
         dimint = val->shape[val->rank - 1];
         ndim_col_widths = heapalloc_ndim_col_widths_arr(dimint);
 
@@ -117,7 +117,7 @@ void jprint(struct JVal* val, bool newline) {
                    else            { width = snprintf(NULL, 0, "%d", *iptr); }
                    break;
                 default:
-                    printf("jprint: unexpected type for width detection: %d", elem->type);
+                    printf("jprint: unexpected type for width detection: %d\n", elem->type);
                     exit(EXIT_FAILURE);
             }
 
@@ -130,7 +130,7 @@ void jprint(struct JVal* val, bool newline) {
       jprint_recur_dimensions(val, 0, 0, length, ndim_col_widths);
 
       // Free the column width array.
-      if (val->rank >= 2) {
+      if (val->typaram == JNumeric && val->rank >= 2) {
         dimint = val->shape[val->rank - 1];
         heapfree_ndim_col_widths_arr(ndim_col_widths, dimint);
       }
@@ -440,6 +440,10 @@ struct JVal* jdyad_internal_shape_verb(struct JVal* lhs, struct JVal* rhs) {
                 lhs->type);
             exit(EXIT_FAILURE);
     }
+
+    // The resultant array inherits the type of the values passed in on
+    // the right.
+    ret->typaram = rhs->typaram;
 
     dst_length = jarray_length(ret);
 

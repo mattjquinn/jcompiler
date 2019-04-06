@@ -1,6 +1,7 @@
 #![warn(trivial_numeric_casts)]
 
 extern crate ansi_term;
+extern crate ascii;
 extern crate getopts;
 extern crate itertools;
 extern crate llvm_sys;
@@ -10,7 +11,6 @@ extern crate quickcheck;
 extern crate rand;
 extern crate regex;
 extern crate tempfile;
-extern crate ascii;
 
 #[macro_use]
 extern crate pest_derive;
@@ -50,13 +50,15 @@ fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
     }
 }
 
-pub fn compile(path: &str,
-               target_triple : Option<String>,
-               llvm_optimization_level : u8,
-               do_strip_executable : bool,
-               do_report_mem_usage : bool,
-               do_verbose: bool,
-               output_path : Option<String>) -> Result<(), String> {
+pub fn compile(
+    path: &str,
+    target_triple: Option<String>,
+    llvm_optimization_level: u8,
+    do_strip_executable: bool,
+    do_report_mem_usage: bool,
+    do_verbose: bool,
+    output_path: Option<String>,
+) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
     let ast = match parser::parse(&jsrc[..]) {
@@ -72,18 +74,18 @@ pub fn compile(path: &str,
         }
     }
 
-    let mut llvm_module = compiler::compile_to_module(
-        path,
-        target_triple.clone(),
-        do_report_mem_usage,
-        &ast);
+    let mut llvm_module =
+        compiler::compile_to_module(path, target_triple.clone(), do_report_mem_usage, &ast);
 
     compiler::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
     let llvm_ir_cstr = llvm_module.to_cstring();
     let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
 
     if do_verbose {
-        println!("LLVM IR optimized at level {}:\n{}", llvm_optimization_level, llvm_ir);
+        println!(
+            "LLVM IR optimized at level {}:\n{}",
+            llvm_optimization_level, llvm_ir
+        );
     }
 
     // Compile the LLVM IR to a temporary object file.
@@ -140,8 +142,14 @@ fn link_object_file(
             "-lm",
         ]
     } else {
-        vec![object_file_path, "c_defns/jverbs.c", "c_defns/jmemory.c",
-             "-o", &executable_path[..], "-lm"]
+        vec![
+            object_file_path,
+            "c_defns/jverbs.c",
+            "c_defns/jmemory.c",
+            "-o",
+            &executable_path[..],
+            "-lm",
+        ]
     };
 
     shell::run_shell_command("clang-7", &clang_args[..])

@@ -11,3 +11,8 @@ x =: 1 2 3
 x , 0
 0 , 0
 x , x
+T1 =: 2 3 $ 'catdog'
+T1
+T2 =: 2 3 $ 'ratpig'
+T2
+NB. T1, T2

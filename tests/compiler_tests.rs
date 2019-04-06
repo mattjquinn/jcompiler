@@ -1,21 +1,30 @@
 /// Integration tests for the entire compiler.
-
 extern crate jcompilerlib;
 extern crate tempfile;
 
+use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
-use std::process::Command;
 
-fn compile(test_jfile : &str) -> (String, String) {
-
+fn compile(test_jfile: &str) -> (String, String) {
     // First compile *without* optimizations/stripping.
-    let unopt_compile_to_path = String::from(NamedTempFile::new().unwrap().path()
-        .to_str().expect("valid tempfile path"));
-    jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
-                          None, 0, false,
-                          false, false, Some(unopt_compile_to_path.clone()))
-        .expect("unoptimized compilation failed");
+    let unopt_compile_to_path = String::from(
+        NamedTempFile::new()
+            .unwrap()
+            .path()
+            .to_str()
+            .expect("valid tempfile path"),
+    );
+    jcompilerlib::compile(
+        &format!("jlang_programs/{}", test_jfile)[..],
+        None,
+        0,
+        false,
+        false,
+        false,
+        Some(unopt_compile_to_path.clone()),
+    )
+    .expect("unoptimized compilation failed");
     let unopt_output = Command::new(unopt_compile_to_path)
         .output()
         .expect("failed to execute unoptimized binary");
@@ -23,12 +32,23 @@ fn compile(test_jfile : &str) -> (String, String) {
     let unopt_stderr = str::from_utf8(&unopt_output.stderr).unwrap().to_owned();
 
     // Then compile *with* optimizations/stripping.
-    let opt_compile_to_path = String::from(NamedTempFile::new().unwrap().path()
-        .to_str().expect("valid tempfile path"));
-    jcompilerlib::compile(&format!("jlang_programs/{}", test_jfile)[..],
-                          None, 3, true,
-                          false, false, Some(opt_compile_to_path.clone()))
-        .expect("optimized/stripped compilation failed");
+    let opt_compile_to_path = String::from(
+        NamedTempFile::new()
+            .unwrap()
+            .path()
+            .to_str()
+            .expect("valid tempfile path"),
+    );
+    jcompilerlib::compile(
+        &format!("jlang_programs/{}", test_jfile)[..],
+        None,
+        3,
+        true,
+        false,
+        false,
+        Some(opt_compile_to_path.clone()),
+    )
+    .expect("optimized/stripped compilation failed");
     let opt_output = Command::new(opt_compile_to_path)
         .output()
         .expect("failed to execute optimized/stripped binary");
@@ -53,7 +73,10 @@ fn ctest_number_expr() {
 #[test]
 fn ctest_list_expr() {
     let (stdout, stderr) = compile("ctest_list_expr.ijs");
-    assert_eq!("2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n", &stdout[..]);
+    assert_eq!(
+        "2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -123,7 +146,10 @@ fn ctest_products_lists() {
 #[test]
 fn ctest_mixed_adds_mults() {
     let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
-    assert_eq!("170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n", &stdout[..]);
+    assert_eq!(
+        "170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -144,28 +170,40 @@ fn ctest_subtractions_lists_positives() {
 #[test]
 fn ctest_monadic_negate() {
     let (stdout, stderr) = compile("ctest_monadic_negate.ijs");
-    assert_eq!("_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n2\n2\n2\n", &stdout[..]);
+    assert_eq!(
+        "_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n2\n2\n2\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_additions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_additions_lists_mixedlens_legal.ijs");
-    assert_eq!("11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!(
+        "11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_subtractions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_subtractions_lists_mixedlens_legal.ijs");
-    assert_eq!("_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!(
+        "_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_products_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_products_lists_mixedlens_legal.ijs");
-    assert_eq!("40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n", &stdout[..]);
+    assert_eq!(
+        "40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -179,7 +217,10 @@ fn ctest_insertions_plus() {
 #[test]
 fn ctest_insertions_times() {
     let (stdout, stderr) = compile("ctest_insertions_times.ijs");
-    assert_eq!("0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n", &stdout[..]);
+    assert_eq!(
+        "0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -193,7 +234,10 @@ fn ctest_insertions_minus() {
 #[test]
 fn ctest_lessthan() {
     let (stdout, stderr) = compile("ctest_lessthan.ijs");
-    assert_eq!("0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
+    assert_eq!(
+        "0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -207,7 +251,10 @@ fn ctest_equal() {
 #[test]
 fn ctest_largerthan() {
     let (stdout, stderr) = compile("ctest_largerthan.ijs");
-    assert_eq!("1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n", &stdout[..]);
+    assert_eq!(
+        "1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -221,14 +268,20 @@ fn ctest_is_verb_globalassgmts() {
 #[test]
 fn ctest_global_assgmts_refs() {
     let (stdout, stderr) = compile("ctest_global_assgmts_refs.ijs");
-    assert_eq!("99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n7.5\n1 2 3 4 5\n", &stdout[..]);
+    assert_eq!(
+        "99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n7.5\n1 2 3 4 5\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_global_refs_mixedverbs() {
     let (stdout, stderr) = compile("ctest_global_refs_mixedverbs.ijs");
-    assert_eq!("1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n6 5 2 10\n8 7 4 12\n36 25 4 100\n4 5\n5 6\n", &stdout[..]);
+    assert_eq!(
+        "1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n6 5 2 10\n8 7 4 12\n36 25 4 100\n4 5\n5 6\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -291,21 +344,30 @@ fn ctest_dyadic_copy() {
 #[test]
 fn ctest_monadic_ceiling() {
     let (stdout, stderr) = compile("ctest_monadic_ceiling.ijs");
-    assert_eq!("_1 1 2\n_1 _1 _1 _1 _1 0 0 0 3 4 5556\n1 2 3 4 5\n_1 1 3\n", &stdout[..]);
+    assert_eq!(
+        "_1 1 2\n_1 _1 _1 _1 _1 0 0 0 3 4 5556\n1 2 3 4 5\n_1 1 3\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_monadic_largerof() {
     let (stdout, stderr) = compile("ctest_monadic_largerof.ijs");
-    assert_eq!("3 3 5\n3\n3 3 3 3 4 5 6\n0 _1 _2 _3 _3 _3 _3\n", &stdout[..]);
+    assert_eq!(
+        "3 3 5\n3\n3 3 3 3 4 5 6\n0 _1 _2 _3 _3 _3 _3\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
 fn ctest_monadic_largerorequal() {
     let (stdout, stderr) = compile("ctest_monadic_largerorequal.ijs");
-    assert_eq!("1 1 0\n1 1 1 0 0\n1\n1 1 1 1 1\n1 1 1 0 0\n1 1 0 0 0\n", &stdout[..]);
+    assert_eq!(
+        "1 1 0\n1 1 1 0 0\n1\n1 1 1 1 1\n1 1 1 0 0\n1 1 0 0 0\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -350,7 +412,10 @@ fn ctest_dyadic_shape() {
 #[test]
 fn ctest_monadic_shapeof() {
     let (stdout, stderr) = compile("ctest_monadic_shapeof.ijs");
-    assert_eq!("\n0\n3\n4\n1\n2 4\n2\n5 4 2\n3\n9 3 4 1\n4\n1 10 14 8 9\n5\n1 10 1 8 1\n5\n", &stdout[..]);
+    assert_eq!(
+        "\n0\n3\n4\n1\n2 4\n2\n5 4 2\n3\n9 3 4 1\n4\n1 10 14 8 9\n5\n1 10 1 8 1\n5\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
 
@@ -373,4 +438,3 @@ fn ctest_dyadic_append() {
     assert_eq!("0 0\n_1.4 0\n_3 _8.9\n0 1 2 3 4 5\n0 1 2 3 4 5\n0 1 2 3 4 5\n_1 2 3 4 5 8 10 11 12 13 14 15\n500\n1010\n100 100 100 100 100 100 100 100 100 100\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
-

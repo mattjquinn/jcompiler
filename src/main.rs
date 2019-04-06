@@ -11,7 +11,7 @@ extern crate rand;
 extern crate regex;
 extern crate tempfile;
 
-use getopts::{Options};
+use getopts::Options;
 use jcompilerlib::compiler;
 use std::env;
 
@@ -25,7 +25,12 @@ fn main() {
     opts.optflag("", "verbose", "print AST, IR, etc.");
     opts.optflag("m", "mem-usage", "binary will print memory usage");
     opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LVL");
-    opts.optopt("", "strip", "strip symbols from the binary (default: yes)", "yes|no");
+    opts.optopt(
+        "",
+        "strip",
+        "strip symbols from the binary (default: yes)",
+        "yes|no",
+    );
 
     let default_triple_cstring = compiler::get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
@@ -60,39 +65,41 @@ fn main() {
         std::process::exit(1);
     }
 
-    let llvm_opt_level : u8 = match matches.opt_str("llvm-opt") {
-        Some(lvlstr) =>
-            match lvlstr.parse::<u8>() {
-                Ok(n) if n <= 3 => n,
-                _ => {
-                    println!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr);
-                    return;
-                }
-        }
+    let llvm_opt_level: u8 = match matches.opt_str("llvm-opt") {
+        Some(lvlstr) => match lvlstr.parse::<u8>() {
+            Ok(n) if n <= 3 => n,
+            _ => {
+                println!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr);
+                return;
+            }
+        },
         _ => 0,
     };
 
     let do_strip = match matches.opt_str("strip") {
-        Some(ans) => {
-            match &ans[..] {
-                "yes" => true,
-                "no" => false,
-                _ => {
-                    println!("Unrecognized choice \"{}\" for --strip; need \"yes\" or \"no\".", ans);
-                    return;
-                }
+        Some(ans) => match &ans[..] {
+            "yes" => true,
+            "no" => false,
+            _ => {
+                println!(
+                    "Unrecognized choice \"{}\" for --strip; need \"yes\" or \"no\".",
+                    ans
+                );
+                return;
             }
         },
-        _ => true // Strip executables of debugging symbols by default.
+        _ => true, // Strip executables of debugging symbols by default.
     };
 
-    match jcompilerlib::compile(&matches.free[0],
-                                matches.opt_str("target"),
-                                llvm_opt_level,
-                                do_strip,
-                                matches.opt_present("mem-usage"),
-                                matches.opt_present("verbose"),
-                                None) {
+    match jcompilerlib::compile(
+        &matches.free[0],
+        matches.opt_str("target"),
+        llvm_opt_level,
+        do_strip,
+        matches.opt_present("mem-usage"),
+        matches.opt_present("verbose"),
+        None,
+    ) {
         Ok(_) => {}
         Err(e) => {
             eprintln!("{}", e);
