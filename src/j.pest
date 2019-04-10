@@ -27,6 +27,5 @@ string = @{ "'" ~ ( "''" | (!"'" ~ ANY) )* ~ "'" }
 WHITESPACE = _{ " " | "\t" }
 
 // Comments match up to, but not including, the next newline
-// or end of file; the end marker must not be matched here
-// to ensure we can match it in the "program" rule.
-COMMENT = _{ "NB." ~ ( !("\n" | EOI) ~ ANY)* }
+// or end of file
+COMMENT = _{ "NB." ~ ( !"\n" ~ ANY)* }
