@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["compile_to_module",""],["get_default_target_triple",""],["optimise_ir",""],["write_object_file",""]],"struct":[["Module","A struct that keeps ownership of all the strings we've passed to the LLVM API until we destroy the `LLVMModule`."]]});

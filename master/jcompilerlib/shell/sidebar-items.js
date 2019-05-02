@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["run_shell_command","Execute a CLI command as `shell_command`, but ignore stdout."]]});
