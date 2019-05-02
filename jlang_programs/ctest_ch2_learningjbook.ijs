@@ -54,3 +54,32 @@ x =: 2 2 3 $ 0 1 2 3 4 5 6 7 8 9 10 11
 x
 $ x
 # $ x
+title =: 'My Ten Years in a Quandary'
+title
+'What''s new?'
+''
+# ''
+a =: 'rear'
+b =: 'ranged'
+a,b
+x =: 1 2 3
+0 , x
+x , 0
+0 , 0
+x , x
+T1 =: 2 3 $ 'catdog'
+T1
+T2 =: 2 3 $ 'ratpig'
+T2
+T1, T2
+x
+# x
+T1
+$ T1
+# T1
+# 6
+T1
+T2
+T1, T2
++/ 1 2 3
+1 + 2 + 3

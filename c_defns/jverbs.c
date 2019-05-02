@@ -356,6 +356,9 @@ struct JVal* jdyad_internal_append_verb(struct JVal* lhs, struct JVal* rhs) {
     // TODO: This implementation innefficiently copies both arguments to a new array,
     // Consider adding a linked-list representation
     // to JArrayNDimensionalType arrays such that appending is O(1).
+    // TODO: Some of these cases should be merged together; the
+    // tricky part is ensuring that gaps resulting from appending two
+    // structures with different shapes are preserved.
 
     if ( lhs->rank == 0 && rhs->rank == 0 && lhs->typaram == rhs->typaram) {
         int sum_length = 2;
@@ -401,6 +404,39 @@ struct JVal* jdyad_internal_append_verb(struct JVal* lhs, struct JVal* rhs) {
 
         for (int i = 0; i < rhs->shape[0]; i++) {
             ((struct JVal**)ret->ptr)[i+lhs->shape[0]] = jval_clone(
+                ((struct JVal**)rhs->ptr)[i], JLocHeapLocal);
+        }
+
+        return ret;
+    } else if (lhs->type == JArrayNDimensionalType && rhs->type == JArrayNDimensionalType
+            && jinternal_same_rank_and_shape(lhs, rhs)
+            && lhs->typaram == rhs->typaram) {
+
+        int sum_length = jarray_length(lhs) + jarray_length(rhs);
+
+        // The 1st dimension of the appended result will be double
+        // that of the LHS/RHS (since they are the same shape); for example,
+        // appending a table of shape (2, 3) to a table of (2, 3) will
+        // result in a table of (4, 3).
+        // Notice here that we store the double in lhs->shape[0]
+        // temporarily, make the allocation, then after the call, we restore
+        // lhs's shape; this is a hack to prevent having to allocate
+        // a temporary shape array.
+        lhs->shape[0] *= 2;
+        ret = jval_heapalloc_array_dim_n(lhs->rank, lhs->shape);
+        lhs->shape[0] = rhs->shape[0];
+
+        ret->typaram = lhs->typaram;
+
+        int lhs_length = jarray_length(lhs);
+        for (int i = 0; i < lhs_length; i++) {
+            ((struct JVal**)ret->ptr)[i] = jval_clone(
+                ((struct JVal**)lhs->ptr)[i], JLocHeapLocal);
+        }
+
+        int rhs_length = jarray_length(rhs);
+        for (int i = 0; i < rhs_length; i++) {
+            ((struct JVal**)ret->ptr)[lhs_length+i] = jval_clone(
                 ((struct JVal**)rhs->ptr)[i], JLocHeapLocal);
         }
 
