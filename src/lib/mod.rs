@@ -19,7 +19,6 @@ extern crate core;
 pub mod compiler;
 pub mod parser;
 pub mod shell;
-pub mod parser_combinator;
 
 use getopts::Options;
 use std::fs;
@@ -62,73 +61,65 @@ pub fn compile(
 ) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
-    let ast = match parser_combinator::parse(&jsrc[..]) {
-        Ok(astnodes) => astnodes,
+    let ast = match parser::parse(&jsrc[..]) {
+        Ok(instrs) => instrs,
         Err(parse_error) => {
             panic!("{}", parse_error);
         }
     };
-    println!("{:?}", ast);
 
-//    let ast = match parser::parse(&jsrc[..]) {
-//        Ok(instrs) => instrs,
-//        Err(parse_error) => {
-//            panic!("{}", parse_error);
-//        }
-//    };
-//
-//    if do_verbose {
-//        for astnode in &ast {
-//            println!("{:?}", astnode);
-//        }
-//    }
-//
-//    let mut llvm_module =
-//        compiler::compile_to_module(path, target_triple.clone(), do_report_mem_usage, &ast);
-//
-//    compiler::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
-//    let llvm_ir_cstr = llvm_module.to_cstring();
-//    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
-//
-//    if do_verbose {
-//        println!(
-//            "LLVM IR optimized at level {}:\n{}",
-//            llvm_optimization_level, llvm_ir
-//        );
-//    }
-//
-//    // Compile the LLVM IR to a temporary object file.
-//    let object_file = try!(convert_io_error(NamedTempFile::new()));
-//    let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
-//
-//    if do_verbose {
-//        println!("Writing object file to {}", obj_file_path);
-//    }
-//
-//    compiler::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
-//
-//    let output_path = match output_path {
-//        Some(op) => op,
-//        None => executable_name(path),
-//    };
-//
-//    if do_verbose {
-//        println!("Writing executable to {}", output_path);
-//    }
-//
-//    let res = link_object_file(&obj_file_path, &output_path, target_triple);
-//    match res {
-//        Ok(_) => (),
-//        Err(e) => panic!(format!("Linking executable failed: {}", e)),
-//    };
-//
-//    if do_strip_executable {
-//        let strip_args = ["-s", &output_path[..]];
-//        shell::run_shell_command("strip", &strip_args[..]).unwrap();
-//        if do_verbose {
-//            println!("Stripped executable of debug symbols.");
-//        }
-//    }
+    if do_verbose {
+        for astnode in &ast {
+            println!("{:?}", astnode);
+        }
+    }
+
+    let mut llvm_module =
+        compiler::compile_to_module(path, target_triple.clone(), do_report_mem_usage, &ast);
+
+    compiler::optimise_ir(&mut llvm_module, llvm_optimization_level as i64);
+    let llvm_ir_cstr = llvm_module.to_cstring();
+    let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
+
+    if do_verbose {
+        println!(
+            "LLVM IR optimized at level {}:\n{}",
+            llvm_optimization_level, llvm_ir
+        );
+    }
+
+    // Compile the LLVM IR to a temporary object file.
+    let object_file = try!(convert_io_error(NamedTempFile::new()));
+    let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
+
+    if do_verbose {
+        println!("Writing object file to {}", obj_file_path);
+    }
+
+    compiler::write_object_file(&mut llvm_module, &obj_file_path).unwrap();
+
+    let output_path = match output_path {
+        Some(op) => op,
+        None => executable_name(path),
+    };
+
+    if do_verbose {
+        println!("Writing executable to {}", output_path);
+    }
+
+    let res = link_object_file(&obj_file_path, &output_path, target_triple);
+    match res {
+        Ok(_) => (),
+        Err(e) => panic!(format!("Linking executable failed: {}", e)),
+    };
+
+    if do_strip_executable {
+        let strip_args = ["-s", &output_path[..]];
+        shell::run_shell_command("strip", &strip_args[..]).unwrap();
+        if do_verbose {
+            println!("Stripped executable of debug symbols.");
+        }
+    }
 
     Ok(())
 }
@@ -164,12 +155,12 @@ fn link_object_file(
     shell::run_shell_command("clang-7", &clang_args[..])
 }
 
-//#[test]
-//fn executable_name_test() {
-//    assert_eq!(executable_name("test.ijs"), "test");
-//}
-//
-//#[test]
-//fn executable_name_relative_path_test() {
-//    assert_eq!(executable_name("dir/test.ijs"), "test");
-//}
+#[test]
+fn executable_name_test() {
+    assert_eq!(executable_name("test.ijs"), "test");
+}
+
+#[test]
+fn executable_name_relative_path_test() {
+    assert_eq!(executable_name("dir/test.ijs"), "test");
+}
