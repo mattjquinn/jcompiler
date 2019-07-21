@@ -5,6 +5,7 @@ extern crate tempfile;
 use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
+use jcompilerlib::backend::llvm::LLVMBackend;
 
 fn compile(test_jfile: &str) -> (String, String) {
     // First compile *without* optimizations/stripping.
@@ -15,11 +16,14 @@ fn compile(test_jfile: &str) -> (String, String) {
             .to_str()
             .expect("valid tempfile path"),
     );
+    let backend = LLVMBackend {
+        target_triple : None,
+        optimization_level : 0,
+        do_strip_executable : false
+    };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
-        None,
-        0,
-        false,
+        backend,
         false,
         false,
         Some(unopt_compile_to_path.clone()),
@@ -39,11 +43,14 @@ fn compile(test_jfile: &str) -> (String, String) {
             .to_str()
             .expect("valid tempfile path"),
     );
+    let backend = LLVMBackend {
+        target_triple : None,
+        optimization_level : 3,
+        do_strip_executable : true
+    };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
-        None,
-        3,
-        true,
+        backend,
         false,
         false,
         Some(opt_compile_to_path.clone()),

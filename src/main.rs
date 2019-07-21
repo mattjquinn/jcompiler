@@ -12,7 +12,7 @@ extern crate regex;
 extern crate tempfile;
 
 use getopts::Options;
-use jcompilerlib::compiler;
+use jcompilerlib::backend;
 use std::env;
 
 fn main() {
@@ -20,85 +20,57 @@ fn main() {
 
     let mut opts = Options::new();
 
-    opts.optflag("h", "help", "print usage");
-    opts.optflag("v", "version", "print jcompiler version");
-    opts.optflag("", "verbose", "print AST, IR, etc.");
+    // Allow all backends to register their CLI options.
+    backend::register_cli_options(&mut opts);
+
+    // Register CLI options common to all backends.
     opts.optflag("m", "mem-usage", "binary will print memory usage");
-    opts.optopt("", "llvm-opt", "LLVM optimization level (0 to 3)", "LVL");
-    opts.optopt(
-        "",
-        "strip",
-        "strip symbols from the binary (default: yes)",
-        "yes|no",
-    );
+    opts.optflag("v", "version", "print jcompiler version");
+    opts.optflag("V", "verbose", "print AST, IR, etc.");
+    opts.optflag("h", "help", "print usage");
 
-    let default_triple_cstring = compiler::get_default_target_triple();
-    let default_triple = default_triple_cstring.to_str().unwrap();
-
-    opts.optopt(
-        "",
-        "target",
-        &format!("LLVM target triple (default: {})", default_triple),
-        "TARGET",
-    );
-
+    // Parse options; print usage and exit if there's a problem.
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(_) => {
-            jcompilerlib::print_usage(&args[0], opts);
+            print_usage(&args[0], opts);
             std::process::exit(1);
         }
     };
 
+    // Display help information if so requested.
     if matches.opt_present("h") {
-        jcompilerlib::print_usage(&args[0], opts);
+        print_usage(&args[0], opts);
         return;
     }
 
+    // Display version information if so requested.
     if matches.opt_present("v") {
         println!("jcompiler {}", env!("CARGO_PKG_VERSION"));
         return;
     }
 
+    // We expect a single unbound argument: the J file to be compiled.
     if matches.free.len() != 1 {
-        jcompilerlib::print_usage(&args[0], opts);
+        print_usage(&args[0], opts);
         std::process::exit(1);
     }
 
-    let llvm_opt_level: u8 = match matches.opt_str("llvm-opt") {
-        Some(lvlstr) => match lvlstr.parse::<u8>() {
-            Ok(n) if n <= 3 => n,
-            _ => {
-                println!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr);
-                return;
-            }
-        },
-        _ => 0,
-    };
-
-    let do_strip = match matches.opt_str("strip") {
-        Some(ans) => match &ans[..] {
-            "yes" => true,
-            "no" => false,
-            _ => {
-                println!(
-                    "Unrecognized choice \"{}\" for --strip; need \"yes\" or \"no\".",
-                    ans
-                );
-                return;
-            }
-        },
-        _ => true, // Strip executables of debugging symbols by default.
+    // Get a Backend struct.
+    let backend = match backend::init_from_cli_options(&matches) {
+        Ok(backend) => backend,
+        Err(err) =>{
+            eprintln!("{}", err);
+            return;
+        }
     };
 
     match jcompilerlib::compile(
         &matches.free[0],
-        matches.opt_str("target"),
-        llvm_opt_level,
-        do_strip,
+        backend,
         matches.opt_present("mem-usage"),
         matches.opt_present("verbose"),
-        None,
+        None
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -107,3 +79,9 @@ fn main() {
         }
     };
 }
+
+pub fn print_usage(bin_name: &str, opts: Options) {
+    let brief = format!("Usage: {} SOURCE_FILE [options]", bin_name);
+    print!("{}", opts.usage(&brief));
+}
+

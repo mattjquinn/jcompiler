@@ -6,6 +6,9 @@ use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
 use llvm_sys::{LLVMBuilder, LLVMModule};
 use std::collections::HashMap;
+use getopts::{Options,Matches};
+
+use tempfile::NamedTempFile;
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_double, c_uint, c_ulonglong};
@@ -13,8 +16,153 @@ use std::ptr::null_mut;
 use std::str;
 
 use parser;
+use shell;
 
 const LLVM_FALSE: LLVMBool = 0;
+
+pub struct LLVMBackend {
+    pub target_triple : Option<String>,
+    pub optimization_level : u8,
+    pub do_strip_executable : bool,
+}
+
+impl ::Backend for LLVMBackend {
+
+    fn compile_ast(&self,
+                   path : &str,
+                   ast : &Vec<parser::AstNode>,
+                   do_report_mem_usage : bool,
+                   do_verbose : bool,
+                   output_path : String
+    ) -> Result<(), String> {
+
+        let mut llvm_module =
+            compile_to_module(path, self.target_triple.clone(), do_report_mem_usage, &ast);
+
+        optimise_ir(&mut llvm_module, self.optimization_level as i64);
+        let llvm_ir_cstr = llvm_module.to_cstring();
+        let llvm_ir = String::from_utf8_lossy(llvm_ir_cstr.as_bytes());
+
+        if do_verbose {
+            println!(
+                "LLVM IR optimized at level {}:\n{}",
+                self.optimization_level, llvm_ir
+            );
+        }
+
+        // Compile the LLVM IR to a temporary object file.
+        let object_file = try!(convert_io_error(NamedTempFile::new()));
+        let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
+
+        if do_verbose {
+            println!("Writing object file to {}", obj_file_path);
+        }
+
+        write_object_file(&mut llvm_module, &obj_file_path).unwrap();
+
+        if do_verbose {
+            println!("Writing executable to {}", output_path);
+        }
+
+        let res = link_object_file(&obj_file_path, &output_path, self.target_triple.clone());
+        match res {
+            Ok(_) => (),
+            Err(e) => panic!(format!("Linking executable failed: {}", e)),
+        };
+
+        if self.do_strip_executable {
+            let strip_args = ["-s", &output_path[..]];
+            shell::run_shell_command("strip", &strip_args[..]).unwrap();
+            if do_verbose {
+                println!("Stripped executable of debug symbols.");
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub fn register_cli_options(options : &mut Options) {
+    let default_triple_cstring = get_default_target_triple();
+    let default_triple = default_triple_cstring.to_str().unwrap();
+
+    options.optopt(
+        "",
+        "llvm-target",
+        &format!("if using LLVM backend, specifies the LLVM target triple (default: {})", default_triple),
+        "TARGET",
+    );
+    options.optopt(
+        "",
+        "llvm-opt",
+        "if using LLVM backend, sets the LLVM optimization level (0 to 3)",
+        "LVL");
+    options.optopt(
+        "",
+        "llvm-strip",
+        "if using LLVM backend, strips symbols from the binary (default: yes)",
+        "yes|no",
+    );
+}
+
+pub fn init_from_cli_options(matches : &Matches) -> Result<LLVMBackend, String> {
+    let target_triple = matches.opt_str("llvm-target");
+    let optimization_level: u8 = match matches.opt_str("llvm-opt") {
+        Some(lvlstr) => match lvlstr.parse::<u8>() {
+            Ok(n) if n <= 3 => n,
+            _ => return Err(format!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr))
+        },
+        _ => 0,
+    };
+
+    let do_strip_executable = match matches.opt_str("llvm-strip") {
+        Some(ans) => match &ans[..] {
+            "yes" => true,
+            "no" => false,
+            _ => return Err(format!("Unrecognized choice \"{}\" for --llvm-strip; need \"yes\" or \"no\".", ans))
+        },
+        _ => true, // Strip executables of debugging symbols by default.
+    };
+    Ok(LLVMBackend { target_triple, optimization_level, do_strip_executable })
+}
+
+fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+
+fn link_object_file(
+    object_file_path: &str,
+    executable_path: &str,
+    target_triple: Option<String>,
+) -> Result<(), String> {
+    // Link the object file.
+    let clang_args = if let Some(ref target_triple) = target_triple {
+        vec![
+            object_file_path,
+            "c_defns/jverbs.c",
+            "c_defns/jmemory.c",
+            "-target",
+            &target_triple,
+            "-o",
+            &executable_path[..],
+            "-lm",
+        ]
+    } else {
+        vec![
+            object_file_path,
+            "c_defns/jverbs.c",
+            "c_defns/jmemory.c",
+            "-o",
+            &executable_path[..],
+            "-lm",
+        ]
+    };
+
+    shell::run_shell_command("clang-7", &clang_args[..])
+}
 
 pub fn compile_to_module(
     module_name: &str,
