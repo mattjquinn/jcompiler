@@ -26,7 +26,7 @@ use backend::Backend;
 
 pub fn compile(
     path: &str,
-    backend: impl Backend,
+    backend: Box<Backend>,
     do_report_mem_usage: bool,
     do_verbose: bool,
     optional_output_path : Option<String>

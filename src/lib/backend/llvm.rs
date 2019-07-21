@@ -105,7 +105,7 @@ pub fn register_cli_options(options : &mut Options) {
     );
 }
 
-pub fn init_from_cli_options(matches : &Matches) -> Result<LLVMBackend, String> {
+pub fn init_from_cli_options(matches : &Matches) -> Result<Box<::Backend>, String> {
     let target_triple = matches.opt_str("llvm-target");
     let optimization_level: u8 = match matches.opt_str("llvm-opt") {
         Some(lvlstr) => match lvlstr.parse::<u8>() {
@@ -123,7 +123,7 @@ pub fn init_from_cli_options(matches : &Matches) -> Result<LLVMBackend, String> 
         },
         _ => true, // Strip executables of debugging symbols by default.
     };
-    Ok(LLVMBackend { target_triple, optimization_level, do_strip_executable })
+    Ok(Box::new(LLVMBackend { target_triple, optimization_level, do_strip_executable }))
 }
 
 fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {

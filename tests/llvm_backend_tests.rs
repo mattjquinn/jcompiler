@@ -1,4 +1,4 @@
-/// Integration tests for the entire compiler.
+/// Integration tests for the LLVM backend.
 extern crate jcompilerlib;
 extern crate tempfile;
 
@@ -23,7 +23,7 @@ fn compile(test_jfile: &str) -> (String, String) {
     };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
-        backend,
+        Box::new(backend),
         false,
         false,
         Some(unopt_compile_to_path.clone()),
@@ -50,7 +50,7 @@ fn compile(test_jfile: &str) -> (String, String) {
     };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
-        backend,
+        Box::new(backend),
         false,
         false,
         Some(opt_compile_to_path.clone()),
@@ -71,14 +71,14 @@ fn compile(test_jfile: &str) -> (String, String) {
 }
 
 #[test]
-fn ctest_number_expr() {
+fn llvmtest_number_expr() {
     let (stdout, stderr) = compile("ctest_number_expr.ijs");
     assert_eq!("8\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_list_expr() {
+fn llvmtest_list_expr() {
     let (stdout, stderr) = compile("ctest_list_expr.ijs");
     assert_eq!(
         "2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n",
@@ -88,70 +88,70 @@ fn ctest_list_expr() {
 }
 
 #[test]
-fn ctest_monadic_increment() {
+fn llvmtest_monadic_increment() {
     let (stdout, stderr) = compile("ctest_monadic_increment.ijs");
     assert_eq!("2 3 4 5 6\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_double_monadic_increment() {
+fn llvmtest_double_monadic_increment() {
     let (stdout, stderr) = compile("ctest_double_monadic_increment.ijs");
     assert_eq!("107 2002 70 46 90 2\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_monadic_square() {
+fn llvmtest_monadic_square() {
     let (stdout, stderr) = compile("ctest_monadic_square.ijs");
     assert_eq!("1 4 9 16 25\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_double_monadic_square() {
+fn llvmtest_double_monadic_square() {
     let (stdout, stderr) = compile("ctest_double_monadic_square.ijs");
     assert_eq!("1 16 81 256 625\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_increment_square() {
+fn llvmtest_increment_square() {
     let (stdout, stderr) = compile("ctest_increment_square.ijs");
     assert_eq!("2 5 10 17 26\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_additions_single_numbers() {
+fn llvmtest_additions_single_numbers() {
     let (stdout, stderr) = compile("ctest_additions_single_numbers.ijs");
     assert_eq!("3\n6\n10\n5\n0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_additions_lists() {
+fn llvmtest_additions_lists() {
     let (stdout, stderr) = compile("ctest_additions_lists.ijs");
     assert_eq!("3 3\n6 6 6\n12 15 14\n5\n0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_products_single_numbers() {
+fn llvmtest_products_single_numbers() {
     let (stdout, stderr) = compile("ctest_products_single_numbers.ijs");
     assert_eq!("2\n6\n24\n4\n0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_products_lists() {
+fn llvmtest_products_lists() {
     let (stdout, stderr) = compile("ctest_products_lists.ijs");
     assert_eq!("2 2\n6 6 6\n18 0 70\n4\n0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_mixed_adds_mults() {
+fn llvmtest_mixed_adds_mults() {
     let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
     assert_eq!(
         "170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n",
@@ -161,21 +161,21 @@ fn ctest_mixed_adds_mults() {
 }
 
 #[test]
-fn ctest_subtractions_single_positives() {
+fn llvmtest_subtractions_single_positives() {
     let (stdout, stderr) = compile("ctest_subtractions_single_positives.ijs");
     assert_eq!("_1\n2\n_2\n3\n0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_subtractions_lists_positives() {
+fn llvmtest_subtractions_lists_positives() {
     let (stdout, stderr) = compile("ctest_subtractions_lists_positives.ijs");
     assert_eq!("_1 _1\n2 2 2\n8 _3 10\n0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_monadic_negate() {
+fn llvmtest_monadic_negate() {
     let (stdout, stderr) = compile("ctest_monadic_negate.ijs");
     assert_eq!(
         "_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n2\n2\n2\n",
@@ -185,7 +185,7 @@ fn ctest_monadic_negate() {
 }
 
 #[test]
-fn ctest_additions_lists_mixedlens_legal() {
+fn llvmtest_additions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_additions_lists_mixedlens_legal.ijs");
     assert_eq!(
         "11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n",
@@ -195,7 +195,7 @@ fn ctest_additions_lists_mixedlens_legal() {
 }
 
 #[test]
-fn ctest_subtractions_lists_mixedlens_legal() {
+fn llvmtest_subtractions_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_subtractions_lists_mixedlens_legal.ijs");
     assert_eq!(
         "_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n",
@@ -205,7 +205,7 @@ fn ctest_subtractions_lists_mixedlens_legal() {
 }
 
 #[test]
-fn ctest_products_lists_mixedlens_legal() {
+fn llvmtest_products_lists_mixedlens_legal() {
     let (stdout, stderr) = compile("ctest_products_lists_mixedlens_legal.ijs");
     assert_eq!(
         "40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n",
@@ -215,14 +215,14 @@ fn ctest_products_lists_mixedlens_legal() {
 }
 
 #[test]
-fn ctest_insertions_plus() {
+fn llvmtest_insertions_plus() {
     let (stdout, stderr) = compile("ctest_insertions_plus.ijs");
     assert_eq!("5\n3\n6\n11\n2\n_26\n_26\n_10\n90 180 270\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_insertions_times() {
+fn llvmtest_insertions_times() {
     let (stdout, stderr) = compile("ctest_insertions_times.ijs");
     assert_eq!(
         "0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n",
@@ -232,14 +232,14 @@ fn ctest_insertions_times() {
 }
 
 #[test]
-fn ctest_insertions_minus() {
+fn llvmtest_insertions_minus() {
     let (stdout, stderr) = compile("ctest_insertions_minus.ijs");
     assert_eq!("0\n5\n1\n_1\n2\n3\n16\n_3\n14\n10\n13 23 33\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_lessthan() {
+fn llvmtest_lessthan() {
     let (stdout, stderr) = compile("ctest_lessthan.ijs");
     assert_eq!(
         "0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n",
@@ -249,14 +249,14 @@ fn ctest_lessthan() {
 }
 
 #[test]
-fn ctest_equal() {
+fn llvmtest_equal() {
     let (stdout, stderr) = compile("ctest_equal.ijs");
     assert_eq!("0\n1\n0 0 1\n1 1 1\n0 0 0\n1 1 1\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_largerthan() {
+fn llvmtest_largerthan() {
     let (stdout, stderr) = compile("ctest_largerthan.ijs");
     assert_eq!(
         "1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n",
@@ -266,14 +266,14 @@ fn ctest_largerthan() {
 }
 
 #[test]
-fn ctest_is_verb_globalassgmts() {
+fn llvmtest_is_verb_globalassgmts() {
     let (stdout, stderr) = compile("ctest_is_verb_globalassgmts.ijs");
     assert_eq!("", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_global_assgmts_refs() {
+fn llvmtest_global_assgmts_refs() {
     let (stdout, stderr) = compile("ctest_global_assgmts_refs.ijs");
     assert_eq!(
         "99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n7.5\n1 2 3 4 5\n",
@@ -283,7 +283,7 @@ fn ctest_global_assgmts_refs() {
 }
 
 #[test]
-fn ctest_global_refs_mixedverbs() {
+fn llvmtest_global_refs_mixedverbs() {
     let (stdout, stderr) = compile("ctest_global_refs_mixedverbs.ijs");
     assert_eq!(
         "1 1 0 1\n0\n3\n5 4 1 9\n1 1 1 1\n4\n6 5 2 10\n8 7 4 12\n36 25 4 100\n4 5\n5 6\n",
@@ -293,21 +293,21 @@ fn ctest_global_refs_mixedverbs() {
 }
 
 #[test]
-fn ctest_negative_numbers() {
+fn llvmtest_negative_numbers() {
     let (stdout, stderr) = compile("ctest_negative_numbers.ijs");
     assert_eq!("_1 _2 _3 _4 _5 _6 _7 _8 _9 _10\n2\n1 1 1 0 0\n_2 _4 _6 _8\n0 1 2 3 4\n4 1 0 1 4\n_8 _4 0 4 8\n10 8 _4 3 _9\n_8640\n_8\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_decimals() {
+fn llvmtest_decimals() {
     let (stdout, stderr) = compile("ctest_decimals.ijs");
     assert_eq!("0 0 0 0 0\n0 0 0 0 0\n1 1 1 1 1\n_1 _1 _1 _1 _1\n1 _2.943 3 _4 5 _800.123\n_1 _2.4 _3 0 1.9 8 7.123 2.71828\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_divisions() {
+fn llvmtest_divisions() {
     let (stdout, stderr) = compile("ctest_divisions.ijs");
     let expected = format!(
         "{}{}{}{}",
@@ -321,35 +321,35 @@ fn ctest_divisions() {
 }
 
 #[test]
-fn ctest_power() {
+fn llvmtest_power() {
     let (stdout, stderr) = compile("ctest_power.ijs");
     assert_eq!("1\n1\n1\n8\n_8\n59049\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_monadic_reciprocal() {
+fn llvmtest_monadic_reciprocal() {
     let (stdout, stderr) = compile("ctest_monadic_reciprocal.ijs");
     assert_eq!("1\n0.5\n0.333333\n0.25\n_1\n_0.5\n_0.333333\n_0.25\n1 0.5 0.333333 0.25 0.2\n_1 _0.5 _0.333333 _0.25 _0.2\n2.28333\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_monadic_tally() {
+fn llvmtest_monadic_tally() {
     let (stdout, stderr) = compile("ctest_monadic_tally.ijs");
     assert_eq!("1\n2\n3\n4\n_1 2 _3 4 _5\n5\n5\n1\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_dyadic_copy() {
+fn llvmtest_dyadic_copy() {
     let (stdout, stderr) = compile("ctest_dyadic_copy.ijs");
     assert_eq!("1 1 1 1 1\n5\n\n0 0 0\n_1 _1 _1 _1 _1 _1 _1\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_monadic_ceiling() {
+fn llvmtest_monadic_ceiling() {
     let (stdout, stderr) = compile("ctest_monadic_ceiling.ijs");
     assert_eq!(
         "_1 1 2\n_1 _1 _1 _1 _1 0 0 0 3 4 5556\n1 2 3 4 5\n_1 1 3\n",
@@ -359,7 +359,7 @@ fn ctest_monadic_ceiling() {
 }
 
 #[test]
-fn ctest_monadic_largerof() {
+fn llvmtest_monadic_largerof() {
     let (stdout, stderr) = compile("ctest_monadic_largerof.ijs");
     assert_eq!(
         "3 3 5\n3\n3 3 3 3 4 5 6\n0 _1 _2 _3 _3 _3 _3\n",
@@ -369,7 +369,7 @@ fn ctest_monadic_largerof() {
 }
 
 #[test]
-fn ctest_monadic_largerorequal() {
+fn llvmtest_monadic_largerorequal() {
     let (stdout, stderr) = compile("ctest_monadic_largerorequal.ijs");
     assert_eq!(
         "1 1 0\n1 1 1 0 0\n1\n1 1 1 1 1\n1 1 1 0 0\n1 1 0 0 0\n",
@@ -379,7 +379,7 @@ fn ctest_monadic_largerorequal() {
 }
 
 #[test]
-fn ctest_ch1_learningjbook() {
+fn llvmtest_ch1_learningjbook() {
     let (stdout, stderr) = compile("ctest_ch1_learningjbook.ijs");
     let expected = format!(
         "{}{}{}{}{}",
@@ -394,14 +394,14 @@ fn ctest_ch1_learningjbook() {
 }
 
 #[test]
-fn ctest_strings() {
+fn llvmtest_strings() {
     let (stdout, stderr) = compile("ctest_strings.ijs");
     assert_eq!("\n\nMy Ten Years in a Quandary\nA VERRRRRRRRRRRRRRRRRRRRRRRRY LOOOOOOOOOOOOONG STRINNNNNNNNNNNG\n0\n1\n2\nParty like it's 1999.\n21\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
 #[test]
-fn ctest_dyadic_shape() {
+fn llvmtest_dyadic_shape() {
     let (stdout, stderr) = compile("ctest_dyadic_shape.ijs");
     let expected = format!(
         "{}{}{}{}{}{}",
@@ -417,7 +417,7 @@ fn ctest_dyadic_shape() {
 }
 
 #[test]
-fn ctest_monadic_shapeof() {
+fn llvmtest_monadic_shapeof() {
     let (stdout, stderr) = compile("ctest_monadic_shapeof.ijs");
     assert_eq!(
         "\n0\n3\n4\n1\n2 4\n2\n5 4 2\n3\n9 3 4 1\n4\n1 10 14 8 9\n5\n1 10 1 8 1\n5\n",
@@ -427,7 +427,7 @@ fn ctest_monadic_shapeof() {
 }
 
 #[test]
-fn ctest_ch2_learningjbook() {
+fn llvmtest_ch2_learningjbook() {
     let (stdout, stderr) = compile("ctest_ch2_learningjbook.ijs");
     let expected = format!(
         "{}{}{}{}",
@@ -441,7 +441,7 @@ fn ctest_ch2_learningjbook() {
 }
 
 #[test]
-fn ctest_dyadic_append() {
+fn llvmtest_dyadic_append() {
     let (stdout, stderr) = compile("ctest_dyadic_append.ijs");
     assert_eq!("0 0\n_1.4 0\n_3 _8.9\n0 1 2 3 4 5\n0 1 2 3 4 5\n0 1 2 3 4 5\n_1 2 3 4 5 8 10 11 12 13 14 15\n500\n1010\n100 100 100 100 100 100 100 100 100 100\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
