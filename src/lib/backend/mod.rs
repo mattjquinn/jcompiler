@@ -34,3 +34,11 @@ pub fn init_from_cli_options(matches: &Matches) -> Result<Box<Backend>, String> 
         None => Err("No choice of backend was specified".to_string())
     }
 }
+
+fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(e) => Err(format!("{}", e)),
+    }
+}
+

@@ -17,6 +17,7 @@ use std::str;
 
 use parser;
 use shell;
+use backend;
 
 const LLVM_FALSE: LLVMBool = 0;
 
@@ -51,7 +52,7 @@ impl ::Backend for LLVMBackend {
         }
 
         // Compile the LLVM IR to a temporary object file.
-        let object_file = try!(convert_io_error(NamedTempFile::new()));
+        let object_file = backend::convert_io_error(NamedTempFile::new())?;
         let obj_file_path = object_file.path().to_str().expect("path not valid utf-8");
 
         if do_verbose {
@@ -124,13 +125,6 @@ pub fn init_from_cli_options(matches : &Matches) -> Result<Box<::Backend>, Strin
         _ => true, // Strip executables of debugging symbols by default.
     };
     Ok(Box::new(LLVMBackend { target_triple, optimization_level, do_strip_executable }))
-}
-
-fn convert_io_error<T>(result: Result<T, std::io::Error>) -> Result<T, String> {
-    match result {
-        Ok(value) => Ok(value),
-        Err(e) => Err(format!("{}", e)),
-    }
 }
 
 fn link_object_file(

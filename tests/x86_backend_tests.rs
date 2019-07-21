@@ -34,9 +34,9 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-//#[test]
-//fn x86test_number_expr() {
-//    let (stdout, stderr) = compile("ctest_number_expr.ijs");
-//    assert_eq!("8\n", &stdout[..]);
-//    assert_eq!("", &stderr[..]);
-//}
+#[test]
+fn x86test_number_expr() {
+    let (stdout, stderr) = compile("ctest_number_expr.ijs");
+    assert_eq!("Hello, world!\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
