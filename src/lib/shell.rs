@@ -34,7 +34,10 @@ fn shell_command(command: &str, args: &[&str]) -> Result<String, String> {
 /// Execute a CLI command as `shell_command`, but ignore stdout.
 pub fn run_shell_command(command: &str, args: &[&str]) -> Result<(), String> {
     match shell_command(command, args) {
-        Ok(_) => Ok(()),
+        Ok(stdout) => {
+            println!("Shell command stdout: {}", stdout);
+            Ok(())
+        },
         Err(e) => Err(e),
     }
 }

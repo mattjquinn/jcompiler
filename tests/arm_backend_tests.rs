@@ -41,6 +41,16 @@ fn compile(test_jfile: &str) -> (String, String) {
 #[test]
 fn armtest_number_expr() {
     let (stdout, stderr) = compile("ctest_number_expr.ijs");
-    assert_eq!("The number is: 1029\n", &stdout[..]);
+    assert_eq!("8\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_list_expr() {
+    let (stdout, stderr) = compile("ctest_list_expr.ijs");
+    assert_eq!(
+        "2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n",
+        &stdout[..]
+    );
     assert_eq!("", &stderr[..]);
 }
