@@ -1,11 +1,11 @@
-/// Integration tests for the x86 backend.
+/// Integration tests for the ARM backend.
 extern crate jcompilerlib;
 extern crate tempfile;
 
 use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
-use jcompilerlib::backend::x86::X86Backend;
+use jcompilerlib::backend::arm::ARMBackend;
 
 fn compile(test_jfile: &str) -> (String, String) {
     let unopt_compile_to_path = String::from(
@@ -15,7 +15,7 @@ fn compile(test_jfile: &str) -> (String, String) {
             .to_str()
             .expect("valid tempfile path"),
     );
-    let backend = X86Backend {};
+    let backend = ARMBackend {};
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
         Box::new(backend),
@@ -24,6 +24,10 @@ fn compile(test_jfile: &str) -> (String, String) {
         Some(unopt_compile_to_path.clone()),
     )
     .expect("unoptimized compilation failed");
+
+    // NOTE: If you're on an amd_x64 system, running ARM binaries will only
+    // be possible if you have "qemu-arm-static" installed (which registers
+    // an interpreter that allows transparent ./ execution of ARM binaries).
     let unopt_output = Command::new(unopt_compile_to_path)
         .output()
         .expect("failed to execute unoptimized binary");
@@ -35,8 +39,8 @@ fn compile(test_jfile: &str) -> (String, String) {
 }
 
 #[test]
-fn x86test_number_expr() {
+fn armtest_number_expr() {
     let (stdout, stderr) = compile("ctest_number_expr.ijs");
-    assert_eq!("Hello, world!\n", &stdout[..]);
+    assert_eq!("The number is: 1029\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
