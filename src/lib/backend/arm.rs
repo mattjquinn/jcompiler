@@ -18,8 +18,24 @@ struct ValueRef {
 #[derive(Debug)]
 struct BasicBlock {
     base_offset: i32,
-    instructions: Vec<String>,
+    instructions: Vec<ArmIns>,
     value_refs: Vec<ValueRef>,
+}
+
+#[derive(Debug)]
+enum ArmIns {
+    Generic(String)
+}
+
+impl std::fmt::Display for ArmIns {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), core::fmt::Error> {
+        match self {
+            ArmIns::Generic(s) => {
+                f.write_str(s.as_str());
+                Ok(())
+            }
+        }
+    }
 }
 
 impl BasicBlock {
@@ -59,29 +75,29 @@ impl ::Backend for ARMBackend {
                     compile_expr(&mut basic_block, expr);
 
                     for value_ref in basic_block.value_refs.iter().rev() {
-                        basic_block.instructions.push("ldr r0, =intfmt".to_string());
-                        basic_block.instructions.push(format!("ldrb r1, [sp, # {}]", value_ref.offset));
-                        basic_block.instructions.push("bl printf".to_string());
+                        basic_block.instructions.push(ArmIns::Generic("ldr r0, =intfmt".to_string()));
+                        basic_block.instructions.push(ArmIns::Generic(format!("ldrb r1, [sp, # {}]", value_ref.offset)));
+                        basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
 
                         // Multiple printed terms are separated by space, except for the last item
                         // TODO: This is a terrible way to check if we have iterated
                         // to the "final" value ref in the list
                         if value_ref.offset != 0 {
-                            basic_block.instructions.push("ldr r0, =spacefmt".to_string());
-                            basic_block.instructions.push("bl printf".to_string());
+                            basic_block.instructions.push(ArmIns::Generic("ldr r0, =spacefmt".to_string()));
+                            basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
                         }
                     }
 
                     // All printed expressions are terminated with a newline.
-                    basic_block.instructions.push("ldr r0, =nlfmt".to_string());
-                    basic_block.instructions.push("bl printf".to_string());
+                    basic_block.instructions.push(ArmIns::Generic("ldr r0, =nlfmt".to_string()));
+                    basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
 
                     // TODO: This needs to be done within a "cleanup" method of BasicBlock
                     basic_block.instructions.push(
-                        format!("add sp, sp, # {}",
+                        ArmIns::Generic(format!("add sp, sp, # {}",
                                 basic_block.value_refs.last()
                                     // TODO: Obviously this +4 needs to go (be more clear)
-                                    .map_or(0,|v| v.offset + 4)));
+                                    .map_or(0,|v| v.offset + 4))));
 
                     basic_blocks.push(basic_block);
                 },
@@ -133,9 +149,9 @@ impl ::Backend for ARMBackend {
 fn compile_expr(basic_block : &mut BasicBlock, expr : &AstNode) {
     match expr {
         parser::AstNode::Integer(int) => {
-            basic_block.instructions.push(format!("mov r7, #{}", &int));
-            basic_block.instructions.push(format!("sub sp, sp, #4"));
-            basic_block.instructions.push(format!("str r7, [sp]"));
+            basic_block.instructions.push(ArmIns::Generic(format!("mov r7, #{}", &int)));
+            basic_block.instructions.push(ArmIns::Generic(format!("sub sp, sp, #4")));
+            basic_block.instructions.push(ArmIns::Generic(format!("str r7, [sp]")));
             basic_block.value_refs.push(ValueRef {
                 offset: basic_block.base_offset
             });
