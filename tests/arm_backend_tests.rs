@@ -2,10 +2,10 @@
 extern crate jcompilerlib;
 extern crate tempfile;
 
+use jcompilerlib::backend::arm::ARMBackend;
 use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
-use jcompilerlib::backend::arm::ARMBackend;
 
 fn compile(test_jfile: &str) -> (String, String) {
     let unopt_compile_to_path = String::from(

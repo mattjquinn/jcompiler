@@ -20,16 +20,16 @@ pub mod backend;
 pub mod parser;
 pub mod shell;
 
+use backend::Backend;
 use std::fs;
 use std::path::Path;
-use backend::Backend;
 
 pub fn compile(
     path: &str,
     backend: Box<Backend>,
     do_report_mem_usage: bool,
     do_verbose: bool,
-    optional_output_path : Option<String>
+    optional_output_path: Option<String>,
 ) -> Result<(), String> {
     let jsrc = fs::read_to_string(path).expect("cannot open source of provided J program");
 
@@ -48,7 +48,7 @@ pub fn compile(
 
     let output_path = match optional_output_path {
         Some(p) => p,
-        None => executable_name(path)
+        None => executable_name(path),
     };
 
     backend.compile_ast(path, &ast, do_report_mem_usage, do_verbose, output_path)

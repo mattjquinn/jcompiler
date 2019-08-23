@@ -2,10 +2,10 @@
 extern crate jcompilerlib;
 extern crate tempfile;
 
+use jcompilerlib::backend::llvm::LLVMBackend;
 use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
-use jcompilerlib::backend::llvm::LLVMBackend;
 
 fn compile(test_jfile: &str) -> (String, String) {
     // First compile *without* optimizations/stripping.
@@ -17,9 +17,9 @@ fn compile(test_jfile: &str) -> (String, String) {
             .expect("valid tempfile path"),
     );
     let backend = LLVMBackend {
-        target_triple : None,
-        optimization_level : 0,
-        do_strip_executable : false
+        target_triple: None,
+        optimization_level: 0,
+        do_strip_executable: false,
     };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],
@@ -44,9 +44,9 @@ fn compile(test_jfile: &str) -> (String, String) {
             .expect("valid tempfile path"),
     );
     let backend = LLVMBackend {
-        target_triple : None,
-        optimization_level : 3,
-        do_strip_executable : true
+        target_triple: None,
+        optimization_level: 3,
+        do_strip_executable: true,
     };
     jcompilerlib::compile(
         &format!("jlang_programs/{}", test_jfile)[..],

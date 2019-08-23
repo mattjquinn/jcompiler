@@ -59,7 +59,7 @@ fn main() {
     // Get a Backend struct.
     let backend = match backend::init_from_cli_options(&matches) {
         Ok(backend) => backend,
-        Err(err) =>{
+        Err(err) => {
             eprintln!("{}", err);
             return;
         }
@@ -70,7 +70,7 @@ fn main() {
         backend,
         matches.opt_present("mem-usage"),
         matches.opt_present("verbose"),
-        None
+        None,
     ) {
         Ok(_) => {}
         Err(e) => {
@@ -84,4 +84,3 @@ pub fn print_usage(bin_name: &str, opts: Options) {
     let brief = format!("Usage: {} SOURCE_FILE [options]", bin_name);
     print!("{}", opts.usage(&brief));
 }
-

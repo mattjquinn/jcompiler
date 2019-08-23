@@ -1,3 +1,4 @@
+use getopts::{Matches, Options};
 use itertools::Itertools;
 use llvm_sys::core::*;
 use llvm_sys::prelude::*;
@@ -6,7 +7,6 @@ use llvm_sys::target_machine::*;
 use llvm_sys::transforms::pass_manager_builder::*;
 use llvm_sys::{LLVMBuilder, LLVMModule};
 use std::collections::HashMap;
-use getopts::{Options,Matches};
 
 use tempfile::NamedTempFile;
 
@@ -15,28 +15,27 @@ use std::os::raw::{c_double, c_uint, c_ulonglong};
 use std::ptr::null_mut;
 use std::str;
 
+use backend;
 use parser;
 use shell;
-use backend;
 
 const LLVM_FALSE: LLVMBool = 0;
 
 pub struct LLVMBackend {
-    pub target_triple : Option<String>,
-    pub optimization_level : u8,
-    pub do_strip_executable : bool,
+    pub target_triple: Option<String>,
+    pub optimization_level: u8,
+    pub do_strip_executable: bool,
 }
 
 impl ::Backend for LLVMBackend {
-
-    fn compile_ast(&self,
-                   path : &str,
-                   ast : &Vec<parser::AstNode>,
-                   do_report_mem_usage : bool,
-                   do_verbose : bool,
-                   output_path : String
+    fn compile_ast(
+        &self,
+        path: &str,
+        ast: &Vec<parser::AstNode>,
+        do_report_mem_usage: bool,
+        do_verbose: bool,
+        output_path: String,
     ) -> Result<(), String> {
-
         let mut llvm_module =
             compile_to_module(path, self.target_triple.clone(), do_report_mem_usage, &ast);
 
@@ -83,21 +82,25 @@ impl ::Backend for LLVMBackend {
     }
 }
 
-pub fn register_cli_options(options : &mut Options) {
+pub fn register_cli_options(options: &mut Options) {
     let default_triple_cstring = get_default_target_triple();
     let default_triple = default_triple_cstring.to_str().unwrap();
 
     options.optopt(
         "",
         "llvm-target",
-        &format!("if using LLVM backend, specifies the LLVM target triple (default: {})", default_triple),
+        &format!(
+            "if using LLVM backend, specifies the LLVM target triple (default: {})",
+            default_triple
+        ),
         "TARGET",
     );
     options.optopt(
         "",
         "llvm-opt",
         "if using LLVM backend, sets the LLVM optimization level (0 to 3)",
-        "LVL");
+        "LVL",
+    );
     options.optopt(
         "",
         "llvm-strip",
@@ -106,12 +109,17 @@ pub fn register_cli_options(options : &mut Options) {
     );
 }
 
-pub fn init_from_cli_options(matches : &Matches) -> Result<Box<::Backend>, String> {
+pub fn init_from_cli_options(matches: &Matches) -> Result<Box<::Backend>, String> {
     let target_triple = matches.opt_str("llvm-target");
     let optimization_level: u8 = match matches.opt_str("llvm-opt") {
         Some(lvlstr) => match lvlstr.parse::<u8>() {
             Ok(n) if n <= 3 => n,
-            _ => return Err(format!("Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".", lvlstr))
+            _ => {
+                return Err(format!(
+                "Unrecognized choice \"{}\" for --llvm-opt; need \"0\", \"1\", \"2\", or \"3\".",
+                lvlstr
+            ));
+            }
         },
         _ => 0,
     };
@@ -120,11 +128,20 @@ pub fn init_from_cli_options(matches : &Matches) -> Result<Box<::Backend>, Strin
         Some(ans) => match &ans[..] {
             "yes" => true,
             "no" => false,
-            _ => return Err(format!("Unrecognized choice \"{}\" for --llvm-strip; need \"yes\" or \"no\".", ans))
+            _ => {
+                return Err(format!(
+                    "Unrecognized choice \"{}\" for --llvm-strip; need \"yes\" or \"no\".",
+                    ans
+                ));
+            }
         },
         _ => true, // Strip executables of debugging symbols by default.
     };
-    Ok(Box::new(LLVMBackend { target_triple, optimization_level, do_strip_executable }))
+    Ok(Box::new(LLVMBackend {
+        target_triple,
+        optimization_level,
+        do_strip_executable,
+    }))
 }
 
 fn link_object_file(

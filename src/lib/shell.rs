@@ -37,7 +37,7 @@ pub fn run_shell_command(command: &str, args: &[&str]) -> Result<(), String> {
         Ok(stdout) => {
             println!("Shell command stdout: {}", stdout);
             Ok(())
-        },
+        }
         Err(e) => Err(e),
     }
 }

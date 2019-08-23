@@ -1,12 +1,10 @@
+use getopts::{Matches, Options};
 use parser;
-use backend;
-use getopts::{Options,Matches};
-use std::io::Write;
 use std::fs::File;
+use std::io::Write;
 
-use tempfile::NamedTempFile;
+use itertools::free::join;
 use parser::AstNode;
-use std::ops::Add;
 
 pub struct ARMBackend {}
 
@@ -24,15 +22,64 @@ struct BasicBlock {
 
 #[derive(Debug)]
 enum ArmIns {
-    Generic(String)
+    Load {
+        dst: &'static str,
+        src: &'static str,
+    },
+    Store {
+        dst: &'static str,
+        src: &'static str,
+    },
+    LoadOffset {
+        dst: &'static str,
+        src: &'static str,
+        offsets: Vec<i32>,
+    },
+    BranchAndLink {
+        addr: &'static str,
+    },
+    AddImm {
+        dst: &'static str,
+        src: &'static str,
+        imm: i32,
+    },
+    SubImm {
+        dst: &'static str,
+        src: &'static str,
+        imm: i32,
+    },
+    MoveImm {
+        dst: &'static str,
+        imm: i32,
+    },
 }
 
 impl std::fmt::Display for ArmIns {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), core::fmt::Error> {
         match self {
-            ArmIns::Generic(s) => {
-                f.write_str(s.as_str());
-                Ok(())
+            ArmIns::Load { dst, src } => f.write_str(format!("ldr {}, {}", dst, src).as_str()),
+            ArmIns::Store { dst, src } => f.write_str(format!("str {}, [{}]", src, dst).as_str()),
+            ArmIns::LoadOffset { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
+            }
+            ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
+            ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::AddImm { dst, src, imm } => {
+                if dst == src {
+                    // ARM allows compressed format if source and destination are identical.
+                    f.write_str(format!("add {}, {}", src, imm).as_str())
+                } else {
+                    f.write_str(format!("add {}, {}, {}", dst, src, imm).as_str())
+                }
+            }
+            ArmIns::SubImm { dst, src, imm } => {
+                if dst == src {
+                    // ARM allows compressed format if source and destination are identical.
+                    f.write_str(format!("sub {}, {}", src, imm).as_str())
+                } else {
+                    f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
+                }
             }
         }
     }
@@ -42,28 +89,28 @@ impl BasicBlock {
     fn new() -> BasicBlock {
         BasicBlock {
             base_offset: 0,
-            instructions : Vec::new(),
-            value_refs : Vec::new()
+            instructions: Vec::new(),
+            value_refs: Vec::new(),
         }
     }
 }
 
 impl ::Backend for ARMBackend {
-    fn compile_ast(&self,
-                   path: &str,
-                   ast: &Vec<parser::AstNode>,
-                   do_report_mem_usage: bool,
-                   do_verbose: bool,
-                   output_path: String
+    fn compile_ast(
+        &self,
+        _path: &str,
+        ast: &Vec<parser::AstNode>,
+        _do_report_mem_usage: bool,
+        _do_verbose: bool,
+        output_path: String,
     ) -> Result<(), String> {
-
         for astnode in ast {
             println!("{:?}", astnode);
         }
 
         let assembly_filename = format!("{}.s", output_path);
-        let assembly_file = File::create(&assembly_filename)
-            .expect("Intermediate file in which to write assembly");
+        let assembly_file =
+            File::create(&assembly_filename).expect("Intermediate file in which to write assembly");
         println!("Writing assembly file to {}", &assembly_filename);
 
         let mut basic_blocks = Vec::new();
@@ -75,33 +122,56 @@ impl ::Backend for ARMBackend {
                     compile_expr(&mut basic_block, expr);
 
                     for value_ref in basic_block.value_refs.iter().rev() {
-                        basic_block.instructions.push(ArmIns::Generic("ldr r0, =intfmt".to_string()));
-                        basic_block.instructions.push(ArmIns::Generic(format!("ldrb r1, [sp, # {}]", value_ref.offset)));
-                        basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
+                        basic_block.instructions.push(ArmIns::Load {
+                            dst: "r0",
+                            src: "=intfmt",
+                        });
+                        basic_block.instructions.push(ArmIns::LoadOffset {
+                            dst: "r1",
+                            src: "sp",
+                            offsets: vec![value_ref.offset],
+                        });
+                        basic_block
+                            .instructions
+                            .push(ArmIns::BranchAndLink { addr: "printf" });
 
                         // Multiple printed terms are separated by space, except for the last item
                         // TODO: This is a terrible way to check if we have iterated
                         // to the "final" value ref in the list
                         if value_ref.offset != 0 {
-                            basic_block.instructions.push(ArmIns::Generic("ldr r0, =spacefmt".to_string()));
-                            basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
+                            basic_block.instructions.push(ArmIns::Load {
+                                dst: "r0",
+                                src: "=spacefmt",
+                            });
+                            basic_block
+                                .instructions
+                                .push(ArmIns::BranchAndLink { addr: "printf" });
                         }
                     }
 
                     // All printed expressions are terminated with a newline.
-                    basic_block.instructions.push(ArmIns::Generic("ldr r0, =nlfmt".to_string()));
-                    basic_block.instructions.push(ArmIns::Generic("bl printf".to_string()));
+                    basic_block.instructions.push(ArmIns::Load {
+                        dst: "r0",
+                        src: "=nlfmt",
+                    });
+                    basic_block
+                        .instructions
+                        .push(ArmIns::BranchAndLink { addr: "printf" });
 
                     // TODO: This needs to be done within a "cleanup" method of BasicBlock
-                    basic_block.instructions.push(
-                        ArmIns::Generic(format!("add sp, sp, # {}",
-                                basic_block.value_refs.last()
-                                    // TODO: Obviously this +4 needs to go (be more clear)
-                                    .map_or(0,|v| v.offset + 4))));
+                    basic_block.instructions.push(ArmIns::AddImm {
+                        dst: "sp",
+                        src: "sp",
+                        imm: basic_block
+                            .value_refs
+                            .last()
+                            // TODO: Obviously this +4 needs to go (be more clear)
+                            .map_or(0, |v| v.offset + 4),
+                    });
 
                     basic_blocks.push(basic_block);
-                },
-                _ => panic!("Not ready to compile top-level AST node: {:?}", astnode)
+                }
+                _ => panic!("Not ready to compile top-level AST node: {:?}", astnode),
             }
         }
 
@@ -138,36 +208,49 @@ impl ::Backend for ARMBackend {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
 
-
-        let args = vec!["assemble-and-link-armv7.sh", &assembly_filename[..], &output_path];
+        let args = vec![
+            "assemble-and-link-armv7.sh",
+            &assembly_filename[..],
+            &output_path,
+        ];
         ::shell::run_shell_command("sh", &args)?;
 
         Ok(())
     }
 }
 
-fn compile_expr(basic_block : &mut BasicBlock, expr : &AstNode) {
+fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
     match expr {
         parser::AstNode::Integer(int) => {
-            basic_block.instructions.push(ArmIns::Generic(format!("mov r7, #{}", &int)));
-            basic_block.instructions.push(ArmIns::Generic(format!("sub sp, sp, #4")));
-            basic_block.instructions.push(ArmIns::Generic(format!("str r7, [sp]")));
+            basic_block.instructions.push(ArmIns::MoveImm {
+                dst: "r7",
+                imm: *int,
+            });
+            basic_block.instructions.push(ArmIns::SubImm {
+                dst: "sp",
+                src: "sp",
+                imm: 4,
+            });
+            basic_block.instructions.push(ArmIns::Store {
+                dst: "sp",
+                src: "r7",
+            });
             basic_block.value_refs.push(ValueRef {
-                offset: basic_block.base_offset
+                offset: basic_block.base_offset,
             });
             basic_block.base_offset += 4;
-        },
+        }
         parser::AstNode::Terms(terms) => {
             for term in terms {
                 compile_expr(basic_block, term);
             }
-        },
-        _ => panic!("Not ready to compile expression: {:?}", expr)
+        }
+        _ => panic!("Not ready to compile expression: {:?}", expr),
     }
 }
 
-pub fn register_cli_options(_options : &mut Options) {}
+pub fn register_cli_options(_options: &mut Options) {}
 
-pub fn init_from_cli_options(_matches : &Matches) -> Result<Box<::Backend>, String> {
+pub fn init_from_cli_options(_matches: &Matches) -> Result<Box<::Backend>, String> {
     Ok(Box::new(ARMBackend {}))
 }
