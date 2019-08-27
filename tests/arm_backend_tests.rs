@@ -75,3 +75,17 @@ fn armtest_monadic_square() {
     assert_eq!("1 4 9 16 25\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_double_monadic_square() {
+    let (stdout, stderr) = compile("ctest_double_monadic_square.ijs");
+    assert_eq!("1 16 81 256 625\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_increment_square() {
+    let (stdout, stderr) = compile("ctest_increment_square.ijs");
+    assert_eq!("2 5 10 17 26\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
