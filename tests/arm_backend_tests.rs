@@ -54,3 +54,10 @@ fn armtest_list_expr() {
     );
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_monadic_increment() {
+    let (stdout, stderr) = compile("ctest_monadic_increment.ijs");
+    assert_eq!("2 3 4 5 6\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

@@ -35,6 +35,11 @@ enum ArmIns {
         src: &'static str,
         offsets: Vec<i32>,
     },
+    StoreOffset {
+        dst: &'static str,
+        src: &'static str,
+        offsets: Vec<i32>,
+    },
     BranchAndLink {
         addr: &'static str,
     },
@@ -52,6 +57,7 @@ enum ArmIns {
         dst: &'static str,
         imm: i32,
     },
+    Nop
 }
 
 #[derive(Debug)]
@@ -83,6 +89,10 @@ impl std::fmt::Display for ArmIns {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
             }
+            ArmIns::StoreOffset { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
+            }
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
             ArmIns::AddImm { dst, src, imm } => {
@@ -101,6 +111,7 @@ impl std::fmt::Display for ArmIns {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
             }
+            ArmIns::Nop => f.write_str("nop")
         }
     }
 }
@@ -264,6 +275,29 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
             for term in terms {
                 compile_expr(basic_block, term);
             }
+        },
+        parser::AstNode::MonadicOp {verb, expr} => {
+            basic_block.instructions.push(ArmIns::Nop);
+            compile_expr(basic_block, expr);
+            basic_block.instructions.push(ArmIns::Nop);
+            for value_ref in basic_block.value_refs.iter().rev() {
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: "r4",
+                    src: "sp",
+                    offsets: vec![value_ref.offset]
+                });
+                basic_block.instructions.push(ArmIns::AddImm {
+                    dst: "r4",
+                    src: "r4",
+                    imm: 1
+                });
+                basic_block.instructions.push(ArmIns::StoreOffset {
+                    src: "r4",
+                    dst: "sp",
+                    offsets: vec![value_ref.offset]
+                });
+            }
+            basic_block.instructions.push(ArmIns::Nop);
         }
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
