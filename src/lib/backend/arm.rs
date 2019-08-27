@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Write;
 
 use itertools::free::join;
-use parser::AstNode;
+use parser::{AstNode, MonadicVerb};
 
 pub struct ARMBackend {}
 
@@ -56,6 +56,11 @@ enum ArmIns {
     MoveImm {
         dst: &'static str,
         imm: i32,
+    },
+    Multiply {
+        dst: &'static str,
+        src: &'static str,
+        mul: &'static str,
     },
     Nop
 }
@@ -110,6 +115,9 @@ impl std::fmt::Display for ArmIns {
                 } else {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
+            }
+            ArmIns::Multiply { dst, src, mul } => {
+                f.write_str(format!("mul {}, {}, {}", dst, src, mul).as_str())
             }
             ArmIns::Nop => f.write_str("nop")
         }
@@ -286,11 +294,23 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
                     src: "sp",
                     offsets: vec![value_ref.offset]
                 });
-                basic_block.instructions.push(ArmIns::AddImm {
-                    dst: "r4",
-                    src: "r4",
-                    imm: 1
-                });
+                match verb {
+                    MonadicVerb::Increment => {
+                        basic_block.instructions.push(ArmIns::AddImm {
+                            dst: "r4",
+                            src: "r4",
+                            imm: 1
+                        });
+                    },
+                    MonadicVerb::Square => {
+                        basic_block.instructions.push(ArmIns::Multiply {
+                            dst: "r4",
+                            src: "r4",
+                            mul: "r4"
+                        });
+                    }
+                    _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
+                }
                 basic_block.instructions.push(ArmIns::StoreOffset {
                     src: "r4",
                     dst: "sp",
