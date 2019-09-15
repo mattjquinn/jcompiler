@@ -8,11 +8,10 @@ rust:
 - beta
 - nightly
 
-before_install:
-- sudo apt-get update
-- sudo apt-get install -y gcc-8-arm-linux-gnueabihf binutils-arm-linux-gnueabihf libc6-dev-armhf-cross
-
 install:
+- export LINARO_CROSS_COMPILER_NAME=gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+- wget https://releases.linaro.org/components/toolchain/binaries/latest-7/arm-linux-gnueabihf/$LINARO_CROSS_COMPILER_NAME
+- sudo tar xf $LINARO_CROSS_COMPILER_NAME -C /opt/
 - export CLANG_TAR=clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
 - wget http://releases.llvm.org/7.0.1/$CLANG_TAR
 - export CLANG_PATH=/opt/clang_llvm7
