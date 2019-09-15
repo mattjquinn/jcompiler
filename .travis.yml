@@ -10,7 +10,7 @@ rust:
 
 before_install:
 - sudo apt-get update
-- sudo apt-get install -y binutils-arm-linux-gnueabihf
+- sudo apt-get install -y gcc-9-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
 
 install:
 - export CLANG_TAR=clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
