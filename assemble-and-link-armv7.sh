@@ -9,6 +9,11 @@
 # use a portable toolchain rather than one provided by the Debian
 # repositories, but it's not a primary concern at the moment.
 
+# This can be upgraded to 9 once
+# Travis provides 19.04 Ubuntu machines (use the
+# `gcc-9-arm-linux-gnueabihf` apt package)
+export GCC_VERSION=8
+
 arm-linux-gnueabihf-as \
         -march=armv7-a \
         -mfloat-abi=hard \
@@ -18,8 +23,8 @@ arm-linux-gnueabihf-as \
         $1
 
 arm-linux-gnueabihf-ld \
-        -plugin /usr/lib/gcc-cross/arm-linux-gnueabihf/9/liblto_plugin.so \
-        -plugin-opt=/usr/lib/gcc-cross/arm-linux-gnueabihf/9/lto-wrapper \
+        -plugin /usr/lib/gcc-cross/arm-linux-gnueabihf/$GCC_VERSION/liblto_plugin.so \
+        -plugin-opt=/usr/lib/gcc-cross/arm-linux-gnueabihf/$GCC_VERSION/lto-wrapper \
         -plugin-opt=-fresolution=/tmp/ccGcImIe.res \
         -plugin-opt=-pass-through=-lgcc \
         -plugin-opt=-pass-through=-lgcc_eh \
@@ -33,12 +38,12 @@ arm-linux-gnueabihf-ld \
         -o $2 \
         /usr/arm-linux-gnueabihf/lib/crt1.o \
         /usr/arm-linux-gnueabihf/lib/crti.o \
-        /usr/lib/gcc-cross/arm-linux-gnueabihf/9/crtbeginT.o \
-        -L/usr/lib/gcc-cross/arm-linux-gnueabihf/9 \
+        /usr/lib/gcc-cross/arm-linux-gnueabihf/$GCC_VERSION/crtbeginT.o \
+        -L/usr/lib/gcc-cross/arm-linux-gnueabihf/$GCC_VERSION \
         -L/usr/arm-linux-gnueabihf/lib \
         -L/usr/lib/arm-linux-gnueabihf \
         $1.o \
         --start-group -lgcc -lgcc_eh -lc --end-group \
-        /usr/lib/gcc-cross/arm-linux-gnueabihf/9/crtend.o \
+        /usr/lib/gcc-cross/arm-linux-gnueabihf/$GCC_VERSION/crtend.o \
         /usr/arm-linux-gnueabihf/lib/crtn.o
 
