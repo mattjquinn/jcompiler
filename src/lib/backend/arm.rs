@@ -360,6 +360,13 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                             add: "r3"
                         });
                     },
+                    DyadicVerb::Times => {
+                        basic_block.instructions.push(ArmIns::Multiply {
+                            dst: "r4",
+                            src: "r4",
+                            mul: "r3"
+                        });
+                    },
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
                 basic_block.instructions.push(ArmIns::StoreOffset {

@@ -96,3 +96,24 @@ fn armtest_additions_single_numbers() {
     assert_eq!("3\n6\n10\n5\n0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_additions_lists() {
+    let (stdout, stderr) = compile("ctest_additions_lists.ijs");
+    assert_eq!("3 3\n6 6 6\n12 15 14\n5\n0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_products_single_numbers() {
+    let (stdout, stderr) = compile("ctest_products_single_numbers.ijs");
+    assert_eq!("2\n6\n24\n4\n0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_products_lists() {
+    let (stdout, stderr) = compile("ctest_products_lists.ijs");
+    assert_eq!("2 2\n6 6 6\n18 0 70\n4\n0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
