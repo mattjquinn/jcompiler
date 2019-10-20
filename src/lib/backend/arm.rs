@@ -65,26 +65,6 @@ enum ArmIns {
     Nop
 }
 
-#[derive(Debug)]
-enum ArmReg {
-    R0,
-    R1,
-    R2,
-    R3,
-    R4,
-    R5,
-    R6,
-    R7,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    SP,
-    LR,
-    PC
-}
-
 impl std::fmt::Display for ArmIns {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), core::fmt::Error> {
         match self {
