@@ -9,6 +9,12 @@ A compiler for the J programming language.
 
 ### Compiling J
 
+jCompiler includes two backends: one harnesses LLVM,
+the other directly emits ARM instructions. Both of these
+are very much nascent.
+
+#### Using the LLVM Backend
+
 You will need LLVM 7 and Rust installed.
 
     $ cargo build --release
@@ -16,7 +22,21 @@ You will need LLVM 7 and Rust installed.
 You can then compile and run programs as follows:
 
 ```
-$ target/release/jcompiler <jfile>.ijs
+$ target/release/jcompiler --backend=llvm <jfile>.ijs
+$ ./<jfile>
+```
+
+#### Using the ARM Backend
+
+In addition to Rust, you will also need an ARM cross-compiler
+toolchain such as those [available from Linaro](https://releases.linaro.org/components/toolchain/binaries/latest-7/arm-linux-gnueabihf/).
+Unpack the toolchain to `/opt`, and check the path at the top of `assemble-and-link-armv7.sh`,
+modifying it to use your path if necessary.
+
+You can then compile and run programs as follows:
+
+```
+$ target/release/jcompiler --backend=arm <jfile>.ijs
 $ ./<jfile>
 ```
 
@@ -88,3 +108,5 @@ compared with all optimizations turned on:
 
 as of March 30th, 2019.
 
+### Related / Of Interest
+* KeRF: https://github.com/kevinlawler/kerf
