@@ -89,3 +89,10 @@ fn armtest_increment_square() {
     assert_eq!("2 5 10 17 26\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_additions_single_numbers() {
+    let (stdout, stderr) = compile("ctest_additions_single_numbers.ijs");
+    assert_eq!("3\n6\n10\n5\n0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

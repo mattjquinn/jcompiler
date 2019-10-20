@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::Write;
 
 use itertools::free::join;
-use parser::{AstNode, MonadicVerb};
+use parser::{AstNode, MonadicVerb, DyadicVerb};
 
 type Offset = i32;
 
@@ -12,7 +12,8 @@ pub struct ARMBackend {}
 
 #[derive(Debug)]
 struct BasicBlock {
-    base_offset: i32,
+    frame_pointer: i32,
+    frame_size: i32,
     instructions: Vec<ArmIns>,
 }
 
@@ -39,6 +40,11 @@ enum ArmIns {
     BranchAndLink {
         addr: &'static str,
     },
+    Add {
+        dst: &'static str,
+        src: &'static str,
+        add: &'static str,
+    },
     AddImm {
         dst: &'static str,
         src: &'static str,
@@ -48,6 +54,10 @@ enum ArmIns {
         dst: &'static str,
         src: &'static str,
         imm: i32,
+    },
+    Move {
+        dst: &'static str,
+        src: &'static str,
     },
     MoveImm {
         dst: &'static str,
@@ -75,6 +85,8 @@ impl std::fmt::Display for ArmIns {
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
             }
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
+            ArmIns::Move { dst, src } =>
+                f.write_str(format!("mov {}, {}", dst, src).as_str()),
             ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
             ArmIns::AddImm { dst, src, imm } => {
                 if dst == src {
@@ -92,6 +104,9 @@ impl std::fmt::Display for ArmIns {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
             }
+            ArmIns::Add { dst, src, add } => {
+                f.write_str(format!("add {}, {}, {}", dst, src, add).as_str())
+            }
             ArmIns::Multiply { dst, src, mul } => {
                 f.write_str(format!("mul {}, {}, {}", dst, src, mul).as_str())
             }
@@ -101,11 +116,38 @@ impl std::fmt::Display for ArmIns {
 }
 
 impl BasicBlock {
-    fn new() -> BasicBlock {
+    fn new(frame_size: i32) -> BasicBlock {
+        println!("Allocating new basic block with frame size {}", frame_size);
         BasicBlock {
-            base_offset: 0,
-            instructions: Vec::new(),
+            frame_size,
+            frame_pointer: 0,
+            instructions: vec![
+                // Frame pointer starts out at stack pointer.
+                ArmIns::Move {
+                    dst: "fp",
+                    src: "sp",
+                },
+                // Expand fp to size of frame.
+                ArmIns::SubImm {
+                    dst: "fp",
+                    src: "fp",
+                    imm: frame_size,
+                },
+                // Expand sp along with it.
+                ArmIns::Move {
+                    dst: "sp",
+                    src: "fp"
+                }
+            ]
         }
+    }
+    fn stack_allocate(&mut self, width: i32) -> i32 {
+        if self.frame_pointer + width > self.frame_size {
+            panic!("Attempted to allocate entity of width {} which overflows frame size of {}; frame pointer is {}", width, self.frame_size, self.frame_pointer);
+        }
+        let offset = self.frame_pointer;
+        self.frame_pointer += width;
+        offset
     }
 }
 
@@ -132,17 +174,17 @@ impl ::Backend for ARMBackend {
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
-                    let mut basic_block = BasicBlock::new();
+                    let mut basic_block = BasicBlock::new(compute_frame_size(expr));
                     let val_offsets = compile_expr(&mut basic_block, expr);
 
-                    for offset in val_offsets.iter().rev() {
+                    for (idx, offset) in val_offsets.iter().enumerate() {
                         basic_block.instructions.push(ArmIns::Load {
                             dst: "r0",
                             src: "=intfmt",
                         });
                         basic_block.instructions.push(ArmIns::LoadOffset {
                             dst: "r1",
-                            src: "sp",
+                            src: "fp",
                             offsets: vec![*offset],
                         });
                         basic_block
@@ -150,9 +192,7 @@ impl ::Backend for ARMBackend {
                             .push(ArmIns::BranchAndLink { addr: "printf" });
 
                         // Multiple printed terms are separated by space, except for the last item
-                        // TODO: This is a terrible way to check if we have iterated
-                        // to the "final" value ref in the list
-                        if *offset != 0 {
+                        if idx != val_offsets.len() - 1 {
                             basic_block.instructions.push(ArmIns::Load {
                                 dst: "r0",
                                 src: "=spacefmt",
@@ -172,11 +212,16 @@ impl ::Backend for ARMBackend {
                         .instructions
                         .push(ArmIns::BranchAndLink { addr: "printf" });
 
-                    // Cleans up the stack for this basic block.
+                    // Erases the frame for this block.
                     basic_block.instructions.push(ArmIns::AddImm{
-                        dst:"sp",
-                        src:"sp",
-                        imm: basic_block.base_offset
+                        dst:"fp",
+                        src:"fp",
+                        imm: basic_block.frame_size,
+                    });
+                    // Stack pointer must be moved up as well.
+                    basic_block.instructions.push(ArmIns::Move {
+                        dst: "sp",
+                        src: "fp"
                     });
 
                     basic_blocks.push(basic_block);
@@ -236,18 +281,13 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                 dst: "r7",
                 imm: *int,
             });
-            basic_block.instructions.push(ArmIns::SubImm {
-                dst: "sp",
-                src: "sp",
-                imm: 4,
-            });
-            basic_block.instructions.push(ArmIns::Store {
-                dst: "sp",
+            let offset = basic_block.stack_allocate(4);
+            basic_block.instructions.push(ArmIns::StoreOffset {
+                dst: "fp",
                 src: "r7",
+                offsets: vec![offset],
             });
-            let val_offsets = vec![basic_block.base_offset];
-            basic_block.base_offset += 4;
-            val_offsets
+            vec![offset]
         }
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
@@ -260,10 +300,10 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
             basic_block.instructions.push(ArmIns::Nop);
             let val_offsets = compile_expr(basic_block, expr);
             basic_block.instructions.push(ArmIns::Nop);
-            for offset in val_offsets.iter().rev() {
+            for offset in &val_offsets {
                 basic_block.instructions.push(ArmIns::LoadOffset {
                     dst: "r4",
-                    src: "sp",
+                    src: "fp",
                     offsets: vec![*offset]
                 });
                 match verb {
@@ -285,15 +325,65 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                 }
                 basic_block.instructions.push(ArmIns::StoreOffset {
                     src: "r4",
-                    dst: "sp",
+                    dst: "fp",
                     offsets: vec![*offset]
                 });
             }
             basic_block.instructions.push(ArmIns::Nop);
             val_offsets   // we return the same list of offsets,
                           // because we've updated them in-place
-        }
+        },
+        parser::AstNode::DyadicOp {verb, lhs, rhs} => {
+            basic_block.instructions.push(ArmIns::Nop);
+            let rhs_offsets = compile_expr(basic_block, rhs);
+            let lhs_offsets = compile_expr(basic_block, lhs);
+            basic_block.instructions.push(ArmIns::Nop);
+            if rhs_offsets.len() != lhs_offsets.len() {
+                panic!("Not ready to compile dyadic op with LHS/RHS of differing lengths.")
+            }
+            for offset_idx in 0..rhs_offsets.len() {
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: "r3",
+                    src: "fp",
+                    offsets: vec![*lhs_offsets.get(offset_idx).unwrap()]
+                });
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: "r4",
+                    src: "fp",
+                    offsets: vec![*rhs_offsets.get(offset_idx).unwrap()]
+                });
+                match verb {
+                    DyadicVerb::Plus => {
+                        basic_block.instructions.push(ArmIns::Add {
+                            dst: "r4",
+                            src: "r4",
+                            add: "r3"
+                        });
+                    },
+                    _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
+                }
+                basic_block.instructions.push(ArmIns::StoreOffset {
+                    src: "r4",
+                    dst: "fp",
+                    offsets: vec![*lhs_offsets.get(offset_idx).unwrap()]
+                });
+            }
+            lhs_offsets     // we are storing in LHS offsets, hence we return LHS offsets
+        },
         _ => panic!("Not ready to compile expression: {:?}", expr),
+    }
+}
+
+fn compute_frame_size(expr: &AstNode) -> i32 {
+    match expr {
+        parser::AstNode::Integer(_int) => 4,
+        parser::AstNode::Terms(terms) =>
+            terms.iter().map(|e| compute_frame_size(e)).sum(),
+        parser::AstNode::MonadicOp {verb: _, expr} =>
+            compute_frame_size(expr),
+        parser::AstNode::DyadicOp {verb: _, lhs, rhs} =>
+            compute_frame_size(lhs) + compute_frame_size(rhs),
+        _ => panic!("Not ready to compute frame size of expr: {:?}", expr)
     }
 }
 
