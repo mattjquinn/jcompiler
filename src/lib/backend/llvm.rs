@@ -109,7 +109,7 @@ pub fn register_cli_options(options: &mut Options) {
     );
 }
 
-pub fn init_from_cli_options(matches: &Matches) -> Result<Box<::Backend>, String> {
+pub fn init_from_cli_options(matches: &Matches) -> Result<Box<dyn(::Backend)>, String> {
     let target_triple = matches.opt_str("llvm-target");
     let optimization_level: u8 = match matches.opt_str("llvm-opt") {
         Some(lvlstr) => match lvlstr.parse::<u8>() {
@@ -596,8 +596,8 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
             ref lhs,
             ref rhs,
         } => {
-            let mut rhs = compile_expr(rhs, module, bb);
-            let mut lhs = compile_expr(lhs, module, bb);
+            let rhs = compile_expr(rhs, module, bb);
+            let lhs = compile_expr(lhs, module, bb);
 
             // Pass args to dynamic library function; types/lengths will be resolved there.
             // TODO: If both type and len of lhs and rhs are statically known,
@@ -617,7 +617,7 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
             }
         }
         parser::AstNode::Reduce { ref verb, ref expr } => {
-            let mut expr = compile_expr(expr, module, bb);
+            let expr = compile_expr(expr, module, bb);
 
             // Pass args to dynamic library function; types/lengths will be resolved there.
             // TODO: If both type and len of lhs and rhs are statically known,
@@ -638,7 +638,7 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
             ref ident,
             ref expr,
         } => {
-            let mut expr = compile_expr(expr, module, bb);
+            let expr = compile_expr(expr, module, bb);
 
             // IMPORTANT: For an assignment sequence such as:
             //   z =: 6

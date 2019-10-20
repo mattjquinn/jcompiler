@@ -6,18 +6,14 @@ use std::io::Write;
 use itertools::free::join;
 use parser::{AstNode, MonadicVerb};
 
-pub struct ARMBackend {}
+type Offset = i32;
 
-#[derive(Debug)]
-struct ValueRef {
-    offset: i32,
-}
+pub struct ARMBackend {}
 
 #[derive(Debug)]
 struct BasicBlock {
     base_offset: i32,
     instructions: Vec<ArmIns>,
-    value_refs: Vec<ValueRef>,
 }
 
 #[derive(Debug)]
@@ -109,7 +105,6 @@ impl BasicBlock {
         BasicBlock {
             base_offset: 0,
             instructions: Vec::new(),
-            value_refs: Vec::new(),
         }
     }
 }
@@ -138,9 +133,9 @@ impl ::Backend for ARMBackend {
             match astnode {
                 parser::AstNode::Print(expr) => {
                     let mut basic_block = BasicBlock::new();
-                    compile_expr(&mut basic_block, expr);
+                    let val_offsets = compile_expr(&mut basic_block, expr);
 
-                    for value_ref in basic_block.value_refs.iter().rev() {
+                    for offset in val_offsets.iter().rev() {
                         basic_block.instructions.push(ArmIns::Load {
                             dst: "r0",
                             src: "=intfmt",
@@ -148,7 +143,7 @@ impl ::Backend for ARMBackend {
                         basic_block.instructions.push(ArmIns::LoadOffset {
                             dst: "r1",
                             src: "sp",
-                            offsets: vec![value_ref.offset],
+                            offsets: vec![*offset],
                         });
                         basic_block
                             .instructions
@@ -157,7 +152,7 @@ impl ::Backend for ARMBackend {
                         // Multiple printed terms are separated by space, except for the last item
                         // TODO: This is a terrible way to check if we have iterated
                         // to the "final" value ref in the list
-                        if value_ref.offset != 0 {
+                        if *offset != 0 {
                             basic_block.instructions.push(ArmIns::Load {
                                 dst: "r0",
                                 src: "=spacefmt",
@@ -177,15 +172,11 @@ impl ::Backend for ARMBackend {
                         .instructions
                         .push(ArmIns::BranchAndLink { addr: "printf" });
 
-                    // TODO: This needs to be done within a "cleanup" method of BasicBlock
-                    basic_block.instructions.push(ArmIns::AddImm {
-                        dst: "sp",
-                        src: "sp",
-                        imm: basic_block
-                            .value_refs
-                            .last()
-                            // TODO: Obviously this +4 needs to go (be more clear)
-                            .map_or(0, |v| v.offset + 4),
+                    // Cleans up the stack for this basic block.
+                    basic_block.instructions.push(ArmIns::AddImm{
+                        dst:"sp",
+                        src:"sp",
+                        imm: basic_block.base_offset
                     });
 
                     basic_blocks.push(basic_block);
@@ -238,7 +229,7 @@ impl ::Backend for ARMBackend {
     }
 }
 
-fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
+fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
     match expr {
         parser::AstNode::Integer(int) => {
             basic_block.instructions.push(ArmIns::MoveImm {
@@ -254,25 +245,26 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
                 dst: "sp",
                 src: "r7",
             });
-            basic_block.value_refs.push(ValueRef {
-                offset: basic_block.base_offset,
-            });
+            let val_offsets = vec![basic_block.base_offset];
             basic_block.base_offset += 4;
+            val_offsets
         }
         parser::AstNode::Terms(terms) => {
+            let mut val_offsets = vec![];
             for term in terms {
-                compile_expr(basic_block, term);
+                val_offsets.extend(compile_expr(basic_block, term));
             }
+            val_offsets
         },
         parser::AstNode::MonadicOp {verb, expr} => {
             basic_block.instructions.push(ArmIns::Nop);
-            compile_expr(basic_block, expr);
+            let val_offsets = compile_expr(basic_block, expr);
             basic_block.instructions.push(ArmIns::Nop);
-            for value_ref in basic_block.value_refs.iter().rev() {
+            for offset in val_offsets.iter().rev() {
                 basic_block.instructions.push(ArmIns::LoadOffset {
                     dst: "r4",
                     src: "sp",
-                    offsets: vec![value_ref.offset]
+                    offsets: vec![*offset]
                 });
                 match verb {
                     MonadicVerb::Increment => {
@@ -294,10 +286,12 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
                 basic_block.instructions.push(ArmIns::StoreOffset {
                     src: "r4",
                     dst: "sp",
-                    offsets: vec![value_ref.offset]
+                    offsets: vec![*offset]
                 });
             }
             basic_block.instructions.push(ArmIns::Nop);
+            val_offsets   // we return the same list of offsets,
+                          // because we've updated them in-place
         }
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
@@ -305,6 +299,6 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) {
 
 pub fn register_cli_options(_options: &mut Options) {}
 
-pub fn init_from_cli_options(_matches: &Matches) -> Result<Box<::Backend>, String> {
+pub fn init_from_cli_options(_matches: &Matches) -> Result<Box<dyn (::Backend)>, String> {
     Ok(Box::new(ARMBackend {}))
 }

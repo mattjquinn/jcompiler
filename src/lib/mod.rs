@@ -26,7 +26,7 @@ use std::path::Path;
 
 pub fn compile(
     path: &str,
-    backend: Box<Backend>,
+    backend: Box<dyn Backend>,
     do_report_mem_usage: bool,
     do_verbose: bool,
     optional_output_path: Option<String>,

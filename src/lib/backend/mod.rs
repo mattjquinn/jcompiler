@@ -27,7 +27,7 @@ pub fn register_cli_options(options: &mut Options) {
     arm::register_cli_options(options);
 }
 
-pub fn init_from_cli_options(matches: &Matches) -> Result<Box<Backend>, String> {
+pub fn init_from_cli_options(matches: &Matches) -> Result<Box<dyn Backend>, String> {
     match matches.opt_str("backend") {
         Some(ref choice) if &choice[..] == "llvm" => llvm::init_from_cli_options(&matches),
         Some(ref choice) if &choice[..] == "arm" => arm::init_from_cli_options(&matches),
