@@ -127,3 +127,17 @@ fn armtest_mixed_adds_mults() {
     );
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_subtractions_single_positives() {
+    let (stdout, stderr) = compile("ctest_subtractions_single_positives.ijs");
+    assert_eq!("_1\n2\n_2\n3\n0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_subtractions_lists_positives() {
+    let (stdout, stderr) = compile("ctest_subtractions_lists_positives.ijs");
+    assert_eq!("_1 _1\n2 2 2\n8 _3 10\n0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
