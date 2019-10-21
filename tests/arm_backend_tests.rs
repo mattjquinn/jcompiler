@@ -117,3 +117,13 @@ fn armtest_products_lists() {
     assert_eq!("2 2\n6 6 6\n18 0 70\n4\n0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_mixed_adds_mults() {
+    let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
+    assert_eq!(
+        "170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n",
+        &stdout[..]
+    );
+    assert_eq!("", &stderr[..]);
+}

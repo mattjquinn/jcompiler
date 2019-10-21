@@ -5,6 +5,8 @@ use std::io::Write;
 
 use itertools::free::join;
 use parser::{AstNode, MonadicVerb, DyadicVerb};
+use itertools::Itertools;
+use itertools::EitherOrBoth::{Both, Left, Right};
 
 type Offset = i32;
 
@@ -49,6 +51,11 @@ enum ArmIns {
         dst: &'static str,
         src: &'static str,
         imm: i32,
+    },
+    Sub {
+        dst: &'static str,
+        src: &'static str,
+        sub: &'static str,
     },
     SubImm {
         dst: &'static str,
@@ -103,6 +110,9 @@ impl std::fmt::Display for ArmIns {
                 } else {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
+            }
+            ArmIns::Sub { dst, src, sub } => {
+                f.write_str(format!("sub {}, {}, {}", dst, src, sub).as_str())
             }
             ArmIns::Add { dst, src, add } => {
                 f.write_str(format!("add {}, {}, {}", dst, src, add).as_str())
@@ -178,24 +188,21 @@ impl ::Backend for ARMBackend {
                     let val_offsets = compile_expr(&mut basic_block, expr);
 
                     for (idx, offset) in val_offsets.iter().enumerate() {
-                        basic_block.instructions.push(ArmIns::Load {
-                            dst: "r0",
-                            src: "=intfmt",
-                        });
+
                         basic_block.instructions.push(ArmIns::LoadOffset {
                             dst: "r1",
                             src: "fp",
                             offsets: vec![*offset],
                         });
-                        basic_block
-                            .instructions
-                            .push(ArmIns::BranchAndLink { addr: "printf" });
+                        basic_block.instructions.push(ArmIns::BranchAndLink {
+                            addr: "jprint"
+                        });
 
                         // Multiple printed terms are separated by space, except for the last item
                         if idx != val_offsets.len() - 1 {
                             basic_block.instructions.push(ArmIns::Load {
                                 dst: "r0",
-                                src: "=spacefmt",
+                                src: "=space_fmt",
                             });
                             basic_block
                                 .instructions
@@ -206,7 +213,7 @@ impl ::Backend for ARMBackend {
                     // All printed expressions are terminated with a newline.
                     basic_block.instructions.push(ArmIns::Load {
                         dst: "r0",
-                        src: "=nlfmt",
+                        src: "=nl_fmt",
                     });
                     basic_block
                         .instructions
@@ -240,13 +247,29 @@ impl ::Backend for ARMBackend {
         let preamble = vec![
             ".arch armv7-a".to_string(),
             ".data".to_string(),
-            "intfmt: .asciz \"%d\"".to_string(),
-            "nlfmt:  .asciz \"\\n\"".to_string(),
-            "spacefmt:  .asciz \" \"".to_string(),
+            "pos_int_fmt: .asciz \"%d\"".to_string(),
+            "neg_int_fmt: .asciz \"_%d\"".to_string(),
+            "nl_fmt:  .asciz \"\\n\"".to_string(),
+            "space_fmt:  .asciz \" \"".to_string(),
             ".text".to_string(),
             ".global main".to_string(),
             ".extern printf".to_string(),
             ".syntax unified".to_string(),
+            // printing related functions
+            "jprint:".to_string(),
+            "push {lr}".to_string(),
+            "cmp r1, #0".to_string(),
+            "blt jprint_neg".to_string(),
+            "ldr r0, =pos_int_fmt".to_string(),
+            "jprint_main:".to_string(),
+            "bl printf".to_string(),
+            "pop {lr}".to_string(),
+            "bx lr".to_string(),
+            "jprint_neg:".to_string(),
+            "ldr r0, =neg_int_fmt".to_string(),
+            "rsblt r1, r1, #0".to_string(), // takes abs value of r1
+            "bl jprint_main".to_string(),
+            // main
             "main:".to_string(),
             "push {ip, lr}".to_string(),
         ];
@@ -338,44 +361,49 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
             let rhs_offsets = compile_expr(basic_block, rhs);
             let lhs_offsets = compile_expr(basic_block, lhs);
             basic_block.instructions.push(ArmIns::Nop);
-            if rhs_offsets.len() != lhs_offsets.len() {
-                panic!("Not ready to compile dyadic op with LHS/RHS of differing lengths.")
+            if rhs_offsets.len() != lhs_offsets.len()
+                && (lhs_offsets.len() != 1 && rhs_offsets.len() != 1) {
+                    panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_offsets.len(), rhs_offsets.len())
             }
-            for offset_idx in 0..rhs_offsets.len() {
-                basic_block.instructions.push(ArmIns::LoadOffset {
-                    dst: "r3",
-                    src: "fp",
-                    offsets: vec![*lhs_offsets.get(offset_idx).unwrap()]
-                });
-                basic_block.instructions.push(ArmIns::LoadOffset {
-                    dst: "r4",
-                    src: "fp",
-                    offsets: vec![*rhs_offsets.get(offset_idx).unwrap()]
-                });
+
+            #[derive(Debug, Eq, PartialEq)]
+            enum Destination { LHS, RHS }
+            let dest = if rhs_offsets.len() > lhs_offsets.len() { Destination::RHS } else { Destination::LHS };
+            let repeated_offset = match lhs_offsets.len() {
+                1 => lhs_offsets.get(0).unwrap(),
+                _ => rhs_offsets.get(0).unwrap()
+            };
+
+            for pair in lhs_offsets.iter().zip_longest(rhs_offsets.iter()) {
+                let (l, r) = match pair {
+                    Both(l, r) => (l, r),
+                    Left(l) => (l, repeated_offset),
+                    Right(r) => (repeated_offset, r)
+                };
+                basic_block.instructions.push(
+                    ArmIns::LoadOffset { dst: "r3", src: "fp", offsets: vec![*l] });
+                basic_block.instructions.push(
+                    ArmIns::LoadOffset { dst: "r4", src: "fp", offsets: vec![*r] });
                 match verb {
-                    DyadicVerb::Plus => {
-                        basic_block.instructions.push(ArmIns::Add {
-                            dst: "r4",
-                            src: "r4",
-                            add: "r3"
-                        });
-                    },
-                    DyadicVerb::Times => {
-                        basic_block.instructions.push(ArmIns::Multiply {
-                            dst: "r4",
-                            src: "r4",
-                            mul: "r3"
-                        });
-                    },
+                    DyadicVerb::Plus =>
+                        basic_block.instructions.push(
+                            ArmIns::Add { dst: "r4", src: "r3", add: "r4" }),
+                    DyadicVerb::Times =>
+                        basic_block.instructions.push(
+                            ArmIns::Multiply { dst: "r4", src: "r3", mul: "r4" }),
+                    DyadicVerb::Minus =>
+                        basic_block.instructions.push(
+                            ArmIns::Sub { dst: "r4", src: "r3", sub: "r4" }),
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
                 basic_block.instructions.push(ArmIns::StoreOffset {
                     src: "r4",
                     dst: "fp",
-                    offsets: vec![*lhs_offsets.get(offset_idx).unwrap()]
+                    offsets: vec![if dest == Destination::RHS { *r } else { *l }]
                 });
             }
-            lhs_offsets     // we are storing in LHS offsets, hence we return LHS offsets
+            // return whichever set of offsets we actually stored to
+            if dest == Destination::RHS { rhs_offsets } else { lhs_offsets }
         },
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
