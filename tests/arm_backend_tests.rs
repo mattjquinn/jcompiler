@@ -181,3 +181,27 @@ fn armtest_products_lists_mixedlens_legal() {
     );
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_insertions_plus() {
+    let (stdout, stderr) = compile("ctest_insertions_plus.ijs");
+    assert_eq!("5\n3\n6\n11\n2\n_26\n_26\n_10\n90 180 270\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_insertions_times() {
+    let (stdout, stderr) = compile("ctest_insertions_times.ijs");
+    assert_eq!(
+        "0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n",
+        &stdout[..]
+    );
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn armtest_insertions_minus() {
+    let (stdout, stderr) = compile("ctest_insertions_minus.ijs");
+    assert_eq!("0\n5\n1\n_1\n2\n3\n16\n_3\n14\n10\n13 23 33\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

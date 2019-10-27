@@ -416,6 +416,58 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
             // return whichever set of offsets we actually stored to
             if dest == Destination::RHS { rhs_offsets } else { lhs_offsets }
         },
+        parser::AstNode::Reduce {verb, expr} => {
+            basic_block.instructions.push(ArmIns::Nop);
+            let expr_offsets = compile_expr(basic_block, expr);
+            basic_block.instructions.push(ArmIns::Nop);
+            // Initialize the accumulator to expr's last offset value
+            let accum_offset = *expr_offsets.last().unwrap();
+            basic_block.instructions.push(ArmIns::LoadOffset {
+                dst: "r3",
+                src: "fp",
+                offsets: vec![accum_offset]
+            });
+            // Accumulate from right to left.
+            for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: "r4",
+                    src: "fp",
+                    offsets: vec![*offset_idx]
+                });
+                match verb {
+                    DyadicVerb::Plus => {
+                        basic_block.instructions.push(ArmIns::Add {
+                            dst: "r3",
+                            src: "r4",
+                            add: "r3"
+                        });
+                    },
+                    DyadicVerb::Minus => {
+                        basic_block.instructions.push(ArmIns::Sub {
+                            dst: "r3",
+                            src: "r4",
+                            sub: "r3"
+                        });
+                    },
+                    DyadicVerb::Times => {
+                        basic_block.instructions.push(ArmIns::Multiply {
+                            dst: "r3",
+                            src: "r4",
+                            mul: "r3"
+                        });
+                    },
+                    _ => unimplemented!("TODO: Support reduction of monadic verb: {:?}", verb)
+                }
+            }
+            // Store the accumulator in expr's first offset, and return that
+            // single offset here.
+            basic_block.instructions.push(ArmIns::StoreOffset {
+                src: "r3",
+                dst: "fp",
+                offsets: vec![accum_offset]
+            });
+            vec![accum_offset]
+        },
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
 }
@@ -429,6 +481,8 @@ fn compute_frame_size(expr: &AstNode) -> i32 {
             compute_frame_size(expr),
         parser::AstNode::DyadicOp {verb: _, lhs, rhs} =>
             compute_frame_size(lhs) + compute_frame_size(rhs),
+        parser::AstNode::Reduce {verb: _, expr} =>
+            compute_frame_size(expr),
         _ => panic!("Not ready to compute frame size of expr: {:?}", expr)
     }
 }
