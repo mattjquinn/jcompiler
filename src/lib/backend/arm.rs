@@ -343,6 +343,17 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                             src: "r4",
                             mul: "r4"
                         });
+                    },
+                    MonadicVerb::Negate => {
+                        basic_block.instructions.push(ArmIns::MoveImm {
+                            dst: "r6",
+                            imm: 0
+                        });
+                        basic_block.instructions.push(ArmIns::Sub {
+                            dst: "r4",
+                            src: "r6",
+                            sub: "r4"
+                        });
                     }
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
                 }
