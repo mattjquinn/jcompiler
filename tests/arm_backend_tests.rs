@@ -222,3 +222,13 @@ fn armtest_equal() {
     assert_eq!("0\n1\n0 0 1\n1 1 1\n0 0 0\n1 1 1\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_largerthan() {
+    let (stdout, stderr) = compile("ctest_largerthan.ijs");
+    assert_eq!(
+        "1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n",
+        &stdout[..]
+    );
+    assert_eq!("", &stderr[..]);
+}
