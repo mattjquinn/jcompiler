@@ -75,6 +75,18 @@ enum ArmIns {
         src: &'static str,
         mul: &'static str,
     },
+    Compare {
+        lhs: &'static str,
+        rhs: &'static str,
+    },
+    MoveLT {
+        dst: &'static str,
+        src: &'static str,
+    },
+    MoveGE {
+        dst: &'static str,
+        src: &'static str,
+    },
     Nop
 }
 
@@ -90,6 +102,15 @@ impl std::fmt::Display for ArmIns {
             ArmIns::StoreOffset { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
+            }
+            ArmIns::Compare { lhs, rhs } => {
+                f.write_str(format!("cmp {}, {}", lhs, rhs).as_str())
+            }
+            ArmIns::MoveLT { dst, src } => {
+                f.write_str(format!("movlt {}, {}", dst, src).as_str())
+            }
+            ArmIns::MoveGE { dst, src } => {
+                f.write_str(format!("movge {}, {}", dst, src).as_str())
             }
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::Move { dst, src } =>
@@ -405,6 +426,14 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                     DyadicVerb::Minus =>
                         basic_block.instructions.push(
                             ArmIns::Sub { dst: "r4", src: "r3", sub: "r4" }),
+                    DyadicVerb::LessThan => {
+                        basic_block.instructions.push(
+                            ArmIns::Compare { lhs: "r3", rhs: "r4" });
+                        basic_block.instructions.push(
+                            ArmIns::MoveLT { dst: "r4", src: "#1" });
+                        basic_block.instructions.push(
+                            ArmIns::MoveGE { dst: "r4", src: "#0" });
+                    }
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
                 basic_block.instructions.push(ArmIns::StoreOffset {

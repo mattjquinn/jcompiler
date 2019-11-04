@@ -205,3 +205,13 @@ fn armtest_insertions_minus() {
     assert_eq!("0\n5\n1\n_1\n2\n3\n16\n_3\n14\n10\n13 23 33\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_lessthan() {
+    let (stdout, stderr) = compile("ctest_lessthan.ijs");
+    assert_eq!(
+        "0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n",
+        &stdout[..]
+    );
+    assert_eq!("", &stderr[..]);
+}
