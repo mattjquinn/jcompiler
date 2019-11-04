@@ -79,14 +79,10 @@ enum ArmIns {
         lhs: &'static str,
         rhs: &'static str,
     },
-    MoveLT {
-        dst: &'static str,
-        src: &'static str,
-    },
-    MoveGE {
-        dst: &'static str,
-        src: &'static str,
-    },
+    MoveLT { dst: &'static str, src: &'static str },
+    MoveGE { dst: &'static str, src: &'static str },
+    MoveNE { dst: &'static str, src: &'static str },
+    MoveEQ { dst: &'static str, src: &'static str },
     Nop
 }
 
@@ -111,6 +107,12 @@ impl std::fmt::Display for ArmIns {
             }
             ArmIns::MoveGE { dst, src } => {
                 f.write_str(format!("movge {}, {}", dst, src).as_str())
+            }
+            ArmIns::MoveEQ { dst, src } => {
+                f.write_str(format!("moveq {}, {}", dst, src).as_str())
+            }
+            ArmIns::MoveNE { dst, src } => {
+                f.write_str(format!("movne {}, {}", dst, src).as_str())
             }
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::Move { dst, src } =>
@@ -433,6 +435,14 @@ fn compile_expr(basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
                             ArmIns::MoveLT { dst: "r4", src: "#1" });
                         basic_block.instructions.push(
                             ArmIns::MoveGE { dst: "r4", src: "#0" });
+                    },
+                    DyadicVerb::Equal => {
+                        basic_block.instructions.push(
+                            ArmIns::Compare { lhs: "r3", rhs: "r4" });
+                        basic_block.instructions.push(
+                            ArmIns::MoveEQ { dst: "r4", src: "#1" });
+                        basic_block.instructions.push(
+                            ArmIns::MoveNE { dst: "r4", src: "#0" });
                     }
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }

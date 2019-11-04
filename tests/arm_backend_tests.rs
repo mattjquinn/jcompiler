@@ -215,3 +215,10 @@ fn armtest_lessthan() {
     );
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_equal() {
+    let (stdout, stderr) = compile("ctest_equal.ijs");
+    assert_eq!("0\n1\n0 0 1\n1 1 1\n0 0 0\n1 1 1\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
