@@ -21,7 +21,3 @@ K9
 finaltotal
 FinalTotal
 average_annual_rainfall
-a =: 7.5
-a
-b =: 1 2 3 4 5
-b

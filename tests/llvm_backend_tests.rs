@@ -273,12 +273,23 @@ fn llvmtest_is_verb_globalassgmts() {
 }
 
 #[test]
-fn llvmtest_global_assgmts_refs() {
-    let (stdout, stderr) = compile("ctest_global_assgmts_refs.ijs");
-    assert_eq!(
-        "99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n7.5\n1 2 3 4 5\n",
-        &stdout[..]
-    );
+fn llvmtest_global_assgmts_refs_integer() {
+    let (stdout, stderr) = compile("ctest_global_assgmts_refs_integer.ijs");
+    assert_eq!("99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn llvmtest_global_assgmts_refs_double() {
+    let (stdout, stderr) = compile("ctest_global_assgmts_refs_double.ijs");
+    assert_eq!("7.5\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}
+
+#[test]
+fn llvmtest_global_assgmts_refs_array() {
+    let (stdout, stderr) = compile("ctest_global_assgmts_refs_array.ijs");
+    assert_eq!("1 2 3 4 5\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
 
