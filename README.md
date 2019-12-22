@@ -110,3 +110,4 @@ as of March 30th, 2019.
 
 ### Related / Of Interest
 * KeRF: https://github.com/kevinlawler/kerf
+* APL amuse-bouches: https://vector.org.uk/sixteen-apl-amuse-bouches/
