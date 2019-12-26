@@ -43,7 +43,7 @@ pub enum DyadicVerb {
 pub enum AstNode {
     Print(Box<AstNode>),
     Integer(i32),
-    DoublePrecisionFloat(f64),
+    SinglePrecisionFloat(f32),
     MonadicOp {
         verb: MonadicVerb,
         expr: Box<AstNode>,
@@ -333,12 +333,12 @@ fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
                 "_" => (-1.0, &dstr[1..]),
                 _ => (1.0, &dstr[..]),
             };
-            let mut flt: f64 = dstr.parse().unwrap();
+            let mut flt: f32 = dstr.parse().unwrap();
             if flt != 0.0 {
                 // Avoid negative zeroes; only multiply sign by nonzeroes.
                 flt *= sign;
             }
-            AstNode::DoublePrecisionFloat(flt)
+            AstNode::SinglePrecisionFloat(flt)
         }
         Rule::expr => build_ast_from_expr(pair),
         Rule::ident => AstNode::Ident(String::from(pair.as_str())),
