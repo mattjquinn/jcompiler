@@ -10,6 +10,7 @@ use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::fmt::{Formatter, Error};
 use std::cmp::max;
+use num::traits::Float;
 
 pub struct ARMBackend {}
 
@@ -314,6 +315,7 @@ impl ::Backend for ARMBackend {
             ".data".to_string(),
             "pos_int_fmt: .asciz \"%d\"".to_string(),
             "neg_int_fmt: .asciz \"_%d\"".to_string(),
+            "pos_float_fmt: .asciz \"%g\"".to_string(),
             "nl_fmt:  .asciz \"\\n\"".to_string(),
             "space_fmt:  .asciz \" \"".to_string()];
         for ident in globalctx.globals_table.keys() {
@@ -327,9 +329,13 @@ impl ::Backend for ARMBackend {
             // printing related functions
             "jprint:".to_string(),
             "push {lr}".to_string(),
-            "cmp r1, #0".to_string(),
-            "blt jprint_neg".to_string(),
-            "ldr r0, =pos_int_fmt".to_string(),
+            //"cmp r1, #0".to_string(),
+            //"blt jprint_neg".to_string(),
+            "mov r0, r1".to_string(),
+            "bl __aeabi_f2d".to_string(),
+            "mov r2, r0".to_string(),
+            "mov r3, r1".to_string(),
+            "ldr r0, =pos_float_fmt".to_string(),
             "jprint_main:".to_string(),
             "bl printf".to_string(),
             "pop {lr}".to_string(),
@@ -397,7 +403,28 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                 offsets: vec![offset],
             });
             vec![Offset::Stack(offset)]
-        }
+        },
+        parser::AstNode::SinglePrecisionFloat(num) => {
+            let (mantissa, exponent, sign) = Float::integer_decode(*num);
+            println!("TODO: {}, {}, {}", mantissa, exponent, sign);
+            // from godbolt.org
+            basic_block.instructions.push(ArmIns::Move {
+                dst: "r7",
+                src: "0xF00000",  // TODO: This is hex for mantissa
+            });
+            basic_block.instructions.push(ArmIns::Add {
+                dst: "r7",
+                src: "r7",
+                add: "0x40000000", // TODO: This is hex for exponent
+            });
+            let offset = basic_block.stack_allocate(4);
+            basic_block.instructions.push(ArmIns::StoreOffset {
+                dst: "fp",
+                src: "r7",
+                offsets: vec![offset],
+            });
+            vec![Offset::Stack(offset)]
+        },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
             for term in terms {
@@ -641,6 +668,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
 fn compute_frame_size(expr: &AstNode) -> i32 {
     match expr {
         parser::AstNode::Integer(_int) => 4,
+        parser::AstNode::SinglePrecisionFloat(_float) => 4,
         parser::AstNode::Terms(terms) =>
             terms.iter().map(|e| compute_frame_size(e)).sum(),
         parser::AstNode::MonadicOp {verb: _, expr} =>
@@ -667,6 +695,7 @@ fn register_globals(expr: &AstNode, registered_idents: &mut HashSet<String>) {
         parser::AstNode::Print(expr) =>
             register_globals(expr, registered_idents),
         parser::AstNode::Integer(_int) => (),
+        parser::AstNode::SinglePrecisionFloat(_float) => (),
         parser::AstNode::Terms(terms) =>
             terms.iter().for_each(|e| register_globals(e, registered_idents)),
         parser::AstNode::MonadicOp {verb: _, expr} =>

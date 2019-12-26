@@ -246,3 +246,10 @@ fn armtest_global_assgmts_refs_integer() {
     assert_eq!("99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n", &stdout[..]);
     assert_eq!("", &stderr[..]);
 }
+
+#[test]
+fn armtest_global_assgmts_refs_double() {
+    let (stdout, stderr) = compile("ctest_global_assgmts_refs_double.ijs");
+    assert_eq!("7.5\n", &stdout[..]);
+    assert_eq!("", &stderr[..]);
+}

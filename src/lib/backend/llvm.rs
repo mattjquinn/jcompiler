@@ -432,7 +432,7 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
                 )
             }
         }
-        parser::AstNode::DoublePrecisionFloat(n) => {
+        parser::AstNode::SinglePrecisionFloat(n) => {
             unsafe {
                 // Allocate space for the number.
                 let num = LLVMBuildAlloca(
@@ -440,7 +440,7 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
                     f64_type(),
                     module.new_string_ptr("dblfp_alloc"),
                 );
-                LLVMBuildStore(builder.builder, f64(n), num);
+                LLVMBuildStore(builder.builder, f64(n.into()), num);
 
                 // Point to the number via a JVal struct.
                 alloc_jval(
