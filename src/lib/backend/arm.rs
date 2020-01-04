@@ -194,9 +194,6 @@ impl BasicBlock {
         }
     }
 
-    // TODO TODO TODO: width goes away, function is typed according to
-    // the width being allocated; associate a type enum with the offset
-    // returned, which is then accessible to i.e. jprint
     // TODO: should be inaccessible to callers outside of this struct
     fn _stack_allocate(&mut self, width: i32) -> i32 {
         if self.frame_pointer + width > self.frame_size {
@@ -469,7 +466,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             });
             vec![Offset::Stack(Type::Integer, offset)]
         },
-        parser::AstNode::SinglePrecisionFloat(num) => {
+        parser::AstNode::DoublePrecisionFloat(num) => {
             let (mantissa, exponent, sign) = Float::integer_decode(*num);
             println!("TODO: {}, {}, {}", mantissa, exponent, sign);
             // from godbolt.org
@@ -740,7 +737,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
 fn compute_frame_size(expr: &AstNode) -> i32 {
     match expr {
         parser::AstNode::Integer(_int) => 4,
-        parser::AstNode::SinglePrecisionFloat(_float) => 4,
+        parser::AstNode::DoublePrecisionFloat(_float) => 4,
         parser::AstNode::Terms(terms) =>
             terms.iter().map(|e| compute_frame_size(e)).sum(),
         parser::AstNode::MonadicOp {verb: _, expr} =>
@@ -769,7 +766,7 @@ fn register_globals(expr: &AstNode,
         parser::AstNode::Print(expr) =>
             register_globals(expr, registered_idents, ident_type_map),
         parser::AstNode::Integer(_int) => (),
-        parser::AstNode::SinglePrecisionFloat(_float) => (),
+        parser::AstNode::DoublePrecisionFloat(_float) => (),
         parser::AstNode::Terms(terms) =>
             terms.iter().for_each(|e| register_globals(e, registered_idents, ident_type_map)),
         parser::AstNode::MonadicOp {verb: _, expr} =>
@@ -793,7 +790,7 @@ fn register_globals(expr: &AstNode,
 fn determine_type(expr: &AstNode, ident_type_map: &HashMap<String, Type>) -> Option<Type> {
     match expr {
         parser::AstNode::Integer(_int) => Some(Type::Integer),
-        parser::AstNode::SinglePrecisionFloat(_float) => Some(Type::Float),
+        parser::AstNode::DoublePrecisionFloat(_float) => Some(Type::Float),
         parser::AstNode::Ident(ident) => Some(ident_type_map.get(ident).unwrap().clone()),
         parser::AstNode::DyadicOp{verb: _, lhs, rhs} =>
             Some(unify_types(
