@@ -16,15 +16,17 @@ pub struct ARMBackend {}
 
 #[derive(Debug)]
 enum Offset {
-    Stack(i32),
-    Global(String),
+    Stack(Type, i32),
+    Global(Type, String),
 }
 
 impl std::fmt::Display for Offset {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            Offset::Stack(i) => f.write_fmt(format_args!("{}", i)),
-            Offset::Global(s) => f.write_fmt(format_args!(".{}", s))
+            Offset::Stack(ty, i) => f.write_fmt(format_args!(
+                "Stack<offset={},type={}>", ty, i)),
+            Offset::Global(ty, s) => f.write_fmt(format_args!(
+                "Global<offset={},type={}>", ty, s))
         }
     }
 }
@@ -32,15 +34,33 @@ impl std::fmt::Display for Offset {
 impl std::clone::Clone for Offset {
     fn clone(&self) -> Self {
         match self {
-            Offset::Stack(i) => Offset::Stack(*i),
-            Offset::Global(s) => Offset::Global(s.clone())
+            Offset::Stack(ty, i) => Offset::Stack(ty.clone(), *i),
+            Offset::Global(ty, s) => Offset::Global(ty.clone(), s.clone())
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Type {
+    Integer,
+    Float  // single precision
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        // TODO: there must be a more concise way to do this
+        let s = match self {
+            Type::Integer => "Integer",
+            Type::Float => "Float",
+        };
+        f.write_fmt(format_args!("{}", s))
     }
 }
 
 #[derive(Debug)]
 struct GlobalContext {
     globals_table: HashMap<String, i32>,
+    ident_type_map: HashMap<String, Type>,
 }
 
 #[derive(Debug)]
@@ -173,12 +193,27 @@ impl BasicBlock {
             instructions,
         }
     }
-    fn stack_allocate(&mut self, width: i32) -> i32 {
+
+    // TODO TODO TODO: width goes away, function is typed according to
+    // the width being allocated; associate a type enum with the offset
+    // returned, which is then accessible to i.e. jprint
+    // TODO: should be inaccessible to callers outside of this struct
+    fn _stack_allocate(&mut self, width: i32) -> i32 {
         if self.frame_pointer + width > self.frame_size {
             panic!("Attempted to allocate entity of width {} which overflows frame size of {}; frame pointer is {}", width, self.frame_size, self.frame_pointer);
         }
         let offset = self.frame_pointer;
         self.frame_pointer += width;
+        offset
+    }
+
+    fn stack_allocate_int(&mut self) -> i32 {
+        let offset = self._stack_allocate(4);
+        offset
+    }
+
+    fn stack_allocate_double(&mut self) -> i32 {
+        let offset = self._stack_allocate(4);
         offset
     }
 }
@@ -202,23 +237,25 @@ impl ::Backend for ARMBackend {
         println!("Writing assembly file to {}", &assembly_filename);
 
         let mut basic_blocks = Vec::new();
-        let globalctx = GlobalContext {
-            globals_table: {
-                let mut global_idents = HashSet::new();
-                for astnode in ast {
-                    register_globals(&astnode, &mut global_idents);
+        let globalctx = {
+            let mut global_idents = HashSet::new();
+            let mut ident_type_map = HashMap::new();
+            for astnode in ast {
+                register_globals(&astnode, &mut global_idents, &mut ident_type_map);
+            }
+            let mut globals_table : HashMap<String, i32> = HashMap::new();
+            if global_idents.len() > 0 {
+                // Assuming all values are 32-bit integers for now:
+                let mut global_bb = BasicBlock::new((global_idents.len() * 4) as i32);
+                for ident in global_idents {
+                    globals_table.insert(ident.clone(), global_bb.stack_allocate_int());
                 }
-                let mut globals_table : HashMap<String, i32> = HashMap::new();
-                if global_idents.len() > 0 {
-                    // Assuming all values are 32-bit integers for now:
-                    let mut global_bb = BasicBlock::new((global_idents.len() * 4) as i32);
-                    for ident in global_idents {
-                        globals_table.insert(ident.clone(), global_bb.stack_allocate(4));
-                    }
-                    basic_blocks.push(global_bb);
-                    println!("Globals table: {:?}", globals_table);
-                }
-                globals_table
+                basic_blocks.push(global_bb);
+                println!("Globals table: {:?}", globals_table);
+            }
+            GlobalContext {
+                globals_table,
+                ident_type_map
             }
         };
 
@@ -233,12 +270,16 @@ impl ::Backend for ARMBackend {
                         parser::AstNode::IsGlobal { ident: _, expr: _ } => (),
                         _ => {
                             for (idx, offset) in val_offsets.iter().enumerate() {
-                                match offset {
-                                    Offset::Stack(i) =>
+                                let ty = match offset {
+                                    Offset::Stack(ty, i) => {
                                         basic_block.instructions.push(ArmIns::LoadOffset {
-                                            dst: "r1", src: "fp", offsets: vec![*i],
-                                        }),
-                                    Offset::Global(ident) => {
+                                            dst: "r1",
+                                            src: "fp",
+                                            offsets: vec![*i],
+                                        });
+                                        ty
+                                    },
+                                    Offset::Global(ty, ident) => {
                                         basic_block.instructions.push(ArmIns::Load {
                                             dst: "r1".to_string(),
                                             src: format!(".{}", ident).to_string()
@@ -247,10 +288,15 @@ impl ::Backend for ARMBackend {
                                             dst: "r1".to_string(),
                                             src: "[r1]".to_string(),
                                         });
+                                        ty
                                     }
-                                }
+                                };
+
                                 basic_block.instructions.push(ArmIns::BranchAndLink {
-                                    addr: "jprint"
+                                    addr: match ty {
+                                        Type::Integer => "jprint_int",
+                                        Type::Float => "jprint_float"
+                                    }
                                 });
 
                                 // Multiple printed terms are separated by space, except for the last item
@@ -327,10 +373,25 @@ impl ::Backend for ARMBackend {
             ".extern printf".to_string(),
             ".syntax unified".to_string(),
             // printing related functions
-            "jprint:".to_string(),
+            // TODO: combine these into their common parts
+            // === INTEGER ==============================================
+            "jprint_int:".to_string(),
             "push {lr}".to_string(),
-            //"cmp r1, #0".to_string(),
-            //"blt jprint_neg".to_string(),
+            "cmp r1, #0".to_string(),
+            "blt jprint_int_neg".to_string(),
+            "ldr r0, =pos_int_fmt".to_string(),
+            "jprint_int_main:".to_string(),
+            "bl printf".to_string(),
+            "pop {lr}".to_string(),
+            "bx lr".to_string(),
+            "jprint_int_neg:".to_string(),
+            "ldr r0, =neg_int_fmt".to_string(),
+            "rsblt r1, r1, #0".to_string(), // takes abs value of r1
+            "bl jprint_int_main".to_string(),
+            // === DOUBLE ==============================================
+            "jprint_float:".to_string(),
+            "push {lr}".to_string(),
+            // TODO: Eventually support negatives here using "cmp"
             "mov r0, r1".to_string(),
             "bl __aeabi_f2d".to_string(),
             "mov r2, r0".to_string(),
@@ -340,10 +401,6 @@ impl ::Backend for ARMBackend {
             "bl printf".to_string(),
             "pop {lr}".to_string(),
             "bx lr".to_string(),
-            "jprint_neg:".to_string(),
-            "ldr r0, =neg_int_fmt".to_string(),
-            "rsblt r1, r1, #0".to_string(), // takes abs value of r1
-            "bl jprint_main".to_string(),
             // main
             "main:".to_string(),
             "push {ip, lr}".to_string(),
@@ -389,6 +446,14 @@ impl ::Backend for ARMBackend {
     }
 }
 
+fn unify_types(l_type: &Type, r_type: &Type) -> Type {
+    match (l_type, r_type) {
+        (Type::Integer, Type::Integer) => Type::Integer,
+        (Type::Float, Type::Float) => Type::Float,
+        _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
+    }
+}
+
 fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
     match expr {
         parser::AstNode::Integer(int) => {
@@ -396,13 +461,13 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                 dst: "r7",
                 imm: *int,
             });
-            let offset = basic_block.stack_allocate(4);
+            let offset = basic_block.stack_allocate_int();
             basic_block.instructions.push(ArmIns::StoreOffset {
                 dst: "fp",
                 src: "r7",
                 offsets: vec![offset],
             });
-            vec![Offset::Stack(offset)]
+            vec![Offset::Stack(Type::Integer, offset)]
         },
         parser::AstNode::SinglePrecisionFloat(num) => {
             let (mantissa, exponent, sign) = Float::integer_decode(*num);
@@ -417,13 +482,13 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                 src: "r7",
                 add: "0x40000000", // TODO: This is hex for exponent
             });
-            let offset = basic_block.stack_allocate(4);
+            let offset = basic_block.stack_allocate_double();
             basic_block.instructions.push(ArmIns::StoreOffset {
                 dst: "fp",
                 src: "r7",
                 offsets: vec![offset],
             });
-            vec![Offset::Stack(offset)]
+            vec![Offset::Stack(Type::Float, offset)]
         },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
@@ -438,10 +503,10 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             basic_block.instructions.push(ArmIns::Nop);
             for offset in &val_offsets {
                 match offset {
-                    Offset::Stack(offset) =>
+                    Offset::Stack(_type, offset) =>
                         basic_block.instructions.push(ArmIns::LoadOffset {
                             dst: "r4", src: "fp", offsets: vec![offset.clone()]}),
-                    Offset::Global(_ident) =>
+                    Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support loading from global.")
                 };
                 match verb {
@@ -473,13 +538,13 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
                 }
                 match offset {
-                    Offset::Stack(offset) =>
+                    Offset::Stack(_type, offset) =>
                         basic_block.instructions.push(ArmIns::StoreOffset {
                             src: "r4",
                             dst: "fp",
                             offsets: vec![offset.clone()]
                         }),
-                    Offset::Global(_ident) =>
+                    Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support storing to global.")
                 };
             }
@@ -509,23 +574,29 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                     Left(l) => (l, repeated_offset),
                     Right(r) => (repeated_offset, r)
                 };
-                match l {
-                    Offset::Stack(i) =>
+                let l_type = match l {
+                    Offset::Stack(ty, i) => {
                         basic_block.instructions.push(
-                            ArmIns::LoadOffset { dst: "r3", src: "fp", offsets: vec![*i] }),
-                    Offset::Global(ident) => {
+                            ArmIns::LoadOffset { dst: "r3", src: "fp", offsets: vec![*i] });
+                        ty
+                    },
+                    Offset::Global(ty, ident) => {
                         basic_block.instructions.push(
                             ArmIns::Load { dst: "r3".to_string(), src: format!(".{}", ident).to_string() });
                         basic_block.instructions.push(
                             ArmIns::Load { dst: "r3".to_string(), src: "[r3]".to_string() });
+                        ty
                     }
                 };
-                match r {
-                    Offset::Stack(i) =>
+                let r_type = match r {
+                    Offset::Stack(ty, i) => {
                         basic_block.instructions.push(
-                            ArmIns::LoadOffset { dst: "r4", src: "fp", offsets: vec![*i] }),
-                    Offset::Global(_ident) => unimplemented!("TODO: Support load from global.")
+                            ArmIns::LoadOffset { dst: "r4", src: "fp", offsets: vec![*i] });
+                        ty
+                    }
+                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
                 };
+                let unified_type = unify_types(l_type, r_type);
                 match verb {
                     DyadicVerb::Plus =>
                         basic_block.instructions.push(
@@ -562,10 +633,10 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                     }
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
-                let dest_offset = basic_block.stack_allocate(4);
+                let dest_offset = basic_block._stack_allocate(4);
                 basic_block.instructions.push(ArmIns::StoreOffset {
                     src: "r4", dst: "fp", offsets: vec![dest_offset] });
-                dest_offsets.push(Offset::Stack(dest_offset));
+                dest_offsets.push(Offset::Stack(unified_type, dest_offset));
             }
             dest_offsets
         },
@@ -576,18 +647,18 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             // Initialize the accumulator to expr's last offset value
             let accum_offset = expr_offsets.last().unwrap();
             match accum_offset {
-                Offset::Stack(i) =>
+                Offset::Stack(_type, i) =>
                     basic_block.instructions.push(ArmIns::LoadOffset {
                         dst: "r3", src: "fp", offsets: vec![*i] }),
-                Offset::Global(_ident) => unimplemented!("TODO: Support load from global.")
+                Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
             }
             // Accumulate from right to left.
             for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
                 match offset_idx {
-                    Offset::Stack(i) =>
+                    Offset::Stack(_type, i) =>
                         basic_block.instructions.push(ArmIns::LoadOffset {
                             dst: "r4", src: "fp", offsets: vec![*i] }),
-                    Offset::Global(_ident) => unimplemented!("TODO: Support load from global.")
+                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
                 };
                 match verb {
                     DyadicVerb::Plus => {
@@ -617,10 +688,10 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             // Store the accumulator in expr's first offset, and return that
             // single offset here.
             match accum_offset {
-                Offset::Stack(i) =>
+                Offset::Stack(_type, i) =>
                     basic_block.instructions.push(ArmIns::StoreOffset {
                         src: "r3", dst: "fp", offsets: vec![*i] }),
-                Offset::Global(_ident) => unimplemented!("TODO: Support store to global.")
+                Offset::Global(_type, _ident) => unimplemented!("TODO: Support store to global.")
             };
             vec![accum_offset.clone()]
         },
@@ -631,10 +702,10 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             }
             let offset = expr_offsets.get(0).unwrap();
             match offset {
-                Offset::Stack(i) =>
+                Offset::Stack(_type, i) =>
                     basic_block.instructions.push(ArmIns::LoadOffset {
                         dst: "r2", src: "fp", offsets: vec![*i] }),
-                Offset::Global(ident) => {
+                Offset::Global(_type, ident) => {
                     basic_block.instructions.push(ArmIns::Load {
                         dst: "r2".to_string(),
                         src: format!(".{}", ident).to_string()
@@ -659,7 +730,8 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             if !globalctx.globals_table.contains_key(ident) {
                 panic!("Program error: reference to undeclared variable: {}", ident)
             }
-            vec![Offset::Global(ident.clone())]
+            let ty = globalctx.ident_type_map.get(ident).unwrap();
+            vec![Offset::Global(ty.clone(), ident.clone())]
         },
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
@@ -690,28 +762,44 @@ fn compute_frame_size(expr: &AstNode) -> i32 {
     }
 }
 
-fn register_globals(expr: &AstNode, registered_idents: &mut HashSet<String>) {
+fn register_globals(expr: &AstNode,
+                    registered_idents: &mut HashSet<String>,
+                    ident_type_map: &mut HashMap<String, Type>) {
     match expr {
         parser::AstNode::Print(expr) =>
-            register_globals(expr, registered_idents),
+            register_globals(expr, registered_idents, ident_type_map),
         parser::AstNode::Integer(_int) => (),
         parser::AstNode::SinglePrecisionFloat(_float) => (),
         parser::AstNode::Terms(terms) =>
-            terms.iter().for_each(|e| register_globals(e, registered_idents)),
+            terms.iter().for_each(|e| register_globals(e, registered_idents, ident_type_map)),
         parser::AstNode::MonadicOp {verb: _, expr} =>
-            register_globals(expr, registered_idents),
+            register_globals(expr, registered_idents, ident_type_map),
         parser::AstNode::DyadicOp {verb: _, lhs, rhs} => {
-            register_globals(lhs, registered_idents);
-            register_globals(rhs, registered_idents);
+            register_globals(lhs, registered_idents, ident_type_map);
+            register_globals(rhs, registered_idents, ident_type_map);
         }
         parser::AstNode::Reduce {verb: _, expr} =>
-            register_globals(expr, registered_idents),
+            register_globals(expr, registered_idents, ident_type_map),
         parser::AstNode::IsGlobal {ident, expr} => {
             registered_idents.insert(ident.clone());
-            register_globals(expr, registered_idents)
+            ident_type_map.insert(ident.clone(), determine_type(expr, &ident_type_map).unwrap());
+            register_globals(expr, registered_idents, ident_type_map)
         },
         parser::AstNode::Ident(_ident) => (),
         _ => panic!("Not ready to register globals declared in expr: {:?}", expr)
+    }
+}
+
+fn determine_type(expr: &AstNode, ident_type_map: &HashMap<String, Type>) -> Option<Type> {
+    match expr {
+        parser::AstNode::Integer(_int) => Some(Type::Integer),
+        parser::AstNode::SinglePrecisionFloat(_float) => Some(Type::Float),
+        parser::AstNode::Ident(ident) => Some(ident_type_map.get(ident).unwrap().clone()),
+        parser::AstNode::DyadicOp{verb: _, lhs, rhs} =>
+            Some(unify_types(
+                        &determine_type(lhs, &ident_type_map).unwrap(),
+                        &determine_type(rhs, &ident_type_map).unwrap())),
+        _ => panic!("TODO: Unprepared to determine type of {:?}", expr)
     }
 }
 
