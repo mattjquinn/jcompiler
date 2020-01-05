@@ -40,7 +40,7 @@ impl std::clone::Clone for Offset {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Type {
     Integer,
     Float  // single precision
@@ -267,16 +267,17 @@ impl ::Backend for ARMBackend {
                         parser::AstNode::IsGlobal { ident: _, expr: _ } => (),
                         _ => {
                             for (idx, offset) in val_offsets.iter().enumerate() {
-                                let ty = match offset {
-                                    Offset::Stack(ty, i) => {
+                                match offset {
+                                    Offset::Stack(ty, i) if *ty == Type::Integer => {
                                         basic_block.instructions.push(ArmIns::LoadOffset {
                                             dst: "r1",
                                             src: "fp",
                                             offsets: vec![*i],
                                         });
-                                        ty
+                                        basic_block.instructions.push(
+                                            ArmIns::BranchAndLink { addr: "jprint_int" });
                                     },
-                                    Offset::Global(ty, ident) => {
+                                    Offset::Global(ty, ident) if *ty == Type::Integer => {
                                         basic_block.instructions.push(ArmIns::Load {
                                             dst: "r1".to_string(),
                                             src: format!(".{}", ident).to_string()
@@ -285,16 +286,30 @@ impl ::Backend for ARMBackend {
                                             dst: "r1".to_string(),
                                             src: "[r1]".to_string(),
                                         });
-                                        ty
-                                    }
-                                };
+                                        basic_block.instructions.push(
+                                            ArmIns::BranchAndLink { addr: "jprint_int" });
+                                    },
+                                    Offset::Global(ty, ident) if *ty == Type::Float => {
+                                        // the MSW is expected in r2
+                                        // TODO: obviously not all MSWs are 0...
+                                        basic_block.instructions.push(ArmIns::MoveImm {
+                                            dst: "r2", imm: 0
+                                        });
+                                        // the LSW is expected in r3
+                                        basic_block.instructions.push(ArmIns::Load {
+                                            dst: "r3".to_string(),
+                                            src: format!(".{}", ident).to_string()
+                                        });
+                                        basic_block.instructions.push(ArmIns::Load {
+                                            dst: "r3".to_string(),
+                                            src: "[r3]".to_string(),
+                                        });
+                                        basic_block.instructions.push(
+                                            ArmIns::BranchAndLink { addr: "jprint_double" });
 
-                                basic_block.instructions.push(ArmIns::BranchAndLink {
-                                    addr: match ty {
-                                        Type::Integer => "jprint_int",
-                                        Type::Float => "jprint_float"
                                     }
-                                });
+                                    _ => panic!("TODO: support this offset for use with jprint: {:?}", offset)
+                                };
 
                                 // Multiple printed terms are separated by space, except for the last item
                                 if idx != val_offsets.len() - 1 {
@@ -358,7 +373,7 @@ impl ::Backend for ARMBackend {
             ".data".to_string(),
             "pos_int_fmt: .asciz \"%d\"".to_string(),
             "neg_int_fmt: .asciz \"_%d\"".to_string(),
-            "pos_float_fmt: .asciz \"%g\"".to_string(),
+            "pos_double_fmt: .asciz \"%g\"".to_string(),
             "nl_fmt:  .asciz \"\\n\"".to_string(),
             "space_fmt:  .asciz \" \"".to_string()];
         for ident in globalctx.globals_table.keys() {
@@ -386,15 +401,12 @@ impl ::Backend for ARMBackend {
             "rsblt r1, r1, #0".to_string(), // takes abs value of r1
             "bl jprint_int_main".to_string(),
             // === DOUBLE ==============================================
-            "jprint_float:".to_string(),
+            // TODO: Eventually support negatives using "cmp"
+            "jprint_double:".to_string(),
             "push {lr}".to_string(),
-            // TODO: Eventually support negatives here using "cmp"
-            "mov r0, r1".to_string(),
-            "bl __aeabi_f2d".to_string(),
-            "mov r2, r0".to_string(),
-            "mov r3, r1".to_string(),
-            "ldr r0, =pos_float_fmt".to_string(),
-            "jprint_main:".to_string(),
+            // printf expects r2 to contain MSW, r3 to contain LSW
+            "ldr r0, =pos_double_fmt".to_string(),
+            "jprint_double_main:".to_string(),
             "bl printf".to_string(),
             "pop {lr}".to_string(),
             "bx lr".to_string(),
@@ -472,7 +484,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             // from godbolt.org
             basic_block.instructions.push(ArmIns::Move {
                 dst: "r7",
-                src: "0xF00000",  // TODO: This is hex for mantissa
+                src: "0x1e0000",  // TODO: This is hex for mantissa
             });
             basic_block.instructions.push(ArmIns::Add {
                 dst: "r7",
@@ -737,7 +749,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
 fn compute_frame_size(expr: &AstNode) -> i32 {
     match expr {
         parser::AstNode::Integer(_int) => 4,
-        parser::AstNode::DoublePrecisionFloat(_float) => 4,
+        parser::AstNode::DoublePrecisionFloat(_double) => 4,
         parser::AstNode::Terms(terms) =>
             terms.iter().map(|e| compute_frame_size(e)).sum(),
         parser::AstNode::MonadicOp {verb: _, expr} =>
@@ -766,7 +778,7 @@ fn register_globals(expr: &AstNode,
         parser::AstNode::Print(expr) =>
             register_globals(expr, registered_idents, ident_type_map),
         parser::AstNode::Integer(_int) => (),
-        parser::AstNode::DoublePrecisionFloat(_float) => (),
+        parser::AstNode::DoublePrecisionFloat(_double) => (),
         parser::AstNode::Terms(terms) =>
             terms.iter().for_each(|e| register_globals(e, registered_idents, ident_type_map)),
         parser::AstNode::MonadicOp {verb: _, expr} =>
@@ -790,7 +802,7 @@ fn register_globals(expr: &AstNode,
 fn determine_type(expr: &AstNode, ident_type_map: &HashMap<String, Type>) -> Option<Type> {
     match expr {
         parser::AstNode::Integer(_int) => Some(Type::Integer),
-        parser::AstNode::DoublePrecisionFloat(_float) => Some(Type::Float),
+        parser::AstNode::DoublePrecisionFloat(_double) => Some(Type::Float),
         parser::AstNode::Ident(ident) => Some(ident_type_map.get(ident).unwrap().clone()),
         parser::AstNode::DyadicOp{verb: _, lhs, rhs} =>
             Some(unify_types(
