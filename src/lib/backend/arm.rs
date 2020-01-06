@@ -43,17 +43,19 @@ impl std::clone::Clone for Offset {
 #[derive(Debug, Clone, PartialEq)]
 enum Type {
     Integer,
-    Float  // single precision
+    Double,
+    Array(u16)  // length of array; no element type (can be mixed)
 }
 
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         // TODO: there must be a more concise way to do this
-        let s = match self {
-            Type::Integer => "Integer",
-            Type::Float => "Float",
-        };
-        f.write_fmt(format_args!("{}", s))
+        match self {
+            Type::Integer => f.write_str("Integer"),
+            Type::Double => f.write_str("Double"),
+            Type::Array(len) =>
+                f.write_fmt(format_args!("Array[{}]", len)),
+        }
     }
 }
 
@@ -264,7 +266,7 @@ impl ::Backend for ARMBackend {
 
                     match &**expr {
                         // top-level global assignments aren't printed
-                        parser::AstNode::IsGlobal { ident: _, expr: _ } => (),
+                        parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
                         _ => {
                             for (idx, offset) in val_offsets.iter().enumerate() {
                                 match offset {
@@ -289,7 +291,7 @@ impl ::Backend for ARMBackend {
                                         basic_block.instructions.push(
                                             ArmIns::BranchAndLink { addr: "jprint_int" });
                                     },
-                                    Offset::Global(ty, ident) if *ty == Type::Float => {
+                                    Offset::Global(ty, ident) if *ty == Type::Double => {
                                         // the LSW is expected in r2
                                         // TODO: obviously not all LSWs are 0; this is an invariant
                                         // for now in the code section responsible for loading double prec literals
@@ -459,7 +461,7 @@ impl ::Backend for ARMBackend {
 fn unify_types(l_type: &Type, r_type: &Type) -> Type {
     match (l_type, r_type) {
         (Type::Integer, Type::Integer) => Type::Integer,
-        (Type::Float, Type::Float) => Type::Float,
+        (Type::Double, Type::Double) => Type::Double,
         _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
     }
 }
@@ -512,7 +514,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
                 src: "r7",
                 offsets: vec![offset],
             });
-            vec![Offset::Stack(Type::Float, offset)]
+            vec![Offset::Stack(Type::Double, offset)]
         },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
@@ -719,7 +721,7 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             };
             vec![accum_offset.clone()]
         },
-        parser::AstNode::IsGlobal {ident, expr} => {
+        parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let expr_offsets = compile_expr(&globalctx, basic_block, expr);
             if expr_offsets.len() != 1 {
                 panic!("Not ready to save global '{}' comprised of multiple offsets: {:?}", ident, expr_offsets);
@@ -779,7 +781,7 @@ fn compute_frame_size(expr: &AstNode) -> i32 {
         }
         parser::AstNode::Reduce {verb: _, expr} =>
             compute_frame_size(expr),
-        parser::AstNode::IsGlobal {ident: _, expr} =>
+        parser::AstNode::GlobalVarAssgmt {ident: _, expr} =>
             compute_frame_size(expr),
         parser::AstNode::Ident(_ident) => 0,
         _ => panic!("Not ready to compute frame size of expr: {:?}", expr)
@@ -804,7 +806,7 @@ fn register_globals(expr: &AstNode,
         }
         parser::AstNode::Reduce {verb: _, expr} =>
             register_globals(expr, registered_idents, ident_type_map),
-        parser::AstNode::IsGlobal {ident, expr} => {
+        parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             registered_idents.insert(ident.clone());
             ident_type_map.insert(ident.clone(), determine_type(expr, &ident_type_map).unwrap());
             register_globals(expr, registered_idents, ident_type_map)
@@ -817,12 +819,14 @@ fn register_globals(expr: &AstNode,
 fn determine_type(expr: &AstNode, ident_type_map: &HashMap<String, Type>) -> Option<Type> {
     match expr {
         parser::AstNode::Integer(_int) => Some(Type::Integer),
-        parser::AstNode::DoublePrecisionFloat(_double) => Some(Type::Float),
+        parser::AstNode::DoublePrecisionFloat(_double) => Some(Type::Double),
         parser::AstNode::Ident(ident) => Some(ident_type_map.get(ident).unwrap().clone()),
         parser::AstNode::DyadicOp{verb: _, lhs, rhs} =>
             Some(unify_types(
                         &determine_type(lhs, &ident_type_map).unwrap(),
                         &determine_type(rhs, &ident_type_map).unwrap())),
+        parser::AstNode::Terms(terms) =>
+            Some(Type::Array(terms.len() as u16)),
         _ => panic!("TODO: Unprepared to determine type of {:?}", expr)
     }
 }

@@ -58,7 +58,7 @@ pub enum AstNode {
         verb: DyadicVerb,
         expr: Box<AstNode>,
     },
-    IsGlobal {
+    GlobalVarAssgmt {
         ident: String,
         expr: Box<AstNode>,
     },
@@ -130,7 +130,7 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let ident = pair.next().unwrap();
             let expr = pair.next().unwrap();
             let expr = build_ast_from_expr(expr);
-            AstNode::IsGlobal {
+            AstNode::GlobalVarAssgmt {
                 ident: String::from(ident.as_str()),
                 expr: Box::new(expr),
             }

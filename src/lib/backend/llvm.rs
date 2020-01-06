@@ -196,7 +196,7 @@ pub fn compile_to_module(
                     let c_expr = compile_expr(expr, &mut module, stmt_bb);
                     match expr.as_ref() {
                         // Top level global assignments aren't printed to console...
-                        parser::AstNode::IsGlobal { ident: _, expr: _ } => (),
+                        parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
                         // ... all other statements are:
                         _ => {
                             let mut args = vec![c_expr.ptr, int1(1)];
@@ -634,7 +634,7 @@ fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBlockR
                 JValPtr { ptr: reduced_arr }
             }
         }
-        parser::AstNode::IsGlobal {
+        parser::AstNode::GlobalVarAssgmt {
             ref ident,
             ref expr,
         } => {
