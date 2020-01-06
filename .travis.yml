@@ -13,7 +13,7 @@ before_install:
 - sudo apt-get install -y qemu-user-static
 
 install:
-- export LINARO_CROSS_COMPILER_NAME=gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf.tar.xz
+- export LINARO_CROSS_COMPILER_NAME=gcc-linaro-7.5.0-2019.12-x86_64_arm-linux-gnueabihf.tar.xz
 - wget https://releases.linaro.org/components/toolchain/binaries/latest-7/arm-linux-gnueabihf/$LINARO_CROSS_COMPILER_NAME
 - sudo tar xf $LINARO_CROSS_COMPILER_NAME -C /opt/
 - export CLANG_TAR=clang+llvm-7.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
