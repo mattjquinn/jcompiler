@@ -10,7 +10,7 @@ use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::fmt::{Formatter, Error};
 use std::cmp::max;
-use num::traits::Float;
+use ieee754::Ieee754;
 
 pub struct ARMBackend {}
 
@@ -290,12 +290,13 @@ impl ::Backend for ARMBackend {
                                             ArmIns::BranchAndLink { addr: "jprint_int" });
                                     },
                                     Offset::Global(ty, ident) if *ty == Type::Float => {
-                                        // the MSW is expected in r2
-                                        // TODO: obviously not all MSWs are 0...
+                                        // the LSW is expected in r2
+                                        // TODO: obviously not all LSWs are 0; this is an invariant
+                                        // for now in the code section responsible for loading double prec literals
                                         basic_block.instructions.push(ArmIns::MoveImm {
                                             dst: "r2", imm: 0
                                         });
-                                        // the LSW is expected in r3
+                                        // the MSW is expected in r3
                                         basic_block.instructions.push(ArmIns::Load {
                                             dst: "r3".to_string(),
                                             src: format!(".{}", ident).to_string()
@@ -479,17 +480,31 @@ fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &
             vec![Offset::Stack(Type::Integer, offset)]
         },
         parser::AstNode::DoublePrecisionFloat(num) => {
-            let (mantissa, exponent, sign) = Float::integer_decode(*num);
-            println!("TODO: {}, {}, {}", mantissa, exponent, sign);
-            // from godbolt.org
-            basic_block.instructions.push(ArmIns::Move {
+            let bits = num.bits();
+            let hex_rep = format!("{:016x}", bits);
+            println!("IEEE754 double hex representation: {}", hex_rep);
+
+            if bits & 0x00000000FFFFFFFF != 0 {
+                // supporting this will require use of an additional register
+                // that is also pushed to the stack
+                panic!("TODO: Support double precision floats with non-zero LSW: {}", hex_rep);
+            }
+
+            // due to limited width of immediate, we split the initialization
+            // over multiple instructions:
+            // TODO: use of i32 here could cause silent truncation
+            let msw_upper : i32 = ((bits >> 32) & 0xF0000000) as i32;
+            let msw_lower : i32 = ((bits >> 32) & 0x0FFFFFFF) as i32;
+            println!("MSW upper: {:x}", msw_upper);
+            println!("MSW lower: {:x}", msw_lower);
+            basic_block.instructions.push(ArmIns::MoveImm {
                 dst: "r7",
-                src: "0x1e0000",  // TODO: This is hex for mantissa
+                imm: msw_upper,
             });
-            basic_block.instructions.push(ArmIns::Add {
+            basic_block.instructions.push(ArmIns::AddImm {
                 dst: "r7",
                 src: "r7",
-                add: "0x40000000", // TODO: This is hex for exponent
+                imm: msw_lower,
             });
             let offset = basic_block.stack_allocate_double();
             basic_block.instructions.push(ArmIns::StoreOffset {
