@@ -11,7 +11,7 @@ extern crate quickcheck;
 extern crate rand;
 extern crate regex;
 extern crate tempfile;
-extern crate num;
+extern crate ieee754;
 
 #[macro_use]
 extern crate pest_derive;
