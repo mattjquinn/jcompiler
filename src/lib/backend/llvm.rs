@@ -195,9 +195,7 @@ pub fn compile_to_module(
                 parser::AstNode::Print(expr) => {
                     let c_expr = compile_expr(expr, &mut module, stmt_bb);
                     match expr.as_ref() {
-                        // Top level global assignments aren't printed to console...
                         parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
-                        // ... all other statements are:
                         _ => {
                             let mut args = vec![c_expr.ptr, int1(1)];
                             add_function_call(&mut module, stmt_bb, "jprint", &mut args[..], "");

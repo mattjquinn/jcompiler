@@ -3,11 +3,11 @@ extern crate jcompilerlib;
 extern crate tempfile;
 
 use jcompilerlib::backend::arm::ARMBackend;
-use std::process::{Command, Stdio};
-use std::fs::File;
+use std::process::{Command};
 use std::str;
 use tempfile::NamedTempFile;
-use std::io::Read;
+
+mod common;
 
 fn compile(test_jfile: &str) -> (String, String) {
     let unopt_compile_to_path = String::from(
@@ -40,32 +40,8 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-fn run_ijconsole(test_jfile: &str) -> (String, String) {
-    let test_file_path = format!("jlang_programs/{}", test_jfile);
-    let mut file = File::open(&test_file_path[..]).expect("file");
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).expect("size");
-    println!("=== TEST FILE CONTENTS ====");
-    println!("{}", contents);
-
-    let j_output = Command::new("/usr/bin/ijconsole")
-        .stdin(Stdio::from(File::open(&test_file_path[..]).expect("file")))
-        .output()
-        .expect("failed to execute ijconsole");
-    let j_stdout = str::from_utf8(&j_output.stdout).unwrap().to_owned();
-    let j_stderr = str::from_utf8(&j_output.stderr).unwrap().to_owned();
-    return (j_stdout, j_stderr);
-}
-
 fn test(test_file: &str) {
-    let (c_stdout, c_stderr) = compile(test_file);
-    println!("=== BINARY OUTPUT ====");
-    println!("{}", c_stdout);
-    let (j_stdout, j_stderr) = run_ijconsole(test_file);
-    println!("=== J INTERP OUTPUT ====");
-    println!("{}", j_stdout);
-    assert_eq!(c_stdout, j_stdout);
-    assert_eq!(c_stderr, j_stderr);
+    common::test(test_file, &compile);
 }
 
 #[test]

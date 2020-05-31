@@ -56,17 +56,6 @@ impl ::Backend for ARMBackend {
             }
         };
 
-        // ijconsole always outputs three spaces, even if stdin is the empty string, so we do the same
-        {
-            let mut initial_bb = BasicBlock::new(0);
-            initial_bb.instructions.push(ArmIns::Load {
-                dst: "r0".to_string(),
-                src: "=line_start_indent_fmt".to_string(),
-            });
-            initial_bb.instructions.push(ArmIns::BranchAndLink { addr: "printf" });
-            basic_blocks.push(initial_bb);
-        }
-
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
@@ -75,14 +64,7 @@ impl ::Backend for ARMBackend {
 
                     match &**expr {
                         // top-level global assignments aren't printed
-                        parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => {
-                            // global assgmts are terminated by three spaces, no newline (per ijconsole)
-                            basic_block.instructions.push(ArmIns::Load {
-                                dst: "r0".to_string(),
-                                src: "=end_global_assgmt_indent_fmt".to_string(),
-                            });
-                            basic_block.instructions.push(ArmIns::BranchAndLink { addr: "printf" });
-                        },
+                        parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
                         _ => {
                             for (idx, offset) in val_offsets.iter().enumerate() {
                                 match offset {
@@ -145,7 +127,7 @@ impl ::Backend for ARMBackend {
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
                             basic_block.instructions.push(ArmIns::Load {
                                 dst: "r0".to_string(),
-                                src: "=line_end_nl_indent_fmt".to_string(),
+                                src: "=line_end_nl_fmt".to_string(),
                             });
                             basic_block
                                 .instructions
@@ -193,9 +175,7 @@ impl ::Backend for ARMBackend {
             "pos_int_fmt: .asciz \"%d\"".to_string(),
             "neg_int_fmt: .asciz \"_%d\"".to_string(),
             "pos_double_fmt: .asciz \"%g\"".to_string(),
-            "line_start_indent_fmt:  .asciz \"   \"".to_string(),
-            "line_end_nl_indent_fmt:  .asciz \"\\n   \"".to_string(),
-            "end_global_assgmt_indent_fmt:  .asciz \"   \"".to_string(),
+            "line_end_nl_fmt:  .asciz \"\\n\"".to_string(),
             "space_fmt:  .asciz \" \"".to_string()];
         for ident in globalctx.globals_table.keys() {
             preamble.push(format!("{}: .word 0", ident));
