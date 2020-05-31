@@ -19,6 +19,9 @@ harness = false
 [dev-dependencies]
 criterion = "0.2"
 
+[dependencies.jcompiler-derive]
+path = "lib/jcompiler-derive"
+
 [dependencies]
 llvm-sys = "70"
 itertools = "0.8.0"

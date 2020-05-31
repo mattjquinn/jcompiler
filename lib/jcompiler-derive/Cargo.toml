@@ -1,0 +1,14 @@
+[package]
+name = "jcompiler-derive"
+version = "0.1.0"
+authors = ["Matt Quinn <matt@mattjquinn.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "0.6.13"
+syn = { version = "1.0.30", feature = ["full"] }
+proc-macro2 = "0.4.30"
+

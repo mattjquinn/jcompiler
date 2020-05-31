@@ -1,6 +1,7 @@
 /// Integration tests for the ARM backend.
 extern crate jcompilerlib;
 extern crate tempfile;
+extern crate jcompiler_derive;
 
 use jcompilerlib::backend::arm::ARMBackend;
 use std::process::{Command};
@@ -8,6 +9,8 @@ use std::str;
 use tempfile::NamedTempFile;
 
 mod common;
+
+use jcompiler_derive::generate_tests;
 
 fn compile(test_jfile: &str) -> (String, String) {
     let unopt_compile_to_path = String::from(
@@ -40,146 +43,26 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-fn test(test_file: &str) {
-    common::test(test_file, &compile);
-}
-
-#[test]
-fn armtest_number_expr() {
-    test("ctest_number_expr.ijs");
-}
-
-#[test]
-fn armtest_list_expr() {
-    test("ctest_list_expr.ijs");
-}
-
-#[test]
-fn armtest_monadic_increment() {
-    test("ctest_monadic_increment.ijs");
-}
-
-#[test]
-fn armtest_double_monadic_increment() {
-    test("ctest_double_monadic_increment.ijs");
-}
-
-#[test]
-fn armtest_monadic_square() {
-    test("ctest_monadic_square.ijs");
-}
-
-#[test]
-fn armtest_double_monadic_square() {
-    test("ctest_double_monadic_square.ijs");
-}
-
-#[test]
-fn armtest_increment_square() {
-    test("ctest_increment_square.ijs");
-}
-
-#[test]
-fn armtest_additions_single_numbers() {
-    test("ctest_additions_single_numbers.ijs");
-}
-
-#[test]
-fn armtest_additions_lists() {
-    test("ctest_additions_lists.ijs");
-}
-
-#[test]
-fn armtest_products_single_numbers() {
-    test("ctest_products_single_numbers.ijs");
-}
-
-#[test]
-fn armtest_products_lists() {
-    test("ctest_products_lists.ijs");
-}
-
-#[test]
-fn armtest_mixed_adds_mults() {
-    test("ctest_mixed_adds_mults.ijs");
-}
-
-#[test]
-fn armtest_subtractions_single_positives() {
-    test("ctest_subtractions_single_positives.ijs");
-}
-
-#[test]
-fn armtest_subtractions_lists_positives() {
-    test("ctest_subtractions_lists_positives.ijs");
-}
-
-#[test]
-fn armtest_monadic_negate() {
-    test("ctest_monadic_negate.ijs");
-}
-
-#[test]
-fn armtest_additions_lists_mixedlens_legal() {
-    test("ctest_additions_lists_mixedlens_legal.ijs");
-}
-
-#[test]
-fn armtest_subtractions_lists_mixedlens_legal() {
-    test("ctest_subtractions_lists_mixedlens_legal.ijs");
-}
-
-#[test]
-fn armtest_products_lists_mixedlens_legal() {
-    test("ctest_products_lists_mixedlens_legal.ijs");
-}
-
-#[test]
-fn armtest_insertions_plus() {
-    test("ctest_insertions_plus.ijs");
-}
-
-#[test]
-fn armtest_insertions_times() {
-    test("ctest_insertions_times.ijs");
-}
-
-#[test]
-fn armtest_insertions_minus() {
-    test("ctest_insertions_minus.ijs");
-}
-
-#[test]
-fn armtest_lessthan() {
-    test("ctest_lessthan.ijs");
-}
-
-#[test]
-fn armtest_equal() {
-    test("ctest_equal.ijs");
-}
-
-#[test]
-fn armtest_largerthan() {
-    test("ctest_largerthan.ijs");
-}
-
-#[test]
-fn armtest_is_verb_globalassgmts() {
-    test("ctest_is_verb_globalassgmts.ijs");
-}
-
-#[test]
-fn armtest_global_assgmts_refs_integer() {
-    test("ctest_global_assgmts_refs_integer.ijs");
-}
-
-#[test]
-fn armtest_global_assgmts_refs_double() {
-    test("ctest_global_assgmts_refs_double.ijs");
-}
-
-//#[test]
-//fn armtest_global_assgmts_refs_array() {
-//     test("ctest_global_assgmts_refs_array.ijs");
-//}
+// TODO: Next on the to-solve list is ctest_global_assgmts_refs_array.ijs
+generate_tests!([
+    // Known test failures:
+    "ctest_ch1_learningjbook.ijs",
+    "ctest_ch2_learningjbook.ijs",
+    "ctest_decimals.ijs",
+    "ctest_divisions.ijs",
+    "ctest_dyadic_append.ijs",
+    "ctest_dyadic_copy.ijs",
+    "ctest_dyadic_shape.ijs",
+    "ctest_monadic_ceiling.ijs",
+    "ctest_global_refs_mixedverbs.ijs",
+    "ctest_monadic_largerof.ijs",
+    "ctest_monadic_largerorequal.ijs",
+    "ctest_monadic_reciprocal.ijs",
+    "ctest_monadic_shapeof.ijs",
+    "ctest_negative_numbers.ijs",
+    "ctest_global_assgmts_refs_array.ijs",
+    "ctest_monadic_tally.ijs",
+    "ctest_power.ijs",
+    "ctest_strings.ijs",
+    "j1.ijs"
+]);
