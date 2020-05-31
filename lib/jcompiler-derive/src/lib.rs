@@ -68,7 +68,7 @@ pub fn generate_tests(input: TokenStream) -> TokenStream {
     let mut idx = 0;
 
     entries.iter().for_each(|test_filename| {
-        let test_name = test_filename.strip_suffix(".ijs").expect("stripped");
+        let test_name = &test_filename[..&test_filename.len()-4];
 
         let filename = proc_macro2::Literal::string(test_filename);
         let methodname = proc_macro2::Ident::new(test_name, Span::call_site());
