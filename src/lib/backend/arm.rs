@@ -12,6 +12,17 @@ use std::fmt::{Formatter, Error};
 use std::cmp::max;
 use ieee754::Ieee754;
 
+// Not ready for prime-time; postponing use of this macro for now.
+// macro_rules! arm {
+//     ( $instr:ident, $bb:ident, $( $attr:ident = $expr:expr ),* ) => {
+//         $bb.instructions.push(ArmIns::$instr{
+//             $(
+//                 $attr: $expr,
+//             )*
+//         });
+//     };
+// }
+
 pub struct ARMBackend {}
 
 #[derive(Debug)]
