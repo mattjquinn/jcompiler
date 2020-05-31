@@ -25,6 +25,8 @@ install:
 - echo $PATH
 - clang --version
 - llvm-config --version
+- wget http://www.jsoftware.com/download/j901/install/j901_amd64.deb
+- sudo dpkg -i j901_amd64.deb
 
 matrix:
   fast_finish: true

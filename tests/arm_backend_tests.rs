@@ -3,9 +3,11 @@ extern crate jcompilerlib;
 extern crate tempfile;
 
 use jcompilerlib::backend::arm::ARMBackend;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::fs::File;
 use std::str;
 use tempfile::NamedTempFile;
+use std::io::Read;
 
 fn compile(test_jfile: &str) -> (String, String) {
     let unopt_compile_to_path = String::from(
@@ -38,225 +40,170 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
+fn run_ijconsole(test_jfile: &str) -> (String, String) {
+    let test_file_path = format!("jlang_programs/{}", test_jfile);
+    let mut file = File::open(&test_file_path[..]).expect("file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("size");
+    println!("=== TEST FILE CONTENTS ====");
+    println!("{}", contents);
+
+    let j_output = Command::new("/usr/bin/ijconsole")
+        .stdin(Stdio::from(File::open(&test_file_path[..]).expect("file")))
+        .output()
+        .expect("failed to execute ijconsole");
+    let j_stdout = str::from_utf8(&j_output.stdout).unwrap().to_owned();
+    let j_stderr = str::from_utf8(&j_output.stderr).unwrap().to_owned();
+    return (j_stdout, j_stderr);
+}
+
+fn test(test_file: &str) {
+    let (c_stdout, c_stderr) = compile(test_file);
+    println!("=== BINARY OUTPUT ====");
+    println!("{}", c_stdout);
+    let (j_stdout, j_stderr) = run_ijconsole(test_file);
+    println!("=== J INTERP OUTPUT ====");
+    println!("{}", j_stdout);
+    assert_eq!(c_stdout, j_stdout);
+    assert_eq!(c_stderr, j_stderr);
+}
+
 #[test]
 fn armtest_number_expr() {
-    let (stdout, stderr) = compile("ctest_number_expr.ijs");
-    assert_eq!("8\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_number_expr.ijs");
 }
 
 #[test]
 fn armtest_list_expr() {
-    let (stdout, stderr) = compile("ctest_list_expr.ijs");
-    assert_eq!(
-        "2 4 6 8 10\n1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_list_expr.ijs");
 }
 
 #[test]
 fn armtest_monadic_increment() {
-    let (stdout, stderr) = compile("ctest_monadic_increment.ijs");
-    assert_eq!("2 3 4 5 6\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_monadic_increment.ijs");
 }
 
 #[test]
 fn armtest_double_monadic_increment() {
-    let (stdout, stderr) = compile("ctest_double_monadic_increment.ijs");
-    assert_eq!("107 2002 70 46 90 2\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_double_monadic_increment.ijs");
 }
 
 #[test]
 fn armtest_monadic_square() {
-    let (stdout, stderr) = compile("ctest_monadic_square.ijs");
-    assert_eq!("1 4 9 16 25\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_monadic_square.ijs");
 }
 
 #[test]
 fn armtest_double_monadic_square() {
-    let (stdout, stderr) = compile("ctest_double_monadic_square.ijs");
-    assert_eq!("1 16 81 256 625\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_double_monadic_square.ijs");
 }
 
 #[test]
 fn armtest_increment_square() {
-    let (stdout, stderr) = compile("ctest_increment_square.ijs");
-    assert_eq!("2 5 10 17 26\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_increment_square.ijs");
 }
 
 #[test]
 fn armtest_additions_single_numbers() {
-    let (stdout, stderr) = compile("ctest_additions_single_numbers.ijs");
-    assert_eq!("3\n6\n10\n5\n0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_additions_single_numbers.ijs");
 }
 
 #[test]
 fn armtest_additions_lists() {
-    let (stdout, stderr) = compile("ctest_additions_lists.ijs");
-    assert_eq!("3 3\n6 6 6\n12 15 14\n5\n0 0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_additions_lists.ijs");
 }
 
 #[test]
 fn armtest_products_single_numbers() {
-    let (stdout, stderr) = compile("ctest_products_single_numbers.ijs");
-    assert_eq!("2\n6\n24\n4\n0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_products_single_numbers.ijs");
 }
 
 #[test]
 fn armtest_products_lists() {
-    let (stdout, stderr) = compile("ctest_products_lists.ijs");
-    assert_eq!("2 2\n6 6 6\n18 0 70\n4\n0 0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_products_lists.ijs");
 }
 
 #[test]
 fn armtest_mixed_adds_mults() {
-    let (stdout, stderr) = compile("ctest_mixed_adds_mults.ijs");
-    assert_eq!(
-        "170\n270\n45\n33\n7 7\n56 56\n28 28\n20 20 20\n10 10 10\n_2969 _3719\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_mixed_adds_mults.ijs");
 }
 
 #[test]
 fn armtest_subtractions_single_positives() {
-    let (stdout, stderr) = compile("ctest_subtractions_single_positives.ijs");
-    assert_eq!("_1\n2\n_2\n3\n0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_subtractions_single_positives.ijs");
 }
 
 #[test]
 fn armtest_subtractions_lists_positives() {
-    let (stdout, stderr) = compile("ctest_subtractions_lists_positives.ijs");
-    assert_eq!("_1 _1\n2 2 2\n8 _3 10\n0 0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_subtractions_lists_positives.ijs");
 }
 
 #[test]
 fn armtest_monadic_negate() {
-    let (stdout, stderr) = compile("ctest_monadic_negate.ijs");
-    assert_eq!(
-        "_5\n6\n_7\n8\n_2\n_1 _2 _3\n_5 _4\n2 2\n2\n2\n2\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_monadic_negate.ijs");
 }
 
 #[test]
 fn armtest_additions_lists_mixedlens_legal() {
-    let (stdout, stderr) = compile("ctest_additions_lists_mixedlens_legal.ijs");
-    assert_eq!(
-        "11 21 31\n11 21 31\n8 9\n7 8\n6 7\n0 0 0 0\n0 0 0\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_additions_lists_mixedlens_legal.ijs");
 }
 
 #[test]
 fn armtest_subtractions_lists_mixedlens_legal() {
-    let (stdout, stderr) = compile("ctest_subtractions_lists_mixedlens_legal.ijs");
-    assert_eq!(
-        "_9 _19 _29\n9 19 29\n2 3\n3 2\n2 3\n0 0 0 0\n0 0 0\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_subtractions_lists_mixedlens_legal.ijs");
 }
 
 #[test]
 fn armtest_products_lists_mixedlens_legal() {
-    let (stdout, stderr) = compile("ctest_products_lists_mixedlens_legal.ijs");
-    assert_eq!(
-        "40 80 120\n40 80 120\n12 24\n8 12\n6 8\n0 0 0 0\n0 0 0\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_products_lists_mixedlens_legal.ijs");
 }
 
 #[test]
 fn armtest_insertions_plus() {
-    let (stdout, stderr) = compile("ctest_insertions_plus.ijs");
-    assert_eq!("5\n3\n6\n11\n2\n_26\n_26\n_10\n90 180 270\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_insertions_plus.ijs");
 }
 
 #[test]
 fn armtest_insertions_times() {
-    let (stdout, stderr) = compile("ctest_insertions_times.ijs");
-    assert_eq!(
-        "0\n5\n1\n2\n6\n30\n2\n_332\n5\n_10\n34 44 54\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_insertions_times.ijs");
 }
 
 #[test]
 fn armtest_insertions_minus() {
-    let (stdout, stderr) = compile("ctest_insertions_minus.ijs");
-    assert_eq!("0\n5\n1\n_1\n2\n3\n16\n_3\n14\n10\n13 23 33\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_insertions_minus.ijs");
 }
 
 #[test]
 fn armtest_lessthan() {
-    let (stdout, stderr) = compile("ctest_lessthan.ijs");
-    assert_eq!(
-        "0\n1\n0 0 0 1\n1 1 0 0\n0 1 0 1\n0 0 0 0 0 1 1 1 1 1 1 1 1\n1 1 1 1 0 0 0 0 0 0 0 0 0\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_lessthan.ijs");
 }
 
 #[test]
 fn armtest_equal() {
-    let (stdout, stderr) = compile("ctest_equal.ijs");
-    assert_eq!("0\n1\n0 0 1\n1 1 1\n0 0 0\n1 1 1\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n0 0 0 0 1 0 0 0 0 0 0 0 0 0 0\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_equal.ijs");
 }
 
 #[test]
 fn armtest_largerthan() {
-    let (stdout, stderr) = compile("ctest_largerthan.ijs");
-    assert_eq!(
-        "1\n0\n1 1 0 0\n0 0 0 1\n0 0 1 0\n1 1 1 1 0 0 0 0 0 0 0 0 0\n0 0 0 0 0 1 1 1 1 1 1 1 1\n",
-        &stdout[..]
-    );
-    assert_eq!("", &stderr[..]);
+    test("ctest_largerthan.ijs");
 }
 
 #[test]
 fn armtest_is_verb_globalassgmts() {
-    let (stdout, stderr) = compile("ctest_is_verb_globalassgmts.ijs");
-    assert_eq!("", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_is_verb_globalassgmts.ijs");
 }
 
 #[test]
 fn armtest_global_assgmts_refs_integer() {
-    let (stdout, stderr) = compile("ctest_global_assgmts_refs_integer.ijs");
-    assert_eq!("99\n99\n8\n9\n100\n99\n0\n1\n2\n3\n4\n5\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_global_assgmts_refs_integer.ijs");
 }
 
 #[test]
 fn armtest_global_assgmts_refs_double() {
-    let (stdout, stderr) = compile("ctest_global_assgmts_refs_double.ijs");
-    assert_eq!("7.5\n", &stdout[..]);
-    assert_eq!("", &stderr[..]);
+    test("ctest_global_assgmts_refs_double.ijs");
 }
 
 //#[test]
 //fn armtest_global_assgmts_refs_array() {
-//    let (stdout, stderr) = compile("ctest_global_assgmts_refs_array.ijs");
-//    assert_eq!("1 2 3 4 5\n", &stdout[..]);
-//    assert_eq!("", &stderr[..]);
+//     test("ctest_global_assgmts_refs_array.ijs");
 //}
