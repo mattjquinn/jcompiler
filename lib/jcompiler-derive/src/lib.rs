@@ -46,7 +46,16 @@ pub fn generate_tests(input: TokenStream) -> TokenStream {
             if !p.is_ok() { panic!("A PathBuf is wrapped in an error.") }
             let pathbuf = p.expect("pathbuf");
             let filename = pathbuf.file_name().expect("filename").to_str().expect("str");
-            if !filename.ends_with(".ijs") { panic!("A test file in the test directory doesn't end in .ijs as it should.") }
+
+            // ignore vim swap files; probably should be configurable...
+            if filename.ends_with(".swp") {
+                return None
+            }
+
+            if !filename.ends_with(".ijs") {
+                panic!("A test file in the test directory doesn't end in .ijs as it should.")
+            }
+
             if test_input.known_test_failures.contains(filename) {
                 println!("Ignoring known test failure: {}", filename);
                 test_input.known_test_failures.remove(filename);
