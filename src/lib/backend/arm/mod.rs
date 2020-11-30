@@ -34,7 +34,7 @@ impl ::Backend for ARMBackend {
         println!("Writing assembly file to {}", &assembly_filename);
 
         let mut basic_blocks = Vec::new();
-        let globalctx = {
+        let mut globalctx = {
             let mut global_idents = HashSet::new();
             let mut ident_type_map = HashMap::new();
             for astnode in ast {
@@ -52,7 +52,8 @@ impl ::Backend for ARMBackend {
             }
             GlobalContext {
                 globals_table,
-                ident_type_map
+                ident_type_map,
+                global_ident_to_offsets: HashMap::new(),
             }
         };
 
@@ -60,69 +61,14 @@ impl ::Backend for ARMBackend {
             match astnode {
                 parser::AstNode::Print(expr) => {
                     let mut basic_block = BasicBlock::new(compute_frame_size(expr));
-                    let val_offsets = compile_expr(&globalctx, &mut basic_block, expr);
+                    let mut global_basic_block = BasicBlock::new(0);
+                    let val_offsets = compile_expr(&mut globalctx, &mut global_basic_block, &mut basic_block, expr);
 
                     match &**expr {
                         // top-level global assignments aren't printed
                         parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
                         _ => {
-                            for (idx, offset) in val_offsets.iter().enumerate() {
-                                match offset {
-                                    Offset::Stack(ty, i) if *ty == Type::Integer => {
-                                        basic_block.instructions.push(ArmIns::LoadOffset {
-                                            dst: "r1",
-                                            src: "fp",
-                                            offsets: vec![*i],
-                                        });
-                                        basic_block.instructions.push(
-                                            ArmIns::BranchAndLink { addr: "jprint_int" });
-                                    },
-                                    Offset::Global(ty, ident) if *ty == Type::Integer => {
-                                        basic_block.instructions.push(ArmIns::Load {
-                                            dst: "r1".to_string(),
-                                            src: format!(".{}", ident).to_string()
-                                        });
-                                        basic_block.instructions.push(ArmIns::Load {
-                                            dst: "r1".to_string(),
-                                            src: "[r1]".to_string(),
-                                        });
-                                        basic_block.instructions.push(
-                                            ArmIns::BranchAndLink { addr: "jprint_int" });
-                                    },
-                                    Offset::Global(ty, ident) if *ty == Type::Double => {
-                                        // the LSW is expected in r2
-                                        // TODO: obviously not all LSWs are 0; this is an invariant
-                                        // for now in the code section responsible for loading double prec literals
-                                        basic_block.instructions.push(ArmIns::MoveImm {
-                                            dst: "r2", imm: 0
-                                        });
-                                        // the MSW is expected in r3
-                                        basic_block.instructions.push(ArmIns::Load {
-                                            dst: "r3".to_string(),
-                                            src: format!(".{}", ident).to_string()
-                                        });
-                                        basic_block.instructions.push(ArmIns::Load {
-                                            dst: "r3".to_string(),
-                                            src: "[r3]".to_string(),
-                                        });
-                                        basic_block.instructions.push(
-                                            ArmIns::BranchAndLink { addr: "jprint_double" });
-
-                                    }
-                                    _ => panic!("TODO: support this offset for use with jprint: {:?}", offset)
-                                };
-
-                                // Multiple printed terms are separated by space, except for the last item
-                                if idx != val_offsets.len() - 1 {
-                                    basic_block.instructions.push(ArmIns::Load {
-                                        dst: "r0".to_string(),
-                                        src: "=space_fmt".to_string(),
-                                    });
-                                    basic_block
-                                        .instructions
-                                        .push(ArmIns::BranchAndLink { addr: "printf" });
-                                }
-                            }
+                            jprint_offset(&val_offsets, &globalctx, &mut basic_block);
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
                             basic_block.instructions.push(ArmIns::Load {
@@ -177,9 +123,7 @@ impl ::Backend for ARMBackend {
             "pos_double_fmt: .asciz \"%g\"".to_string(),
             "line_end_nl_fmt:  .asciz \"\\n\"".to_string(),
             "space_fmt:  .asciz \" \"".to_string()];
-        for ident in globalctx.globals_table.keys() {
-            preamble.push(format!("{}: .word 0", ident));
-        }
+        globalctx.emit_preamble_entries(&mut preamble);
         preamble.extend(vec![
             ".text".to_string(),
             ".global main".to_string(),
@@ -238,9 +182,7 @@ impl ::Backend for ARMBackend {
             }));
         }
         postamble.push("pop {ip, pc}".to_string());
-        for ident in globalctx.globals_table.keys() {
-            postamble.push(format!(".{}: .word {}", ident, ident));
-        }
+        globalctx.emit_postamble_entries(&mut postamble);
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
@@ -253,6 +195,76 @@ impl ::Backend for ARMBackend {
         ::shell::run_shell_command("sh", &args)?;
 
         Ok(())
+    }
+}
+
+fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
+    for (idx, offset) in val_offsets.iter().enumerate() {
+        match offset {
+            Offset::Stack(ty, i) if *ty == Type::Integer => {
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: "r1",
+                    src: "fp",
+                    offsets: vec![*i],
+                });
+                basic_block.instructions.push(
+                    ArmIns::BranchAndLink { addr: "jprint_int" });
+            },
+            Offset::Global(ty, ident) if *ty == Type::Integer => {
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: "r1".to_string(),
+                    src: format!(".{}", ident).to_string()
+                });
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: "r1".to_string(),
+                    src: "[r1]".to_string(),
+                });
+                basic_block.instructions.push(
+                    ArmIns::BranchAndLink { addr: "jprint_int" });
+            },
+            Offset::Global(ty, ident) if *ty == Type::Double => {
+                // the LSW is expected in r2
+                // TODO: obviously not all LSWs are 0; this is an invariant
+                // for now in the code section responsible for loading double prec literals
+                basic_block.instructions.push(ArmIns::MoveImm {
+                    dst: "r2", imm: 0
+                });
+                // the MSW is expected in r3
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: "r3".to_string(),
+                    src: format!(".{}", ident).to_string()
+                });
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: "r3".to_string(),
+                    src: "[r3]".to_string(),
+                });
+                basic_block.instructions.push(
+                    ArmIns::BranchAndLink { addr: "jprint_double" });
+
+            },
+            /* fall-through for global offsets */
+            Offset::Global(ty, i) => {
+                match ty {
+                    Type::Array(_) => {
+                        let offsets = globalctx.global_ident_to_offsets.get(i).unwrap();
+                        jprint_offset(offsets, globalctx, basic_block);
+                    },
+                    _ => panic!("TODO: Unexpected Global offset: {:?}", offset)
+                }
+            },
+            _ => panic!("TODO: unexpected offset used with jprint: {:?}", offset)
+        };
+
+        // Multiple printed terms are separated by space, except for the last item
+        if idx != val_offsets.len() - 1 {
+            basic_block.instructions.push(ArmIns::Load {
+                dst: "r0".to_string(),
+                src: "=space_fmt".to_string(),
+            });
+            basic_block
+                .instructions
+                .push(ArmIns::BranchAndLink { addr: "printf" });
+        }
     }
 }
 

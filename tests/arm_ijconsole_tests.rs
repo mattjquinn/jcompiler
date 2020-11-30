@@ -43,7 +43,11 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-// TODO: Next on the to-solve list is ctest_global_assgmts_refs_array.ijs
+// #[test]
+// fn next() {
+//     common::test("ctest_global_assgmts_refs_double.ijs", &compile);
+// }
+
 generate_tests!([
     // Known test failures:
     "ctest_ch1_learningjbook.ijs",
@@ -60,7 +64,6 @@ generate_tests!([
     "ctest_monadic_reciprocal.ijs",
     "ctest_monadic_shapeof.ijs",
     "ctest_negative_numbers.ijs",
-    "ctest_global_assgmts_refs_array.ijs",
     "ctest_monadic_tally.ijs",
     "ctest_power.ijs",
     "ctest_strings.ijs",

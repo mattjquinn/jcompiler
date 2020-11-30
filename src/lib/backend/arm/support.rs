@@ -51,8 +51,70 @@ impl std::fmt::Display for Type {
 
 #[derive(Debug)]
 pub struct GlobalContext {
-    pub globals_table: HashMap<String, i32>,
-    pub ident_type_map: HashMap<String, Type>,
+    /*TODO: REMOVE*/pub globals_table: HashMap<String, i32>,
+    /*TODO: REMOVE*/pub ident_type_map: HashMap<String, Type>,
+    pub global_ident_to_offsets: HashMap<String, Vec<Offset>>
+}
+
+impl GlobalContext {
+
+    // TODO: make a note about optimization
+    // TODO: history needs to be in an append only log
+    pub fn add_and_set_global_ident_offsets(&mut self, ident: &String, offsets: &Vec<Offset>) {
+        let mut global_offsets = vec![];
+        let mut idx = 0;
+        for offset in offsets {
+            match offset {
+                Offset::Stack(ty, _idx) => {
+                    global_offsets.push(Offset::Global(ty.clone(), format!("{}_idx{}", ident, idx)));
+                    idx += 1
+                }
+                Offset::Global(ty, ident) => {
+                    // TODO: should this be modified in any way?
+                    global_offsets.push(offset.clone());
+                }
+            }
+        }
+        self.global_ident_to_offsets.insert(ident.clone(), global_offsets);
+    }
+
+    pub fn emit_postamble_entries(&self, entries: &mut Vec<String>) {
+        for ident in self.global_ident_to_offsets.keys() {
+            let offsets = self.global_ident_to_offsets.get(ident).unwrap();
+            let mut idx = 0;
+            for offset in offsets {
+                match offset {
+                    Offset::Global(Type::Integer, _) => {
+                        entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
+                        idx += 1
+                    },
+                    Offset::Stack(_, _) => {
+                        panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
+                    }
+                    _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
+                }
+            }
+        }
+    }
+
+    pub fn emit_preamble_entries(&self, entries: &mut Vec<String>) {
+        for ident in self.global_ident_to_offsets.keys() {
+            let offsets = self.global_ident_to_offsets.get(ident).unwrap();
+            let mut idx = 0;
+            for offset in offsets {
+                match offset {
+                    Offset::Global(Type::Integer, _) => {
+                        entries.push(format!("{}_idx{}: .word 0", ident, idx));
+                        idx += 1
+                    },
+                    Offset::Stack(_, _) => {
+                        panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
+                    }
+                    _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -18,7 +18,12 @@ fn unify_types(l_type: &Type, r_type: &Type) -> Type {
     }
 }
 
-pub fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, expr: &AstNode) -> Vec<Offset> {
+pub fn compile_expr(
+        globalctx: &mut GlobalContext,
+        global_bb: &mut BasicBlock,
+        basic_block: &mut BasicBlock,
+        expr: &AstNode) -> Vec<Offset>
+{
     match expr {
         parser::AstNode::Integer(int) => {
             basic_block.instructions.push(ArmIns::MoveImm {
@@ -71,13 +76,13 @@ pub fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, exp
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
             for term in terms {
-                val_offsets.extend(compile_expr(&globalctx,basic_block, term));
+                val_offsets.extend(compile_expr(globalctx, global_bb, basic_block, term));
             }
             val_offsets
         },
         parser::AstNode::MonadicOp {verb, expr} => {
             basic_block.instructions.push(ArmIns::Nop);
-            let val_offsets = compile_expr(&globalctx, basic_block, expr);
+            let val_offsets = compile_expr(globalctx, global_bb, basic_block, expr);
             basic_block.instructions.push(ArmIns::Nop);
             for offset in &val_offsets {
                 match offset {
@@ -132,8 +137,8 @@ pub fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, exp
         },
         parser::AstNode::DyadicOp {verb, lhs, rhs} => {
             basic_block.instructions.push(ArmIns::Nop);
-            let rhs_offsets = compile_expr(&globalctx, basic_block, rhs);
-            let lhs_offsets = compile_expr(&globalctx, basic_block, lhs);
+            let rhs_offsets = compile_expr(globalctx, global_bb, basic_block, rhs);
+            let lhs_offsets = compile_expr(globalctx, global_bb, basic_block, lhs);
             basic_block.instructions.push(ArmIns::Nop);
             if rhs_offsets.len() != lhs_offsets.len()
                 && (lhs_offsets.len() != 1 && rhs_offsets.len() != 1) {
@@ -220,7 +225,7 @@ pub fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, exp
         },
         parser::AstNode::Reduce {verb, expr} => {
             basic_block.instructions.push(ArmIns::Nop);
-            let expr_offsets = compile_expr(&globalctx, basic_block, expr);
+            let expr_offsets = compile_expr(globalctx, global_bb, basic_block, expr);
             basic_block.instructions.push(ArmIns::Nop);
             // Initialize the accumulator to expr's last offset value
             let accum_offset = expr_offsets.last().unwrap();
@@ -274,41 +279,50 @@ pub fn compile_expr(globalctx: &GlobalContext, basic_block: &mut BasicBlock, exp
             vec![accum_offset.clone()]
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
-            let expr_offsets = compile_expr(&globalctx, basic_block, expr);
-            if expr_offsets.len() != 1 {
-                panic!("Not ready to save global '{}' comprised of multiple offsets: {:?}", ident, expr_offsets);
+            let expr_offsets = compile_expr(globalctx, global_bb, basic_block, expr);
+
+            let mut out_offsets = vec![];
+            let mut idx = 0;
+            for offset in expr_offsets.iter() {
+                match offset {
+                    Offset::Stack(_type, i) =>
+                        basic_block.instructions.push(ArmIns::LoadOffset {
+                            dst: "r2",
+                            src: "fp",
+                            offsets: vec![*i]
+                        }),
+                    Offset::Global(_type, global_ident) => {
+                        basic_block.instructions.push(ArmIns::Load {
+                            dst: "r2".to_string(),
+                            src: format!("{}", global_ident).to_string()
+                        });
+                        basic_block.instructions.push(ArmIns::Load {
+                            dst: "r2".to_string(),
+                            src: "[r2]".to_string(),
+                        });
+                    }
+                };
+                basic_block.instructions.push(ArmIns::Load {
+                    src: format!(".{}_idx{}", ident, idx),
+                    dst: "r3".to_string(),
+                });
+                idx += 1;
+                basic_block.instructions.push(ArmIns::Store {
+                    src: "r2".to_string(),
+                    dst: "r3".to_string(),
+                });
+                println!("In GlobalVarAssgmt, adding offset: {:?}", offset);
+                out_offsets.push(offset.clone())
             }
-            let offset = expr_offsets.get(0).unwrap();
-            match offset {
-                Offset::Stack(_type, i) =>
-                    basic_block.instructions.push(ArmIns::LoadOffset {
-                        dst: "r2", src: "fp", offsets: vec![*i] }),
-                Offset::Global(_type, ident) => {
-                    basic_block.instructions.push(ArmIns::Load {
-                        dst: "r2".to_string(),
-                        src: format!(".{}", ident).to_string()
-                    });
-                    basic_block.instructions.push(ArmIns::Load {
-                        dst: "r2".to_string(),
-                        src: "[r2]".to_string(),
-                    });
-                }
-            };
-            basic_block.instructions.push(ArmIns::Load {
-                src: format!(".{}", ident),
-                dst: "r3".to_string(),
-            });
-            basic_block.instructions.push(ArmIns::Store {
-                src: "r2".to_string(),
-                dst: "r3".to_string(),
-            });
-            vec![offset.clone()]
+            globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
+            out_offsets
         },
         parser::AstNode::Ident(ident) => {
             if !globalctx.globals_table.contains_key(ident) {
                 panic!("Program error: reference to undeclared variable: {}", ident)
             }
             let ty = globalctx.ident_type_map.get(ident).unwrap();
+            // TODO: MQ: this becomes a simple return of lookup of ident from GlobalContext
             vec![Offset::Global(ty.clone(), ident.clone())]
         },
         _ => panic!("Not ready to compile expression: {:?}", expr),
