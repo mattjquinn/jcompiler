@@ -327,7 +327,7 @@ pub fn compile_expr(
 pub fn compute_frame_size(expr: &AstNode) -> i32 {
     match expr {
         parser::AstNode::Integer(_int) => 4,
-        parser::AstNode::DoublePrecisionFloat(_double) => 4,
+        parser::AstNode::DoublePrecisionFloat(_double) => 8,
         parser::AstNode::Terms(terms) =>
             terms.iter().map(|e| compute_frame_size(e)).sum(),
         parser::AstNode::MonadicOp {verb: _, expr} =>

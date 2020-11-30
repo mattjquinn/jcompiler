@@ -49,8 +49,17 @@ impl std::fmt::Display for Type {
     }
 }
 
+/**
+ * It remains to be seen whether globals should be
+ * loaded as ARM global variables, or managed via a special
+ * global basic block. The latter would give us the ability
+ * to more aggressively free up memory, at the cost of greater
+ * complexity.
+ */
 #[derive(Debug)]
 pub struct GlobalContext {
+    // TODO: we need a map of idents to lifetime offsets;
+    // those lifetime offsets should be written to global memory
     pub global_ident_to_offsets: HashMap<String, Vec<Offset>>
 }
 
@@ -60,6 +69,7 @@ impl GlobalContext {
     // TODO: history needs to be in an append only array
     pub fn add_and_set_global_ident_offsets(&mut self, ident: &String, offsets: &Vec<Offset>) {
         let mut global_offsets = vec![];
+        // TODO: idx is used all wrong here, it must be globally incremented in the context of an ident
         let mut idx = 0;
         for offset in offsets {
             match offset {
@@ -97,11 +107,12 @@ impl GlobalContext {
     pub fn emit_postamble_entries(&self, entries: &mut Vec<String>) {
         for ident in self.global_ident_to_offsets.keys() {
             let offsets = self.global_ident_to_offsets.get(ident).unwrap();
+            // TODO: idx is used all wrong here, it must be globally incremented in the context of an ident
             let mut idx = 0;
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
+                        entries.push(format!(".{}_idx{}: .long {}_idx{}", ident, idx, ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {
@@ -120,11 +131,12 @@ impl GlobalContext {
     pub fn emit_preamble_entries(&self, entries: &mut Vec<String>) {
         for ident in self.global_ident_to_offsets.keys() {
             let offsets = self.global_ident_to_offsets.get(ident).unwrap();
+            // TODO: idx is used all wrong here, it must be unique per ident
             let mut idx = 0;
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!("{}_idx{}: .word 0", ident, idx));
+                        entries.push(format!("{}_idx{}: .long 0", ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {

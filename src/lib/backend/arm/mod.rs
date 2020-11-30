@@ -35,6 +35,9 @@ impl ::Backend for ARMBackend {
 
         let mut basic_blocks = Vec::new();
         let mut globalctx = {
+            // TODO: We can get rid of a lot of this now, save for the fact
+            // that there is a weird side-effect somewhere that requires us to keep this around
+            // for tests to pass.
             let mut global_idents = HashSet::new();
             let mut ident_type_map = HashMap::new();
             for astnode in ast {
