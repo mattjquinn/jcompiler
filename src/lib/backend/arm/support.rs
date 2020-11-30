@@ -51,15 +51,13 @@ impl std::fmt::Display for Type {
 
 #[derive(Debug)]
 pub struct GlobalContext {
-    /*TODO: REMOVE*/pub globals_table: HashMap<String, i32>,
-    /*TODO: REMOVE*/pub ident_type_map: HashMap<String, Type>,
     pub global_ident_to_offsets: HashMap<String, Vec<Offset>>
 }
 
 impl GlobalContext {
 
     // TODO: make a note about optimization
-    // TODO: history needs to be in an append only log
+    // TODO: history needs to be in an append only array
     pub fn add_and_set_global_ident_offsets(&mut self, ident: &String, offsets: &Vec<Offset>) {
         let mut global_offsets = vec![];
         let mut idx = 0;
@@ -69,7 +67,7 @@ impl GlobalContext {
                     global_offsets.push(Offset::Global(ty.clone(), format!("{}_idx{}", ident, idx)));
                     idx += 1
                 }
-                Offset::Global(ty, ident) => {
+                Offset::Global(_ty, _ident) => {
                     // TODO: should this be modified in any way?
                     global_offsets.push(offset.clone());
                 }
@@ -78,12 +76,34 @@ impl GlobalContext {
         self.global_ident_to_offsets.insert(ident.clone(), global_offsets);
     }
 
+    pub fn cleanup_stack(&self, postamble: &mut Vec<String>) {
+        // TODO: This is incorrect; we need to compute using
+        // the future append-only entry list
+        if self.global_ident_to_offsets.len() > 0 {
+            // Erases the global frame
+            postamble.push(format!("{}", ArmIns::AddImm {
+                dst:"fp",
+                src:"fp",
+                imm: (self.global_ident_to_offsets.len() * 4) as i32
+            }));
+            // Stack pointer must be moved up as well.
+            postamble.push(format!("{}",ArmIns::Move {
+                dst: "sp",
+                src: "fp"
+            }));
+        }
+    }
+
     pub fn emit_postamble_entries(&self, entries: &mut Vec<String>) {
         for ident in self.global_ident_to_offsets.keys() {
             let offsets = self.global_ident_to_offsets.get(ident).unwrap();
             let mut idx = 0;
             for offset in offsets {
                 match offset {
+                    Offset::Global(Type::Double, _) => {
+                        entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
+                        idx += 1
+                    },
                     Offset::Global(Type::Integer, _) => {
                         entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
                         idx += 1
@@ -103,6 +123,10 @@ impl GlobalContext {
             let mut idx = 0;
             for offset in offsets {
                 match offset {
+                    Offset::Global(Type::Double, _) => {
+                        entries.push(format!("{}_idx{}: .word 0", ident, idx));
+                        idx += 1
+                    },
                     Offset::Global(Type::Integer, _) => {
                         entries.push(format!("{}_idx{}: .word 0", ident, idx));
                         idx += 1

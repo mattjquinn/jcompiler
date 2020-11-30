@@ -317,14 +317,9 @@ pub fn compile_expr(
             globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
             out_offsets
         },
-        parser::AstNode::Ident(ident) => {
-            if !globalctx.globals_table.contains_key(ident) {
-                panic!("Program error: reference to undeclared variable: {}", ident)
-            }
-            let ty = globalctx.ident_type_map.get(ident).unwrap();
-            // TODO: MQ: this becomes a simple return of lookup of ident from GlobalContext
-            vec![Offset::Global(ty.clone(), ident.clone())]
-        },
+        parser::AstNode::Ident(ident) =>
+            globalctx.global_ident_to_offsets.get(ident).unwrap().clone()
+        ,
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
 }

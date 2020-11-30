@@ -51,8 +51,6 @@ impl ::Backend for ARMBackend {
                 println!("Globals table: {:?}", globals_table);
             }
             GlobalContext {
-                globals_table,
-                ident_type_map,
                 global_ident_to_offsets: HashMap::new(),
             }
         };
@@ -168,19 +166,7 @@ impl ::Backend for ARMBackend {
             }
         }
         let mut postamble = Vec::new();
-        if globalctx.globals_table.len() > 0 {
-            // Erases the global frame
-            postamble.push(format!("{}", ArmIns::AddImm {
-                dst:"fp",
-                src:"fp",
-                imm: (globalctx.globals_table.len() * 4) as i32
-            }));
-            // Stack pointer must be moved up as well.
-            postamble.push(format!("{}",ArmIns::Move {
-                dst: "sp",
-                src: "fp"
-            }));
-        }
+        globalctx.cleanup_stack(&mut postamble);
         postamble.push("pop {ip, pc}".to_string());
         globalctx.emit_postamble_entries(&mut postamble);
         for instr in postamble {
