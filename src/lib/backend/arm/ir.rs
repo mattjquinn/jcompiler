@@ -1,4 +1,5 @@
 #[derive(Debug)]
 pub enum IRNode {
-    PushIntegerOntoStack(i32)
+    PushIntegerOntoStack(i32),
+    PushDoublePrecisionFloatOntoStack(f64)
 }

@@ -92,7 +92,7 @@ impl ::Backend for ARMBackend {
                         if to_add > 256 {
                             to_add = 256;
                         }
-                        basic_block.instructions.push(ArmIns::AddImm {
+                        basic_block.instructions.push(ArmIns::AddImmDeprecated {
                             dst: "fp",
                             src: "fp",
                             imm: to_add
@@ -217,7 +217,7 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                 // the LSW is expected in r2
                 // TODO: obviously not all LSWs are 0; this is an invariant
                 // for now in the code section responsible for loading double prec literals
-                basic_block.instructions.push(ArmIns::MoveImm {
+                basic_block.instructions.push(ArmIns::MoveImmDeprecated {
                     dst: "r2", imm: 0
                 });
                 // the MSW is expected in r3

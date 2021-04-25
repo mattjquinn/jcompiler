@@ -5,7 +5,6 @@ use parser::{AstNode, MonadicVerb, DyadicVerb};
 use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
-use ieee754::Ieee754;
 
 use super::instructions::{ArmIns};
 use super::support::{GlobalContext, BasicBlock, Offset, Type};
@@ -30,39 +29,7 @@ pub fn compile_expr(
             bb.ir(IRNode::PushIntegerOntoStack(*int))
         },
         parser::AstNode::DoublePrecisionFloat(num) => {
-            let bits = num.bits();
-            let hex_rep = format!("{:016x}", bits);
-            println!("IEEE754 double hex representation: {}", hex_rep);
-
-            if bits & 0x00000000FFFFFFFF != 0 {
-                // supporting this will require use of an additional register
-                // that is also pushed to the stack
-                panic!("TODO: Support double precision floats with non-zero LSW: {}", hex_rep);
-            }
-
-            // due to limited width of immediate, we split the initialization
-            // over multiple instructions:
-            // TODO: use of i32 here could cause silent truncation
-            let msw_upper : i32 = ((bits >> 32) & 0xF0000000) as i32;
-            let msw_lower : i32 = ((bits >> 32) & 0x0FFFFFFF) as i32;
-            println!("MSW upper: {:x}", msw_upper);
-            println!("MSW lower: {:x}", msw_lower);
-            bb.instructions.push(ArmIns::MoveImm {
-                dst: "r7",
-                imm: msw_upper,
-            });
-            bb.instructions.push(ArmIns::AddImm {
-                dst: "r7",
-                src: "r7",
-                imm: msw_lower,
-            });
-            let offset = bb.stack_allocate_double();
-            bb.instructions.push(ArmIns::StoreOffset {
-                dst: "fp",
-                src: "r7",
-                offsets: vec![offset],
-            });
-            vec![Offset::Stack(Type::Double, offset)]
+            bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num))
         },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
@@ -85,7 +52,7 @@ pub fn compile_expr(
                 };
                 match verb {
                     MonadicVerb::Increment => {
-                        bb.instructions.push(ArmIns::AddImm {
+                        bb.instructions.push(ArmIns::AddImmDeprecated {
                             dst: "r4",
                             src: "r4",
                             imm: 1
@@ -99,7 +66,7 @@ pub fn compile_expr(
                         });
                     },
                     MonadicVerb::Negate => {
-                        bb.instructions.push(ArmIns::MoveImm {
+                        bb.instructions.push(ArmIns::MoveImmDeprecated {
                             dst: "r6",
                             imm: 0
                         });
@@ -113,7 +80,7 @@ pub fn compile_expr(
                 }
                 match offset {
                     Offset::Stack(_type, offset) =>
-                        bb.instructions.push(ArmIns::StoreOffset {
+                        bb.instructions.push(ArmIns::StoreOffsetDeprecated {
                             src: "r4",
                             dst: "fp",
                             offsets: vec![offset.clone()]
@@ -208,7 +175,7 @@ pub fn compile_expr(
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
                 let dest_offset = bb._stack_allocate(4);
-                bb.instructions.push(ArmIns::StoreOffset {
+                bb.instructions.push(ArmIns::StoreOffsetDeprecated {
                     src: "r4", dst: "fp", offsets: vec![dest_offset] });
                 dest_offsets.push(Offset::Stack(unified_type, dest_offset));
             }
@@ -263,7 +230,7 @@ pub fn compile_expr(
             // single offset here.
             match accum_offset {
                 Offset::Stack(_type, i) =>
-                    bb.instructions.push(ArmIns::StoreOffset {
+                    bb.instructions.push(ArmIns::StoreOffsetDeprecated {
                         src: "r3", dst: "fp", offsets: vec![*i] }),
                 Offset::Global(_type, _ident) => unimplemented!("TODO: Support store to global.")
             };

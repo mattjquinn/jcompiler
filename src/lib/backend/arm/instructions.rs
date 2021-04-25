@@ -1,18 +1,19 @@
 use itertools::free::join;
+use backend::arm::registers::ArmRegister;
 
 #[derive(Debug)]
 pub enum ArmIns {
     Load { dst: String, src: String },
     Store { dst: String, src: String },
     LoadOffset { dst: &'static str, src: &'static str, offsets: Vec<i32> },
-    StoreOffset { dst: &'static str, src: &'static str, offsets: Vec<i32> },
+    StoreOffsetDeprecated { dst: &'static str, src: &'static str, offsets: Vec<i32> },
     BranchAndLink { addr: &'static str },
     Add { dst: &'static str, src: &'static str, add: &'static str },
-    AddImm { dst: &'static str, src: &'static str, imm: i32 },
+    AddImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
     Sub { dst: &'static str, src: &'static str, sub: &'static str },
     SubImm { dst: &'static str, src: &'static str, imm: i32 },
     Move { dst: &'static str, src: &'static str },
-    MoveImm { dst: &'static str, imm: i32 },
+    MoveImmDeprecated { dst: &'static str, imm: i32 },
     Multiply { dst: &'static str, src: &'static str, mul: &'static str },
     Compare { lhs: &'static str, rhs: &'static str },
     MoveLT { dst: &'static str, src: &'static str },
@@ -21,7 +22,11 @@ pub enum ArmIns {
     MoveGE { dst: &'static str, src: &'static str },
     MoveNE { dst: &'static str, src: &'static str },
     MoveEQ { dst: &'static str, src: &'static str },
-    Nop
+    Nop,
+
+    MoveImm { dst: ArmRegister, imm: i32 },
+    StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
+    AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
 }
 
 impl std::fmt::Display for ArmIns {
@@ -35,7 +40,7 @@ impl std::fmt::Display for ArmIns {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
             }
-            ArmIns::StoreOffset { dst, src, offsets } => {
+            ArmIns::StoreOffsetDeprecated { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
             }
@@ -63,8 +68,8 @@ impl std::fmt::Display for ArmIns {
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::Move { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
-            ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
-            ArmIns::AddImm { dst, src, imm } => {
+            ArmIns::MoveImmDeprecated { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::AddImmDeprecated { dst, src, imm } => {
                 if dst == src {
                     // ARM allows compressed format if source and destination are identical.
                     f.write_str(format!("add {}, {}", src, imm).as_str())
@@ -89,7 +94,24 @@ impl std::fmt::Display for ArmIns {
             ArmIns::Multiply { dst, src, mul } => {
                 f.write_str(format!("mul {}, {}, {}", dst, src, mul).as_str())
             }
-            ArmIns::Nop => f.write_str("nop")
+            ArmIns::Nop => f.write_str("nop"),
+
+
+
+
+            ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::StoreOffset { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
+            }
+            ArmIns::AddImm { dst, src, imm } => {
+                if dst == src {
+                    // ARM allows compressed format if source and destination are identical.
+                    f.write_str(format!("add {}, {}", src, imm).as_str())
+                } else {
+                    f.write_str(format!("add {}, {}, {}", dst, src, imm).as_str())
+                }
+            }
         }
     }
 }

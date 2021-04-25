@@ -1,5 +1,7 @@
 # TODOs
 
+- Make BasicBlock assert that all registers have been freed before
+  providing its finalized list of instructions to the ASM writer
 - Don't assign registers directly, have a function do so per-scope
 * NEXT: Enable final (commented out) test in ARM, support static arrays
    * requires moving the r3 load out of GlobalVarAssgmt to the places where it's expected, i.e. DyadicOp handling

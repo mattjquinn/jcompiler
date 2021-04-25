@@ -12,6 +12,7 @@ extern crate rand;
 extern crate regex;
 extern crate tempfile;
 extern crate ieee754;
+extern crate linked_hash_set;
 
 #[macro_use]
 extern crate pest_derive;

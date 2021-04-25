@@ -1,9 +1,12 @@
 use std::collections::{HashMap};
+use linked_hash_set::LinkedHashSet;
 
 use std::fmt::{Formatter, Error};
+use ieee754::Ieee754;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
+use backend::arm::registers::ArmRegister;
 
 #[derive(Debug)]
 pub enum Offset {
@@ -92,7 +95,7 @@ impl GlobalContext {
         // the future append-only entry list
         if self.global_ident_to_offsets.len() > 0 {
             // Erases the global frame
-            postamble.push(format!("{}", ArmIns::AddImm {
+            postamble.push(format!("{}", ArmIns::AddImmDeprecated {
                 dst:"fp",
                 src:"fp",
                 imm: (self.global_ident_to_offsets.len() * 4) as i32
@@ -157,8 +160,9 @@ impl GlobalContext {
 #[derive(Debug)]
 pub struct BasicBlock {
     frame_pointer: i32,
-    pub frame_size: i32,
-    pub instructions: Vec<ArmIns>,
+    pub frame_size: i32,  // TODO: make private
+    pub instructions: Vec<ArmIns>, // TODO: make private
+    available_registers: LinkedHashSet<ArmRegister>
 }
 
 impl BasicBlock {
@@ -188,10 +192,16 @@ impl BasicBlock {
             frame_size,
             frame_pointer: 0,
             instructions,
+            available_registers: [
+                ArmRegister::R0,
+                ArmRegister::R1,
+                ArmRegister::R2,
+                ArmRegister::R3
+            ].iter().cloned().collect()
         }
     }
 
-    // TODO: should be inaccessible to callers outside of this struct
+    // TODO: make private
     pub fn _stack_allocate(&mut self, width: i32) -> i32 {
         if self.frame_pointer + width > self.frame_size {
             panic!("Attempted to allocate entity of width {} which overflows frame size of {}; frame pointer is {}", width, self.frame_size, self.frame_pointer);
@@ -201,30 +211,70 @@ impl BasicBlock {
         offset
     }
 
+    // TODO: make private
     pub fn stack_allocate_int(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
         offset
     }
 
+    // TODO: make private
     pub fn stack_allocate_double(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
         offset
     }
 
+    fn claim_register(&mut self) -> ArmRegister {
+        match self.available_registers.pop_front() {
+            Some(r) => r,
+            None => panic!("No register is available to claim.")
+        }
+    }
+
+    fn free_register(&mut self, reg: ArmRegister) {
+        if self.available_registers.contains(&reg) {
+            panic!("Attempted to free register {} but it is not claimed.", reg)
+        }
+        self.available_registers.insert(reg);
+    }
+
     pub fn ir(&mut self, instruction: IRNode) -> Vec<Offset> {
         match instruction {
             IRNode::PushIntegerOntoStack(imm) => {
-                self.instructions.push(ArmIns::MoveImm {
-                    dst: "r7",  // TODO: from register request fn
-                    imm
-                });
+                let temp_reg = self.claim_register();
+                self.instructions.push(ArmIns::MoveImm { imm, dst: temp_reg.clone() });
                 let offset = self.stack_allocate_int();
                 self.instructions.push(ArmIns::StoreOffset {
-                    dst: "fp",  // TODO: enum value
-                    src: "r7",  // TODO: from register request fn
-                    offsets: vec![offset],
-                });
+                    src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset]});
+                self.free_register(temp_reg);
                 vec![Offset::Stack(Type::Integer, offset)]
+            },
+            IRNode::PushDoublePrecisionFloatOntoStack(num) => {
+                let bits = num.bits();
+                let hex_rep = format!("{:016x}", bits);
+                println!("IEEE754 double hex representation: {}", hex_rep);
+
+                if bits & 0x00000000FFFFFFFF != 0 {
+                    // supporting this will require use of an additional register
+                    // that is also pushed to the stack
+                    panic!("TODO: Support double precision floats with non-zero LSW: {}", hex_rep);
+                }
+
+                // due to limited width of immediate, we split the initialization
+                // over multiple instructions:
+                // TODO: use of i32 here could cause silent truncation
+                let msw_upper : i32 = ((bits >> 32) & 0xF0000000) as i32;
+                let msw_lower : i32 = ((bits >> 32) & 0x0FFFFFFF) as i32;
+                println!("MSW upper: {:x}", msw_upper);
+                println!("MSW lower: {:x}", msw_lower);
+                let temp_reg = self.claim_register();
+                self.instructions.push(ArmIns::MoveImm { imm: msw_upper, dst: temp_reg.clone() });
+                self.instructions.push(ArmIns::AddImm {
+                    imm: msw_lower, dst: temp_reg.clone(), src: temp_reg.clone() });
+                let offset = self.stack_allocate_double();
+                self.instructions.push(ArmIns::StoreOffset {
+                    dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset]});
+                self.free_register(temp_reg);
+                vec![Offset::Stack(Type::Double, offset)]
             }
         }
     }
