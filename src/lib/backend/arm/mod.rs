@@ -12,6 +12,8 @@ mod instructions;
 mod macros;
 mod support;
 mod compiler;
+mod registers;
+mod ir;
 
 pub struct ARMBackend {}
 

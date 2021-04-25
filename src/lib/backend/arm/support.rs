@@ -3,6 +3,7 @@ use std::collections::{HashMap};
 use std::fmt::{Formatter, Error};
 
 use super::instructions::{ArmIns};
+use super::ir::{IRNode};
 
 #[derive(Debug)]
 pub enum Offset {
@@ -208,5 +209,23 @@ impl BasicBlock {
     pub fn stack_allocate_double(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
         offset
+    }
+
+    pub fn ir(&mut self, instruction: IRNode) -> Vec<Offset> {
+        match instruction {
+            IRNode::PushIntegerOntoStack(imm) => {
+                self.instructions.push(ArmIns::MoveImm {
+                    dst: "r7",  // TODO: from register request fn
+                    imm
+                });
+                let offset = self.stack_allocate_int();
+                self.instructions.push(ArmIns::StoreOffset {
+                    dst: "fp",  // TODO: enum value
+                    src: "r7",  // TODO: from register request fn
+                    offsets: vec![offset],
+                });
+                vec![Offset::Stack(Type::Integer, offset)]
+            }
+        }
     }
 }
