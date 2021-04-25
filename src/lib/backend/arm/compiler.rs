@@ -45,7 +45,7 @@ pub fn compile_expr(
             for offset in &val_offsets {
                 match offset {
                     Offset::Stack(_type, offset) =>
-                        bb.instructions.push(ArmIns::LoadOffset {
+                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
                             dst: "r4", src: "fp", offsets: vec![offset.clone()]}),
                     Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support loading from global.")
@@ -59,7 +59,7 @@ pub fn compile_expr(
                         });
                     },
                     MonadicVerb::Square => {
-                        bb.instructions.push(ArmIns::Multiply {
+                        bb.instructions.push(ArmIns::MultiplyDeprecated {
                             dst: "r4",
                             src: "r4",
                             mul: "r4"
@@ -70,7 +70,7 @@ pub fn compile_expr(
                             dst: "r6",
                             imm: 0
                         });
-                        bb.instructions.push(ArmIns::Sub {
+                        bb.instructions.push(ArmIns::SubDeprecated {
                             dst: "r4",
                             src: "r6",
                             sub: "r4"
@@ -118,21 +118,21 @@ pub fn compile_expr(
                 let l_type = match l {
                     Offset::Stack(ty, i) => {
                         bb.instructions.push(
-                            ArmIns::LoadOffset { dst: "r3", src: "fp", offsets: vec![*i] });
+                            ArmIns::LoadOffsetDeprecated { dst: "r3", src: "fp", offsets: vec![*i] });
                         ty
                     },
                     Offset::Global(ty, ident) => {
                         bb.instructions.push(
-                            ArmIns::Load { dst: "r3".to_string(), src: format!(".{}", ident).to_string() });
+                            ArmIns::LoadDeprecated { dst: "r3".to_string(), src: format!(".{}", ident).to_string() });
                         bb.instructions.push(
-                            ArmIns::Load { dst: "r3".to_string(), src: "[r3]".to_string() });
+                            ArmIns::LoadDeprecated { dst: "r3".to_string(), src: "[r3]".to_string() });
                         ty
                     }
                 };
                 let r_type = match r {
                     Offset::Stack(ty, i) => {
                         bb.instructions.push(
-                            ArmIns::LoadOffset { dst: "r4", src: "fp", offsets: vec![*i] });
+                            ArmIns::LoadOffsetDeprecated { dst: "r4", src: "fp", offsets: vec![*i] });
                         ty
                     }
                     Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
@@ -141,36 +141,36 @@ pub fn compile_expr(
                 match verb {
                     DyadicVerb::Plus =>
                         bb.instructions.push(
-                            ArmIns::Add { dst: "r4", src: "r3", add: "r4" }),
+                            ArmIns::AddDeprecated { dst: "r4", src: "r3", add: "r4" }),
                     DyadicVerb::Times =>
                         bb.instructions.push(
-                            ArmIns::Multiply { dst: "r4", src: "r3", mul: "r4" }),
+                            ArmIns::MultiplyDeprecated { dst: "r4", src: "r3", mul: "r4" }),
                     DyadicVerb::Minus =>
                         bb.instructions.push(
-                            ArmIns::Sub { dst: "r4", src: "r3", sub: "r4" }),
+                            ArmIns::SubDeprecated { dst: "r4", src: "r3", sub: "r4" }),
                     DyadicVerb::LessThan => {
                         bb.instructions.push(
-                            ArmIns::Compare { lhs: "r3", rhs: "r4" });
+                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
                         bb.instructions.push(
-                            ArmIns::MoveLT { dst: "r4", src: "#1" });
+                            ArmIns::MoveLTDeprecated { dst: "r4", src: "#1" });
                         bb.instructions.push(
-                            ArmIns::MoveGE { dst: "r4", src: "#0" });
+                            ArmIns::MoveGEDeprecated { dst: "r4", src: "#0" });
                     },
                     DyadicVerb::Equal => {
                         bb.instructions.push(
-                            ArmIns::Compare { lhs: "r3", rhs: "r4" });
+                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
                         bb.instructions.push(
-                            ArmIns::MoveEQ { dst: "r4", src: "#1" });
+                            ArmIns::MoveEQDeprecated { dst: "r4", src: "#1" });
                         bb.instructions.push(
-                            ArmIns::MoveNE { dst: "r4", src: "#0" });
+                            ArmIns::MoveNEDeprecated { dst: "r4", src: "#0" });
                     }
                     DyadicVerb::LargerThan => {
                         bb.instructions.push(
-                            ArmIns::Compare { lhs: "r3", rhs: "r4" });
+                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
                         bb.instructions.push(
-                            ArmIns::MoveGT { dst: "r4", src: "#1" });
+                            ArmIns::MoveGTDeprecated { dst: "r4", src: "#1" });
                         bb.instructions.push(
-                            ArmIns::MoveLE { dst: "r4", src: "#0" });
+                            ArmIns::MoveLEDeprecated { dst: "r4", src: "#0" });
                     }
                     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
                 }
@@ -189,7 +189,7 @@ pub fn compile_expr(
             let accum_offset = expr_offsets.last().unwrap();
             match accum_offset {
                 Offset::Stack(_type, i) =>
-                    bb.instructions.push(ArmIns::LoadOffset {
+                    bb.instructions.push(ArmIns::LoadOffsetDeprecated {
                         dst: "r3", src: "fp", offsets: vec![*i] }),
                 Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
             }
@@ -197,27 +197,27 @@ pub fn compile_expr(
             for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
                 match offset_idx {
                     Offset::Stack(_type, i) =>
-                        bb.instructions.push(ArmIns::LoadOffset {
+                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
                             dst: "r4", src: "fp", offsets: vec![*i] }),
                     Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
                 };
                 match verb {
                     DyadicVerb::Plus => {
-                        bb.instructions.push(ArmIns::Add {
+                        bb.instructions.push(ArmIns::AddDeprecated {
                             dst: "r3",
                             src: "r4",
                             add: "r3"
                         });
                     },
                     DyadicVerb::Minus => {
-                        bb.instructions.push(ArmIns::Sub {
+                        bb.instructions.push(ArmIns::SubDeprecated {
                             dst: "r3",
                             src: "r4",
                             sub: "r3"
                         });
                     },
                     DyadicVerb::Times => {
-                        bb.instructions.push(ArmIns::Multiply {
+                        bb.instructions.push(ArmIns::MultiplyDeprecated {
                             dst: "r3",
                             src: "r4",
                             mul: "r3"
@@ -244,28 +244,28 @@ pub fn compile_expr(
             for offset in expr_offsets.iter() {
                 match offset {
                     Offset::Stack(_type, i) =>
-                        bb.instructions.push(ArmIns::LoadOffset {
+                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
                             dst: "r2",
                             src: "fp",
                             offsets: vec![*i]
                         }),
                     Offset::Global(_type, global_ident) => {
-                        bb.instructions.push(ArmIns::Load {
+                        bb.instructions.push(ArmIns::LoadDeprecated {
                             dst: "r2".to_string(),
                             src: format!("{}", global_ident).to_string()
                         });
-                        bb.instructions.push(ArmIns::Load {
+                        bb.instructions.push(ArmIns::LoadDeprecated {
                             dst: "r2".to_string(),
                             src: "[r2]".to_string(),
                         });
                     }
                 };
-                bb.instructions.push(ArmIns::Load {
+                bb.instructions.push(ArmIns::LoadDeprecated {
                     src: format!(".{}_idx{}", ident, idx),
                     dst: "r3".to_string(),
                 });
                 idx += 1;
-                bb.instructions.push(ArmIns::Store {
+                bb.instructions.push(ArmIns::StoreDeprecated {
                     src: "r2".to_string(),
                     dst: "r3".to_string(),
                 });

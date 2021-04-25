@@ -74,13 +74,13 @@ impl ::Backend for ARMBackend {
                             jprint_offset(&val_offsets, &globalctx, &mut basic_block);
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
-                            basic_block.instructions.push(ArmIns::Load {
+                            basic_block.instructions.push(ArmIns::LoadDeprecated {
                                 dst: "r0".to_string(),
                                 src: "=line_end_nl_fmt".to_string(),
                             });
                             basic_block
                                 .instructions
-                                .push(ArmIns::BranchAndLink { addr: "printf" });
+                                .push(ArmIns::BranchAndLinkDeprecated { addr: "printf" });
                         }
                     }
 
@@ -100,7 +100,7 @@ impl ::Backend for ARMBackend {
                         added += to_add;
                     }
                     // Stack pointer must be moved up as well.
-                    basic_block.instructions.push(ArmIns::Move {
+                    basic_block.instructions.push(ArmIns::MoveDeprecated {
                         dst: "sp",
                         src: "fp"
                     });
@@ -193,25 +193,25 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
     for (idx, offset) in val_offsets.iter().enumerate() {
         match offset {
             Offset::Stack(ty, i) if *ty == Type::Integer => {
-                basic_block.instructions.push(ArmIns::LoadOffset {
+                basic_block.instructions.push(ArmIns::LoadOffsetDeprecated {
                     dst: "r1",
                     src: "fp",
                     offsets: vec![*i],
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLink { addr: "jprint_int" });
+                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_int" });
             },
             Offset::Global(ty, ident) if *ty == Type::Integer => {
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r1".to_string(),
                     src: format!(".{}", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r1".to_string(),
                     src: "[r1]".to_string(),
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLink { addr: "jprint_int" });
+                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_int" });
             },
             Offset::Global(ty, ident) if *ty == Type::Double => {
                 // the LSW is expected in r2
@@ -221,16 +221,16 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                     dst: "r2", imm: 0
                 });
                 // the MSW is expected in r3
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r3".to_string(),
                     src: format!(".{}", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r3".to_string(),
                     src: "[r3]".to_string(),
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLink { addr: "jprint_double" });
+                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_double" });
 
             },
             /* fall-through for global offsets */
@@ -248,13 +248,13 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
 
         // Multiple printed terms are separated by space, except for the last item
         if idx != val_offsets.len() - 1 {
-            basic_block.instructions.push(ArmIns::Load {
+            basic_block.instructions.push(ArmIns::LoadDeprecated {
                 dst: "r0".to_string(),
                 src: "=space_fmt".to_string(),
             });
             basic_block
                 .instructions
-                .push(ArmIns::BranchAndLink { addr: "printf" });
+                .push(ArmIns::BranchAndLinkDeprecated { addr: "printf" });
         }
     }
 }

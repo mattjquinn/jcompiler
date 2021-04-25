@@ -101,7 +101,7 @@ impl GlobalContext {
                 imm: (self.global_ident_to_offsets.len() * 4) as i32
             }));
             // Stack pointer must be moved up as well.
-            postamble.push(format!("{}",ArmIns::Move {
+            postamble.push(format!("{}",ArmIns::MoveDeprecated {
                 dst: "sp",
                 src: "fp"
             }));
@@ -170,7 +170,7 @@ impl BasicBlock {
         println!("Allocating new basic block with frame size {}", frame_size);
         let mut instructions = vec![
             // Frame pointer starts out at stack pointer.
-            ArmIns::Move { dst: "fp", src: "sp" } ];
+            ArmIns::MoveDeprecated { dst: "fp", src: "sp" } ];
         let mut subbed = 0;
         while subbed < frame_size {
             let mut to_sub = frame_size - subbed;
@@ -179,7 +179,7 @@ impl BasicBlock {
                 to_sub = 256;
             }
             // Expand fp to size of frame.
-            instructions.push(ArmIns::SubImm {
+            instructions.push(ArmIns::SubImmDeprecated {
                 dst: "fp",
                 src: "fp",
                 imm: to_sub
@@ -187,7 +187,7 @@ impl BasicBlock {
             subbed += to_sub;
         }
         // Expand sp along with it.
-        instructions.push(ArmIns::Move { dst: "sp", src: "fp" });
+        instructions.push(ArmIns::MoveDeprecated { dst: "sp", src: "fp" });
         BasicBlock {
             frame_size,
             frame_pointer: 0,
