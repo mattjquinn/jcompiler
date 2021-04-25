@@ -7,6 +7,7 @@ use ieee754::Ieee754;
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
 use backend::arm::registers::ArmRegister;
+use parser::{MonadicVerb};
 
 #[derive(Debug)]
 pub enum Offset {
@@ -275,6 +276,35 @@ impl BasicBlock {
                     dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset]});
                 self.free_register(temp_reg);
                 vec![Offset::Stack(Type::Double, offset)]
+            }
+            IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {
+                let memory_offset_idx = match &offset {
+                    Offset::Stack(_type, idx) => *idx,
+                    Offset::Global(_type, _ident) =>
+                        unimplemented!("TODO: Support application of monadic verb to a global variable.")
+                };
+                let temp_reg = self.claim_register();
+                self.instructions.push(ArmIns::LoadOffset {
+                    dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![memory_offset_idx]});
+                match verb {
+                    MonadicVerb::Increment => self.instructions.push(ArmIns::AddImm {
+                        dst: temp_reg.clone(), src: temp_reg.clone(), imm: 1 }),
+                    MonadicVerb::Square => self.instructions.push(ArmIns::Multiply {
+                        dst: temp_reg.clone(), src: temp_reg.clone(), mul: temp_reg.clone() }),
+                    MonadicVerb::Negate => {
+                        let negation_reg = self.claim_register();
+                        self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
+                        // subtract the immediate from 0
+                        self.instructions.push(ArmIns::Sub {
+                            dst: temp_reg.clone(), src: negation_reg.clone(), sub: temp_reg.clone() });
+                        self.free_register(negation_reg);
+                    }
+                    _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
+                }
+                self.instructions.push(ArmIns::StoreOffset {
+                    src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![memory_offset_idx]});
+                self.free_register(temp_reg);
+                vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
             }
         }
     }

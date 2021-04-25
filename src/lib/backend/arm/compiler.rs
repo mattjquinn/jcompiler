@@ -1,7 +1,7 @@
 use parser;
 use std::collections::{HashMap, HashSet};
 
-use parser::{AstNode, MonadicVerb, DyadicVerb};
+use parser::{AstNode, DyadicVerb};
 use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
@@ -39,65 +39,16 @@ pub fn compile_expr(
             val_offsets
         },
         parser::AstNode::MonadicOp {verb, expr} => {
-            bb.instructions.push(ArmIns::Nop);
             let val_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            bb.instructions.push(ArmIns::Nop);
+            let mut out_offsets = vec![];
             for offset in &val_offsets {
-                match offset {
-                    Offset::Stack(_type, offset) =>
-                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
-                            dst: "r4", src: "fp", offsets: vec![offset.clone()]}),
-                    Offset::Global(_type, _ident) =>
-                        unimplemented!("TODO: Support loading from global.")
-                };
-                match verb {
-                    MonadicVerb::Increment => {
-                        bb.instructions.push(ArmIns::AddImmDeprecated {
-                            dst: "r4",
-                            src: "r4",
-                            imm: 1
-                        });
-                    },
-                    MonadicVerb::Square => {
-                        bb.instructions.push(ArmIns::MultiplyDeprecated {
-                            dst: "r4",
-                            src: "r4",
-                            mul: "r4"
-                        });
-                    },
-                    MonadicVerb::Negate => {
-                        bb.instructions.push(ArmIns::MoveImmDeprecated {
-                            dst: "r6",
-                            imm: 0
-                        });
-                        bb.instructions.push(ArmIns::SubDeprecated {
-                            dst: "r4",
-                            src: "r6",
-                            sub: "r4"
-                        });
-                    }
-                    _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
-                }
-                match offset {
-                    Offset::Stack(_type, offset) =>
-                        bb.instructions.push(ArmIns::StoreOffsetDeprecated {
-                            src: "r4",
-                            dst: "fp",
-                            offsets: vec![offset.clone()]
-                        }),
-                    Offset::Global(_type, _ident) =>
-                        unimplemented!("TODO: Support storing to global.")
-                };
+                out_offsets.extend(bb.ir(IRNode::ApplyMonadicVerbToMemoryOffset(verb.clone(), offset.clone())));
             }
-            bb.instructions.push(ArmIns::Nop);
-            val_offsets   // we return the same list of offsets,
-            // because we've updated them in-place
+            out_offsets   // this should always be the same as val_offsets because we updated in-place on the stack
         },
         parser::AstNode::DyadicOp {verb, lhs, rhs} => {
-            bb.instructions.push(ArmIns::Nop);
             let rhs_offsets = compile_expr(globalctx, global_bb, bb, rhs);
             let lhs_offsets = compile_expr(globalctx, global_bb, bb, lhs);
-            bb.instructions.push(ArmIns::Nop);
             if rhs_offsets.len() != lhs_offsets.len()
                 && (lhs_offsets.len() != 1 && rhs_offsets.len() != 1) {
                 panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_offsets.len(), rhs_offsets.len())
@@ -135,6 +86,7 @@ pub fn compile_expr(
                             ArmIns::LoadOffsetDeprecated { dst: "r4", src: "fp", offsets: vec![*i] });
                         ty
                     }
+                    // TODO: it's not clear why this is unimplementable when we seem to implement it for the left-hand side above
                     Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
                 };
                 let unified_type = unify_types(l_type, r_type);

@@ -27,6 +27,9 @@ pub enum ArmIns {
     MoveImm { dst: ArmRegister, imm: i32 },
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
+    LoadOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
+    Multiply { dst: ArmRegister, src: ArmRegister, mul: ArmRegister },
+    Sub { dst: ArmRegister, src: ArmRegister, sub: ArmRegister },
 }
 
 impl std::fmt::Display for ArmIns {
@@ -111,6 +114,16 @@ impl std::fmt::Display for ArmIns {
                 } else {
                     f.write_str(format!("add {}, {}, {}", dst, src, imm).as_str())
                 }
+            }
+            ArmIns::LoadOffset { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
+            }
+            ArmIns::Multiply { dst, src, mul } => {
+                f.write_str(format!("mul {}, {}, {}", dst, src, mul).as_str())
+            }
+            ArmIns::Sub { dst, src, sub } => {
+                f.write_str(format!("sub {}, {}, {}", dst, src, sub).as_str())
             }
         }
     }
