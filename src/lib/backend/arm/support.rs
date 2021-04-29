@@ -7,7 +7,7 @@ use ieee754::Ieee754;
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
 use backend::arm::registers::ArmRegister;
-use parser::{MonadicVerb};
+use parser::{DyadicVerb, MonadicVerb};
 
 #[derive(Debug)]
 pub enum Offset {
@@ -305,7 +305,91 @@ impl BasicBlock {
                     src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![memory_offset_idx]});
                 self.free_register(temp_reg);
                 vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
+            },
+            IRNode::ApplyDyadicVerbToMemoryOffsets{verb, lhs, rhs} => {
+                let lhs_reg = self.claim_register();
+                let rhs_reg = self.claim_register();
+
+                let l_type = match lhs {
+                    Offset::Stack(ty, i) => {
+                        self.instructions.push(
+                            ArmIns::LoadOffset { dst: lhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
+                        ty
+                    },
+                    Offset::Global(ty, ident) => {
+                        self.instructions.push(
+                            // TODO: make this be ArmIns::LoadIdentifierAddress
+                            ArmIns::Load { dst: lhs_reg.clone(), src: format!(".{}", ident).to_string() });
+                        self.instructions.push(
+                            // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
+                            ArmIns::Load { dst: lhs_reg.clone(), src: format!("[{}]", lhs_reg).to_string() });
+                        ty
+                    }
+                };
+                let r_type = match rhs {
+                    Offset::Stack(ty, i) => {
+                        self.instructions.push(
+                            ArmIns::LoadOffset { dst: rhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
+                        ty
+                    }
+                    // TODO: it's not clear why this is unimplemented when we seem to implement it for the left-hand side above
+                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
+                };
+                let unified_type = unify_types(&l_type, &r_type);
+                match verb {
+                    DyadicVerb::Plus =>
+                        self.instructions.push(
+                            ArmIns::Add { dst: rhs_reg.clone(), src: lhs_reg.clone(), add: rhs_reg.clone() }),
+                    DyadicVerb::Times =>
+                        self.instructions.push(
+                            ArmIns::Multiply { dst: rhs_reg.clone(), src: lhs_reg.clone(), mul: rhs_reg.clone() }),
+                    DyadicVerb::Minus =>
+                        self.instructions.push(
+                            ArmIns::Sub { dst: rhs_reg.clone(), src: lhs_reg.clone(), sub: rhs_reg.clone() }),
+                    DyadicVerb::LessThan => {
+                        self.instructions.push(
+                            ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
+                        self.instructions.push(
+                            ArmIns::MoveLT { dst: rhs_reg.clone(), src: 1 });
+                        self.instructions.push(
+                            ArmIns::MoveGE { dst: rhs_reg.clone(), src: 0 });
+                    },
+                    DyadicVerb::Equal => {
+                        self.instructions.push(
+                            ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
+                        self.instructions.push(
+                            ArmIns::MoveEQ { dst: rhs_reg.clone(), src: 1 });
+                        self.instructions.push(
+                            ArmIns::MoveNE { dst: rhs_reg.clone(), src: 0 });
+                    }
+                    DyadicVerb::LargerThan => {
+                        self.instructions.push(
+                            ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
+                        self.instructions.push(
+                            ArmIns::MoveGT { dst: rhs_reg.clone(), src: 1 });
+                        self.instructions.push(
+                            ArmIns::MoveLE { dst: rhs_reg.clone(), src: 0 });
+                    }
+                    _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
+                }
+                let dest_offset = self._stack_allocate(4);
+                self.instructions.push(ArmIns::StoreOffset {
+                    src: rhs_reg.clone(), dst: ArmRegister::FP, offsets: vec![dest_offset] });
+
+                self.free_register(lhs_reg);
+                self.free_register(rhs_reg);
+
+                vec![Offset::Stack(unified_type, dest_offset)]
             }
         }
     }
 }
+
+pub fn unify_types(l_type: &Type, r_type: &Type) -> Type {
+    match (l_type, r_type) {
+        (Type::Integer, Type::Integer) => Type::Integer,
+        (Type::Double, Type::Double) => Type::Double,
+        _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
+    }
+}
+

@@ -7,16 +7,8 @@ use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
 
 use super::instructions::{ArmIns};
-use super::support::{GlobalContext, BasicBlock, Offset, Type};
+use super::support::{GlobalContext, BasicBlock, Offset, Type, unify_types};
 use backend::arm::ir::IRNode;
-
-fn unify_types(l_type: &Type, r_type: &Type) -> Type {
-    match (l_type, r_type) {
-        (Type::Integer, Type::Integer) => Type::Integer,
-        (Type::Double, Type::Double) => Type::Double,
-        _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
-    }
-}
 
 pub fn compile_expr(
     globalctx: &mut GlobalContext,
@@ -54,82 +46,20 @@ pub fn compile_expr(
                 panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_offsets.len(), rhs_offsets.len())
             }
 
+            // If the LHS and RHS are different lengths, the shorter of the two is repeated to the length of the other.
             let repeated_offset = match lhs_offsets.len() {
                 1 => lhs_offsets.get(0).unwrap(),
                 _ => rhs_offsets.get(0).unwrap()
             };
-            let mut dest_offsets = vec![];
 
+            let mut dest_offsets = vec![];
             for pair in lhs_offsets.iter().zip_longest(rhs_offsets.iter()) {
                 let (l, r) = match pair {
                     Both(l, r) => (l, r),
                     Left(l) => (l, repeated_offset),
                     Right(r) => (repeated_offset, r)
                 };
-                let l_type = match l {
-                    Offset::Stack(ty, i) => {
-                        bb.instructions.push(
-                            ArmIns::LoadOffsetDeprecated { dst: "r3", src: "fp", offsets: vec![*i] });
-                        ty
-                    },
-                    Offset::Global(ty, ident) => {
-                        bb.instructions.push(
-                            ArmIns::LoadDeprecated { dst: "r3".to_string(), src: format!(".{}", ident).to_string() });
-                        bb.instructions.push(
-                            ArmIns::LoadDeprecated { dst: "r3".to_string(), src: "[r3]".to_string() });
-                        ty
-                    }
-                };
-                let r_type = match r {
-                    Offset::Stack(ty, i) => {
-                        bb.instructions.push(
-                            ArmIns::LoadOffsetDeprecated { dst: "r4", src: "fp", offsets: vec![*i] });
-                        ty
-                    }
-                    // TODO: it's not clear why this is unimplementable when we seem to implement it for the left-hand side above
-                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
-                };
-                let unified_type = unify_types(l_type, r_type);
-                match verb {
-                    DyadicVerb::Plus =>
-                        bb.instructions.push(
-                            ArmIns::AddDeprecated { dst: "r4", src: "r3", add: "r4" }),
-                    DyadicVerb::Times =>
-                        bb.instructions.push(
-                            ArmIns::MultiplyDeprecated { dst: "r4", src: "r3", mul: "r4" }),
-                    DyadicVerb::Minus =>
-                        bb.instructions.push(
-                            ArmIns::SubDeprecated { dst: "r4", src: "r3", sub: "r4" }),
-                    DyadicVerb::LessThan => {
-                        bb.instructions.push(
-                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
-                        bb.instructions.push(
-                            ArmIns::MoveLTDeprecated { dst: "r4", src: "#1" });
-                        bb.instructions.push(
-                            ArmIns::MoveGEDeprecated { dst: "r4", src: "#0" });
-                    },
-                    DyadicVerb::Equal => {
-                        bb.instructions.push(
-                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
-                        bb.instructions.push(
-                            ArmIns::MoveEQDeprecated { dst: "r4", src: "#1" });
-                        bb.instructions.push(
-                            ArmIns::MoveNEDeprecated { dst: "r4", src: "#0" });
-                    }
-                    DyadicVerb::LargerThan => {
-                        bb.instructions.push(
-                            ArmIns::CompareDeprecated { lhs: "r3", rhs: "r4" });
-                        bb.instructions.push(
-                            ArmIns::MoveGTDeprecated { dst: "r4", src: "#1" });
-                        bb.instructions.push(
-                            ArmIns::MoveLEDeprecated { dst: "r4", src: "#0" });
-                    }
-                    _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
-                }
-                let dest_offset = bb._stack_allocate(4);
-                bb.instructions.push(ArmIns::StoreOffsetDeprecated {
-                    src: "r4", dst: "fp", offsets: vec![dest_offset] });
-                dest_offsets.push(Offset::Stack(unified_type, dest_offset));
+                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToMemoryOffsets{verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}));
             }
             dest_offsets
         },

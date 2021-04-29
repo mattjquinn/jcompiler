@@ -15,21 +15,23 @@ pub enum ArmIns {
     MoveDeprecated { dst: &'static str, src: &'static str },
     MoveImmDeprecated { dst: &'static str, imm: i32 },
     MultiplyDeprecated { dst: &'static str, src: &'static str, mul: &'static str },
-    CompareDeprecated { lhs: &'static str, rhs: &'static str },
-    MoveLTDeprecated { dst: &'static str, src: &'static str },
-    MoveLEDeprecated { dst: &'static str, src: &'static str },
-    MoveGTDeprecated { dst: &'static str, src: &'static str },
-    MoveGEDeprecated { dst: &'static str, src: &'static str },
-    MoveNEDeprecated { dst: &'static str, src: &'static str },
-    MoveEQDeprecated { dst: &'static str, src: &'static str },
 
     Nop,
     MoveImm { dst: ArmRegister, imm: i32 },
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
+    Load { dst: ArmRegister, src: String },
     LoadOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     Multiply { dst: ArmRegister, src: ArmRegister, mul: ArmRegister },
     Sub { dst: ArmRegister, src: ArmRegister, sub: ArmRegister },
+    Add { dst: ArmRegister, src: ArmRegister, add: ArmRegister },
+    Compare { lhs: ArmRegister, rhs: ArmRegister },
+    MoveLT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveGE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveEQ { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveNE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveGT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveLE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
 }
 
 impl std::fmt::Display for ArmIns {
@@ -46,27 +48,6 @@ impl std::fmt::Display for ArmIns {
             ArmIns::StoreOffsetDeprecated { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
-            }
-            ArmIns::CompareDeprecated { lhs, rhs } => {
-                f.write_str(format!("cmp {}, {}", lhs, rhs).as_str())
-            }
-            ArmIns::MoveLTDeprecated { dst, src } => {
-                f.write_str(format!("movlt {}, {}", dst, src).as_str())
-            }
-            ArmIns::MoveLEDeprecated { dst, src } => {
-                f.write_str(format!("movle {}, {}", dst, src).as_str())
-            }
-            ArmIns::MoveGTDeprecated { dst, src } => {
-                f.write_str(format!("movgt {}, {}", dst, src).as_str())
-            }
-            ArmIns::MoveGEDeprecated { dst, src } => {
-                f.write_str(format!("movge {}, {}", dst, src).as_str())
-            }
-            ArmIns::MoveEQDeprecated { dst, src } => {
-                f.write_str(format!("moveq {}, {}", dst, src).as_str())
-            }
-            ArmIns::MoveNEDeprecated { dst, src } => {
-                f.write_str(format!("movne {}, {}", dst, src).as_str())
             }
             ArmIns::BranchAndLinkDeprecated { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::MoveDeprecated { dst, src } =>
@@ -124,6 +105,33 @@ impl std::fmt::Display for ArmIns {
             }
             ArmIns::Sub { dst, src, sub } => {
                 f.write_str(format!("sub {}, {}, {}", dst, src, sub).as_str())
+            }
+            ArmIns::Load { dst, src } => {
+                f.write_str(format!("ldr {}, {}", dst, src).as_str())
+            }
+            ArmIns::Add { dst, src, add } => {
+                f.write_str(format!("add {}, {}, {}", dst, src, add).as_str())
+            }
+            ArmIns::Compare { lhs, rhs } => {
+                f.write_str(format!("cmp {}, {}", lhs, rhs).as_str())
+            }
+            ArmIns::MoveLT { dst, src } => {
+                f.write_str(format!("movlt {}, #{}", dst, src).as_str())
+            }
+            ArmIns::MoveGE { dst, src } => {
+                f.write_str(format!("movge {}, #{}", dst, src).as_str())
+            }
+            ArmIns::MoveEQ { dst, src } => {
+                f.write_str(format!("moveq {}, #{}", dst, src).as_str())
+            }
+            ArmIns::MoveNE { dst, src } => {
+                f.write_str(format!("movne {}, #{}", dst, src).as_str())
+            }
+            ArmIns::MoveGT { dst, src } => {
+                f.write_str(format!("movgt {}, #{}", dst, src).as_str())
+            }
+            ArmIns::MoveLE { dst, src } => {
+                f.write_str(format!("movle {}, #{}", dst, src).as_str())
             }
         }
     }

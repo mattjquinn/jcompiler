@@ -67,7 +67,7 @@ impl ::Backend for LLVMBackend {
         let res = link_object_file(&obj_file_path, &output_path, self.target_triple.clone());
         match res {
             Ok(_) => (),
-            Err(e) => panic!(format!("Linking executable failed: {}", e)),
+            Err(e) => panic!("Linking executable failed: {}", e),
         };
 
         if self.do_strip_executable {
