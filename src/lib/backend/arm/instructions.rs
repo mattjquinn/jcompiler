@@ -4,7 +4,6 @@ use backend::arm::registers::ArmRegister;
 #[derive(Debug)]
 pub enum ArmIns {
     LoadDeprecated { dst: String, src: String },
-    StoreDeprecated { dst: String, src: String },
     LoadOffsetDeprecated { dst: &'static str, src: &'static str, offsets: Vec<i32> },
     BranchAndLinkDeprecated { addr: &'static str },
     AddImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
@@ -14,6 +13,7 @@ pub enum ArmIns {
 
     MoveImm { dst: ArmRegister, imm: i32 },
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
+    Store { dst: ArmRegister, src: ArmRegister },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
     Load { dst: ArmRegister, src: String },
     LoadOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
@@ -34,8 +34,6 @@ impl std::fmt::Display for ArmIns {
         match self {
             ArmIns::LoadDeprecated { dst, src } =>
                 f.write_str(format!("ldr {}, {}", dst, src).as_str()),
-            ArmIns::StoreDeprecated { dst, src } =>
-                f.write_str(format!("str {}, [{}]", src, dst).as_str()),
             ArmIns::LoadOffsetDeprecated { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
@@ -113,6 +111,9 @@ impl std::fmt::Display for ArmIns {
             }
             ArmIns::MoveLE { dst, src } => {
                 f.write_str(format!("movle {}, #{}", dst, src).as_str())
+            }
+            ArmIns::Store { dst, src } => {
+                f.write_str(format!("str {}, [{}]", src, dst).as_str())
             }
         }
     }

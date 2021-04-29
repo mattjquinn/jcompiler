@@ -45,7 +45,7 @@ fn compile(test_jfile: &str) -> (String, String) {
 
 // #[test]
 // fn next() {
-//     common::test("ctest_global_assgmts_refs_integer.ijs", &compile);
+//     common::test("ctest_strings.ijs", &compile);
 // }
 
 generate_tests!([

@@ -7,5 +7,6 @@ pub enum IRNode {
     PushDoublePrecisionFloatOntoStack(f64),
     ApplyMonadicVerbToMemoryOffset(MonadicVerb, Offset),
     ApplyDyadicVerbToMemoryOffsets{verb: DyadicVerb, lhs: Offset, rhs: Offset},
-    ReduceMemoryOffsets(DyadicVerb, Vec<Offset>)
+    ReduceMemoryOffsets(DyadicVerb, Vec<Offset>),
+    AssignMemoryOffsetsToGlobal{ident: String, offsets: Vec<Offset>}
 }

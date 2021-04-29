@@ -6,7 +6,6 @@ use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
 
-use super::instructions::{ArmIns};
 use super::support::{GlobalContext, BasicBlock, Offset, Type, unify_types};
 use backend::arm::ir::IRNode;
 
@@ -69,40 +68,7 @@ pub fn compile_expr(
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-
-            let mut out_offsets = vec![];
-            let mut idx = 0;
-            for offset in expr_offsets.iter() {
-                match offset {
-                    Offset::Stack(_type, i) =>
-                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
-                            dst: "r2",
-                            src: "fp",
-                            offsets: vec![*i]
-                        }),
-                    Offset::Global(_type, global_ident) => {
-                        bb.instructions.push(ArmIns::LoadDeprecated {
-                            dst: "r2".to_string(),
-                            src: format!("{}", global_ident).to_string()
-                        });
-                        bb.instructions.push(ArmIns::LoadDeprecated {
-                            dst: "r2".to_string(),
-                            src: "[r2]".to_string(),
-                        });
-                    }
-                };
-                bb.instructions.push(ArmIns::LoadDeprecated {
-                    src: format!(".{}_idx{}", ident, idx),
-                    dst: "r3".to_string(),
-                });
-                idx += 1;
-                bb.instructions.push(ArmIns::StoreDeprecated {
-                    src: "r2".to_string(),
-                    dst: "r3".to_string(),
-                });
-                println!("In GlobalVarAssgmt, adding offset: {:?}", offset);
-                out_offsets.push(offset.clone())
-            }
+            let out_offsets = bb.ir(IRNode::AssignMemoryOffsetsToGlobal{ ident: ident.clone(), offsets: expr_offsets });
             globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
             out_offsets
         },

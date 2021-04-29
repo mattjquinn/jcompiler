@@ -439,6 +439,54 @@ impl BasicBlock {
 
                 self.free_register(accum_reg.clone());
                 vec![accum_offset.clone()]
+            },
+            IRNode::AssignMemoryOffsetsToGlobal{ident, offsets: expr_offsets} => {
+                let mut out_offsets = vec![];
+                let mut idx = 0;
+                let value_reg = self.claim_register();
+                let indirection_reg = self.claim_register();
+                for offset in expr_offsets.iter() {
+                    match offset {
+                        Offset::Stack(_type, i) =>
+                            self.instructions.push(ArmIns::LoadOffset {
+                                dst: value_reg.clone(),
+                                src: ArmRegister::FP,
+                                offsets: vec![*i]
+                            }),
+                        Offset::Global(_type, global_ident) => {
+                            // TODO: make this be ArmIns::LoadIdentifierAddress
+                            self.instructions.push(ArmIns::Load {
+                                dst: value_reg.clone(),
+                                src: format!("{}", global_ident).to_string()
+                            });
+                            // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
+                            self.instructions.push(ArmIns::Load {
+                                dst: value_reg.clone(),
+                                src: format!("[{}]", value_reg.clone()).to_string(),
+                            });
+                        }
+                    };
+                    // This load/store sequence looks confusing; it is putting the
+                    // address of the element in the global var, into which the value
+                    // will be placed, into the indirection register, and when the
+                    // store of the value occurs, the value will "pass through"
+                    // the address in the indirection register to end up in the global
+                    // address space.
+                    self.instructions.push(ArmIns::Load {
+                        src: format!(".{}_idx{}", ident, idx),
+                        dst: indirection_reg.clone()
+                    });
+                    idx += 1;
+                    self.instructions.push(ArmIns::Store {
+                        src: value_reg.clone(),
+                        dst: indirection_reg.clone()
+                    });
+                    println!("In GlobalVarAssgmt, adding offset: {:?}", offset);
+                    out_offsets.push(offset.clone())
+                }
+                self.free_register(value_reg);
+                self.free_register(indirection_reg);
+                out_offsets
             }
         }
     }
