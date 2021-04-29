@@ -380,6 +380,65 @@ impl BasicBlock {
                 self.free_register(rhs_reg);
 
                 vec![Offset::Stack(unified_type, dest_offset)]
+            },
+            IRNode::ReduceMemoryOffsets(verb, expr_offsets) => {
+                // Initialize the accumulator to expr's last offset value
+                let accum_reg = self.claim_register();
+                let accum_offset = expr_offsets.last().unwrap();
+                match &accum_offset {
+                    Offset::Stack(_type, i) =>
+                        self.instructions.push(ArmIns::LoadOffset {
+                            dst: accum_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
+                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
+                }
+
+                // Accumulate from right to left.
+                let operand_reg = self.claim_register();
+                for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
+                    match offset_idx {
+                        Offset::Stack(_type, i) =>
+                            self.instructions.push(ArmIns::LoadOffset {
+                                dst: operand_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
+                        Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
+                    };
+                    match verb {
+                        DyadicVerb::Plus => {
+                            self.instructions.push(ArmIns::Add {
+                                dst: accum_reg.clone(),
+                                src: operand_reg.clone(),
+                                add: accum_reg.clone()
+                            });
+                        },
+                        DyadicVerb::Minus => {
+                            self.instructions.push(ArmIns::Sub {
+                                dst: accum_reg.clone(),
+                                src: operand_reg.clone(),
+                                sub: accum_reg.clone()
+                            });
+                        },
+                        DyadicVerb::Times => {
+                            self.instructions.push(ArmIns::Multiply {
+                                dst: accum_reg.clone(),
+                                src: operand_reg.clone(),
+                                mul: accum_reg.clone()
+                            });
+                        },
+                        _ => unimplemented!("TODO: Support reduction of monadic verb: {:?}", verb)
+                    }
+                }
+                self.free_register(operand_reg);
+
+                // Store the accumulator in expr's first offset, and return that
+                // single offset here.
+                match &accum_offset {
+                    Offset::Stack(_type, i) =>
+                        self.instructions.push(ArmIns::StoreOffset {
+                            src: accum_reg.clone(), dst: ArmRegister::FP, offsets: vec![*i] }),
+                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support store to global.")
+                };
+
+                self.free_register(accum_reg.clone());
+                vec![accum_offset.clone()]
             }
         }
     }

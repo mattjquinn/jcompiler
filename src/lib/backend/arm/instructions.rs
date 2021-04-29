@@ -6,17 +6,12 @@ pub enum ArmIns {
     LoadDeprecated { dst: String, src: String },
     StoreDeprecated { dst: String, src: String },
     LoadOffsetDeprecated { dst: &'static str, src: &'static str, offsets: Vec<i32> },
-    StoreOffsetDeprecated { dst: &'static str, src: &'static str, offsets: Vec<i32> },
     BranchAndLinkDeprecated { addr: &'static str },
-    AddDeprecated { dst: &'static str, src: &'static str, add: &'static str },
     AddImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
-    SubDeprecated { dst: &'static str, src: &'static str, sub: &'static str },
     SubImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
     MoveDeprecated { dst: &'static str, src: &'static str },
     MoveImmDeprecated { dst: &'static str, imm: i32 },
-    MultiplyDeprecated { dst: &'static str, src: &'static str, mul: &'static str },
 
-    Nop,
     MoveImm { dst: ArmRegister, imm: i32 },
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
@@ -45,10 +40,6 @@ impl std::fmt::Display for ArmIns {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
             }
-            ArmIns::StoreOffsetDeprecated { dst, src, offsets } => {
-                let offset_str = join(offsets, ", ");
-                f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())
-            }
             ArmIns::BranchAndLinkDeprecated { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::MoveDeprecated { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
@@ -69,16 +60,6 @@ impl std::fmt::Display for ArmIns {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
             }
-            ArmIns::SubDeprecated { dst, src, sub } => {
-                f.write_str(format!("sub {}, {}, {}", dst, src, sub).as_str())
-            }
-            ArmIns::AddDeprecated { dst, src, add } => {
-                f.write_str(format!("add {}, {}, {}", dst, src, add).as_str())
-            }
-            ArmIns::MultiplyDeprecated { dst, src, mul } => {
-                f.write_str(format!("mul {}, {}, {}", dst, src, mul).as_str())
-            }
-            ArmIns::Nop => f.write_str("nop"),
 
 
 

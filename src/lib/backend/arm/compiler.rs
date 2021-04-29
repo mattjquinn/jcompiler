@@ -1,7 +1,7 @@
 use parser;
 use std::collections::{HashMap, HashSet};
 
-use parser::{AstNode, DyadicVerb};
+use parser::{AstNode};
 use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
@@ -64,59 +64,8 @@ pub fn compile_expr(
             dest_offsets
         },
         parser::AstNode::Reduce {verb, expr} => {
-            bb.instructions.push(ArmIns::Nop);
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            bb.instructions.push(ArmIns::Nop);
-            // Initialize the accumulator to expr's last offset value
-            let accum_offset = expr_offsets.last().unwrap();
-            match accum_offset {
-                Offset::Stack(_type, i) =>
-                    bb.instructions.push(ArmIns::LoadOffsetDeprecated {
-                        dst: "r3", src: "fp", offsets: vec![*i] }),
-                Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
-            }
-            // Accumulate from right to left.
-            for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
-                match offset_idx {
-                    Offset::Stack(_type, i) =>
-                        bb.instructions.push(ArmIns::LoadOffsetDeprecated {
-                            dst: "r4", src: "fp", offsets: vec![*i] }),
-                    Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
-                };
-                match verb {
-                    DyadicVerb::Plus => {
-                        bb.instructions.push(ArmIns::AddDeprecated {
-                            dst: "r3",
-                            src: "r4",
-                            add: "r3"
-                        });
-                    },
-                    DyadicVerb::Minus => {
-                        bb.instructions.push(ArmIns::SubDeprecated {
-                            dst: "r3",
-                            src: "r4",
-                            sub: "r3"
-                        });
-                    },
-                    DyadicVerb::Times => {
-                        bb.instructions.push(ArmIns::MultiplyDeprecated {
-                            dst: "r3",
-                            src: "r4",
-                            mul: "r3"
-                        });
-                    },
-                    _ => unimplemented!("TODO: Support reduction of monadic verb: {:?}", verb)
-                }
-            }
-            // Store the accumulator in expr's first offset, and return that
-            // single offset here.
-            match accum_offset {
-                Offset::Stack(_type, i) =>
-                    bb.instructions.push(ArmIns::StoreOffsetDeprecated {
-                        src: "r3", dst: "fp", offsets: vec![*i] }),
-                Offset::Global(_type, _ident) => unimplemented!("TODO: Support store to global.")
-            };
-            vec![accum_offset.clone()]
+            bb.ir(IRNode::ReduceMemoryOffsets(verb.clone(), expr_offsets))
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
