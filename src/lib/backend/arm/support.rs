@@ -79,8 +79,23 @@ impl GlobalContext {
         for offset in offsets {
             match offset {
                 Offset::Stack(ty, _idx) => {
-                    global_offsets.push(Offset::Global(ty.clone(), format!("{}_idx{}", ident, idx)));
-                    idx += 1
+                    match ty {
+                        Type::Double => {
+                            // We only want one offset so we use _double to
+                            // indicate there is an MSW and LSW that get their own addresses. If we use two
+                            // offsets here then we'll attempt to print the MSW and LSW separately.
+                            // TODO: Rely on the type system more.
+                            global_offsets.push(Offset::Global(ty.clone(), format!("{}_idx{}_double", ident, idx)));
+                            idx += 1
+                        },
+                        Type::Integer => {
+                            global_offsets.push(Offset::Global(ty.clone(), format!("{}_idx{}", ident, idx)));
+                            idx += 1
+                        }
+                        Type::Array(_) => {
+                            panic!("TODO: Support setting global idents for array of offsets")
+                        }
+                    };
                 }
                 Offset::Global(_ty, _ident) => {
                     // TODO: should this be modified in any way?
@@ -117,7 +132,8 @@ impl GlobalContext {
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!(".{}_idx{}: .long {}_idx{}", ident, idx, ident, idx));
+                        entries.push(format!(".{}_idx{}_double_msw: .long {}_idx{}_double_msw", ident, idx, ident, idx));
+                        entries.push(format!(".{}_idx{}_double_lsw: .long {}_idx{}_double_lsw", ident, idx, ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {
@@ -141,7 +157,8 @@ impl GlobalContext {
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!("{}_idx{}: .long 0", ident, idx));
+                        entries.push(format!("{}_idx{}_double_msw: .long 0", ident, idx));
+                        entries.push(format!("{}_idx{}_double_lsw: .long 0", ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {
@@ -220,7 +237,8 @@ impl BasicBlock {
 
     // TODO: make private
     pub fn stack_allocate_double(&mut self) -> i32 {
-        let offset = self._stack_allocate(4);
+        // TODO: Do we make this return two offsets, one for MSW and one for LSW?
+        let offset = self._stack_allocate(8);
         offset
     }
 
@@ -252,7 +270,8 @@ impl BasicBlock {
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
                 let bits = num.bits();
                 let hex_rep = format!("{:016x}", bits);
-                println!("IEEE754 double hex representation: {}", hex_rep);
+                let binary_rep = format!("{:02b}", bits);
+                println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
 
                 if bits & 0x00000000FFFFFFFF != 0 {
                     // supporting this will require use of an additional register
@@ -265,6 +284,25 @@ impl BasicBlock {
                 // TODO: use of i32 here could cause silent truncation
                 let msw_upper : i32 = ((bits >> 32) & 0xF0000000) as i32;
                 let msw_lower : i32 = ((bits >> 32) & 0x0FFFFFFF) as i32;
+
+                // // Move into out_lsw_reg
+                // let byte1: i8 = (bits & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 8, add to out_lsw_reg
+                // let byte2: i8 = ((bits >> 8) & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 16, add to out_lsw_reg
+                // let byte3: i8 = ((bits >> 16) & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 24, add to out_lsw_reg
+                // let byte4: i8 = ((bits >> 24) & 0xFF) as i8;
+                //
+                // // Move into out_msg_reg
+                // let byte5: i8 = ((bits >> 32) & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 8, add to out_msw_reg
+                // let byte6: i8 = ((bits >> 40) & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 16, add to out_msw_reg
+                // let byte7: i8 = ((bits >> 48) & 0xFF) as i8;
+                // // Move into temp_reg, shift left by 24, add to out_msw_reg
+                // let byte8: i8 = ((bits >> 48) & 0xFF) as i8;
+
                 println!("MSW upper: {:x}", msw_upper);
                 println!("MSW lower: {:x}", msw_lower);
                 let temp_reg = self.claim_register();
@@ -274,6 +312,9 @@ impl BasicBlock {
                 let offset = self.stack_allocate_double();
                 self.instructions.push(ArmIns::StoreOffset {
                     dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset]});
+                self.instructions.push(ArmIns::MoveImm { imm: 0, dst: temp_reg.clone() });
+                self.instructions.push(ArmIns::StoreOffset {
+                    dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset + 4]}); // TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
                 self.free_register(temp_reg);
                 vec![Offset::Stack(Type::Double, offset)]
             }
@@ -443,49 +484,124 @@ impl BasicBlock {
             IRNode::AssignMemoryOffsetsToGlobal{ident, offsets: expr_offsets} => {
                 let mut out_offsets = vec![];
                 let mut idx = 0;
-                let value_reg = self.claim_register();
-                let indirection_reg = self.claim_register();
                 for offset in expr_offsets.iter() {
                     match offset {
-                        Offset::Stack(_type, i) =>
-                            self.instructions.push(ArmIns::LoadOffset {
-                                dst: value_reg.clone(),
-                                src: ArmRegister::FP,
-                                offsets: vec![*i]
-                            }),
-                        Offset::Global(_type, global_ident) => {
-                            // TODO: make this be ArmIns::LoadIdentifierAddress
-                            self.instructions.push(ArmIns::Load {
-                                dst: value_reg.clone(),
-                                src: format!("{}", global_ident).to_string()
-                            });
-                            // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
-                            self.instructions.push(ArmIns::Load {
-                                dst: value_reg.clone(),
-                                src: format!("[{}]", value_reg.clone()).to_string(),
-                            });
+                        Offset::Stack(ty, i) => {
+                            match ty {
+                                Type::Integer => {
+                                    let value_reg = self.claim_register();
+                                    let indirection_reg = self.claim_register();
+                                    self.instructions.push(ArmIns::LoadOffset {
+                                        dst: value_reg.clone(),
+                                        src: ArmRegister::FP,
+                                        offsets: vec![*i]
+                                    });
+                                    // This load/store sequence looks confusing; it is putting the
+                                    // address of the element in the global var, into which the value
+                                    // will be placed, into the indirection register, and when the
+                                    // store of the value occurs, the value will "pass through"
+                                    // the address in the indirection register to end up in the global
+                                    // address space.
+                                    self.instructions.push(ArmIns::Load {
+                                        src: format!(".{}_idx{}", ident, idx),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    idx += 1;
+                                    self.instructions.push(ArmIns::Store {
+                                        src: value_reg.clone(),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    self.free_register(value_reg);
+                                    self.free_register(indirection_reg);
+                                },
+                                Type::Double => {
+                                    let msw_reg = self.claim_register();
+                                    let lsw_reg = self.claim_register();
+                                    let indirection_reg = self.claim_register();
+                                    self.instructions.push(ArmIns::LoadOffset {
+                                        dst: msw_reg.clone(),
+                                        src: ArmRegister::FP,
+                                        offsets: vec![*i]
+                                    });
+                                    self.instructions.push(ArmIns::LoadOffset {
+                                        dst: lsw_reg.clone(),
+                                        src: ArmRegister::FP,
+                                        offsets: vec![*i + 4] // TODO: if statically type the offset as a DoubleOffset(msw, lsw) we won't have to do this
+                                    });
+                                    // This load/store sequence looks confusing; it is putting the
+                                    // address of the element in the global var, into which the value
+                                    // will be placed, into the indirection register, and when the
+                                    // store of the value occurs, the value will "pass through"
+                                    // the address in the indirection register to end up in the global
+                                    // address space.
+                                    self.instructions.push(ArmIns::Load {
+                                        src: format!(".{}_idx{}_double_msw", ident, idx),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    self.instructions.push(ArmIns::Store {
+                                        src: msw_reg.clone(),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    self.instructions.push(ArmIns::Load {
+                                        src: format!(".{}_idx{}_double_lsw", ident, idx),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    self.instructions.push(ArmIns::Store {
+                                        src: lsw_reg.clone(),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    idx += 1;
+                                    self.free_register(msw_reg);
+                                    self.free_register(lsw_reg);
+                                    self.free_register(indirection_reg);
+                                },
+                                Type::Array(_) =>
+                                    panic!("TODO: Load stack array offsets into value registers")
+                            }
+                        },
+                        Offset::Global(ty, global_ident) => {
+                            match ty {
+                                Type::Integer => {
+                                    let value_reg = self.claim_register();
+                                    let indirection_reg = self.claim_register();
+                                    // TODO: make this be ArmIns::LoadIdentifierAddress
+                                    self.instructions.push(ArmIns::Load {
+                                        dst: value_reg.clone(),
+                                        src: format!("{}", global_ident).to_string()
+                                    });
+                                    // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
+                                    self.instructions.push(ArmIns::Load {
+                                        dst: value_reg.clone(),
+                                        src: format!("[{}]", value_reg.clone()).to_string(),
+                                    });
+                                    // This load/store sequence looks confusing; it is putting the
+                                    // address of the element in the global var, into which the value
+                                    // will be placed, into the indirection register, and when the
+                                    // store of the value occurs, the value will "pass through"
+                                    // the address in the indirection register to end up in the global
+                                    // address space.
+                                    self.instructions.push(ArmIns::Load {
+                                        src: format!(".{}_idx{}", ident, idx),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    idx += 1;
+                                    self.instructions.push(ArmIns::Store {
+                                        src: value_reg.clone(),
+                                        dst: indirection_reg.clone()
+                                    });
+                                    self.free_register(value_reg);
+                                    self.free_register(indirection_reg);
+                                }
+                                Type::Double =>
+                                    panic!("TODO: Load global MSW and LSW offsets into value registers"),
+                                Type::Array(_) =>
+                                    panic!("TODO: Load global array offsets into value registers")
+                            }
                         }
                     };
-                    // This load/store sequence looks confusing; it is putting the
-                    // address of the element in the global var, into which the value
-                    // will be placed, into the indirection register, and when the
-                    // store of the value occurs, the value will "pass through"
-                    // the address in the indirection register to end up in the global
-                    // address space.
-                    self.instructions.push(ArmIns::Load {
-                        src: format!(".{}_idx{}", ident, idx),
-                        dst: indirection_reg.clone()
-                    });
-                    idx += 1;
-                    self.instructions.push(ArmIns::Store {
-                        src: value_reg.clone(),
-                        dst: indirection_reg.clone()
-                    });
                     println!("In GlobalVarAssgmt, adding offset: {:?}", offset);
                     out_offsets.push(offset.clone())
                 }
-                self.free_register(value_reg);
-                self.free_register(indirection_reg);
                 out_offsets
             }
         }

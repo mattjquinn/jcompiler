@@ -9,7 +9,6 @@ pub enum ArmIns {
     AddImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
     SubImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
     MoveDeprecated { dst: &'static str, src: &'static str },
-    MoveImmDeprecated { dst: &'static str, imm: i32 },
 
     MoveImm { dst: ArmRegister, imm: i32 },
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
@@ -41,7 +40,6 @@ impl std::fmt::Display for ArmIns {
             ArmIns::BranchAndLinkDeprecated { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::MoveDeprecated { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
-            ArmIns::MoveImmDeprecated { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
             ArmIns::AddImmDeprecated { dst, src, imm } => {
                 if dst == src {
                     // ARM allows compressed format if source and destination are identical.

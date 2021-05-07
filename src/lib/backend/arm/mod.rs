@@ -215,15 +215,20 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
             },
             Offset::Global(ty, ident) if *ty == Type::Double => {
                 // the LSW is expected in r2
-                // TODO: obviously not all LSWs are 0; this is an invariant
-                // for now in the code section responsible for loading double prec literals
-                basic_block.instructions.push(ArmIns::MoveImmDeprecated {
-                    dst: "r2", imm: 0
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
+                    dst: "r2".to_string(),
+                    // no "_double" prefix because it is already included in the ident
+                    src: format!(".{}_lsw", ident).to_string()
+                });
+                basic_block.instructions.push(ArmIns::LoadDeprecated {
+                    dst: "r2".to_string(),
+                    src: "[r2]".to_string(),
                 });
                 // the MSW is expected in r3
                 basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r3".to_string(),
-                    src: format!(".{}", ident).to_string()
+                    // no "_double" prefix because it is already included in the ident
+                    src: format!(".{}_msw", ident).to_string()
                 });
                 basic_block.instructions.push(ArmIns::LoadDeprecated {
                     dst: "r3".to_string(),
@@ -231,7 +236,6 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                 });
                 basic_block.instructions.push(
                     ArmIns::BranchAndLinkDeprecated { addr: "jprint_double" });
-
             },
             /* fall-through for global offsets */
             Offset::Global(ty, i) => {
