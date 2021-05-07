@@ -273,48 +273,90 @@ impl BasicBlock {
                 let binary_rep = format!("{:02b}", bits);
                 println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
 
-                if bits & 0x00000000FFFFFFFF != 0 {
-                    // supporting this will require use of an additional register
-                    // that is also pushed to the stack
-                    panic!("TODO: Support double precision floats with non-zero LSW: {}", hex_rep);
-                }
-
-                // due to limited width of immediate, we split the initialization
-                // over multiple instructions:
-                // TODO: use of i32 here could cause silent truncation
-                let msw_upper : i32 = ((bits >> 32) & 0xF0000000) as i32;
-                let msw_lower : i32 = ((bits >> 32) & 0x0FFFFFFF) as i32;
-
-                // // Move into out_lsw_reg
-                // let byte1: i8 = (bits & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 8, add to out_lsw_reg
-                // let byte2: i8 = ((bits >> 8) & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 16, add to out_lsw_reg
-                // let byte3: i8 = ((bits >> 16) & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 24, add to out_lsw_reg
-                // let byte4: i8 = ((bits >> 24) & 0xFF) as i8;
-                //
-                // // Move into out_msg_reg
-                // let byte5: i8 = ((bits >> 32) & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 8, add to out_msw_reg
-                // let byte6: i8 = ((bits >> 40) & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 16, add to out_msw_reg
-                // let byte7: i8 = ((bits >> 48) & 0xFF) as i8;
-                // // Move into temp_reg, shift left by 24, add to out_msw_reg
-                // let byte8: i8 = ((bits >> 48) & 0xFF) as i8;
-
-                println!("MSW upper: {:x}", msw_upper);
-                println!("MSW lower: {:x}", msw_lower);
-                let temp_reg = self.claim_register();
-                self.instructions.push(ArmIns::MoveImm { imm: msw_upper, dst: temp_reg.clone() });
-                self.instructions.push(ArmIns::AddImm {
-                    imm: msw_lower, dst: temp_reg.clone(), src: temp_reg.clone() });
                 let offset = self.stack_allocate_double();
-                self.instructions.push(ArmIns::StoreOffset {
-                    dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset]});
-                self.instructions.push(ArmIns::MoveImm { imm: 0, dst: temp_reg.clone() });
-                self.instructions.push(ArmIns::StoreOffset {
-                    dst: ArmRegister::FP, src: temp_reg.clone(), offsets: vec![offset + 4]}); // TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
+
+                // Note: due to limited width of ARM's MOV immediate field,
+                // we split the initialization of both MSW and LWS over multiple
+                // per-byte instructions; probably could be optimized.
+                let temp_reg = self.claim_register();
+                { // LSW
+                    let lsw_reg = self.claim_register();
+                    {
+                        let byte1: i8 = (bits & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte1 as i32, dst: lsw_reg.clone() });
+                    }
+                    {
+                        let byte2: i8 = ((bits >> 8) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte2 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    {
+                        let byte3: i8 = ((bits >> 16) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte3 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    {
+                        let byte4: i8 = ((bits >> 24) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte4 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    self.instructions.push(ArmIns::StoreOffset {
+                        dst: ArmRegister::FP, src: lsw_reg.clone(),
+                        offsets: vec![offset + 4]}); // TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
+                    self.free_register(lsw_reg);
+                }
+                { // MSW
+                    let msw_reg = self.claim_register();
+                    {
+                        let byte5: i8 = ((bits >> 32) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte5 as i32, dst: msw_reg.clone() });
+                    }
+                    {
+                        let byte6: i8 = ((bits >> 40) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte6 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    {
+                        let byte7: i8 = ((bits >> 48) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte7 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    {
+                        let byte8: i8 = ((bits >> 56) & 0xFF) as i8;
+                        self.instructions.push(ArmIns::MoveImm {
+                            imm: byte8 as i32, dst: temp_reg.clone() });
+                        self.instructions.push(ArmIns::LeftShift {
+                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
+                        self.instructions.push(ArmIns::Add {
+                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                    }
+                    self.instructions.push(ArmIns::StoreOffset {
+                        dst: ArmRegister::FP, src: msw_reg.clone(),
+                        offsets: vec![offset]});
+                    self.free_register(msw_reg);
+                }
                 self.free_register(temp_reg);
                 vec![Offset::Stack(Type::Double, offset)]
             }

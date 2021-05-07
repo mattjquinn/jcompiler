@@ -10,7 +10,7 @@ pub enum ArmIns {
     SubImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
     MoveDeprecated { dst: &'static str, src: &'static str },
 
-    MoveImm { dst: ArmRegister, imm: i32 },
+    MoveImm { dst: ArmRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     Store { dst: ArmRegister, src: ArmRegister },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
@@ -26,6 +26,7 @@ pub enum ArmIns {
     MoveNE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
     MoveGT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
     MoveLE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    LeftShift { dst: ArmRegister, src: ArmRegister, n_bits: i8 },
 }
 
 impl std::fmt::Display for ArmIns {
@@ -112,6 +113,9 @@ impl std::fmt::Display for ArmIns {
             }
             ArmIns::Store { dst, src } => {
                 f.write_str(format!("str {}, [{}]", src, dst).as_str())
+            }
+            ArmIns::LeftShift { dst, src, n_bits} => {
+                f.write_str(format!("lsl {}, {}, #{}", src, dst, n_bits).as_str())
             }
         }
     }
