@@ -3,17 +3,12 @@ use backend::arm::registers::ArmRegister;
 
 #[derive(Debug)]
 pub enum ArmIns {
-    LoadDeprecated { dst: String, src: String },
-    LoadOffsetDeprecated { dst: &'static str, src: &'static str, offsets: Vec<i32> },
-    BranchAndLinkDeprecated { addr: &'static str },
-    AddImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
-    SubImmDeprecated { dst: &'static str, src: &'static str, imm: i32 },
-    MoveDeprecated { dst: &'static str, src: &'static str },
-
+    Move { dst: ArmRegister, src: ArmRegister },
     MoveImm { dst: ArmRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     Store { dst: ArmRegister, src: ArmRegister },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
+    SubImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
     Load { dst: ArmRegister, src: String },
     LoadOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     Multiply { dst: ArmRegister, src: ArmRegister, mul: ArmRegister },
@@ -27,40 +22,15 @@ pub enum ArmIns {
     MoveGT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
     MoveLE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
     LeftShift { dst: ArmRegister, src: ArmRegister, n_bits: i8 },
+    BranchAndLink { addr: &'static str },
 }
 
 impl std::fmt::Display for ArmIns {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), core::fmt::Error> {
         match self {
-            ArmIns::LoadDeprecated { dst, src } =>
-                f.write_str(format!("ldr {}, {}", dst, src).as_str()),
-            ArmIns::LoadOffsetDeprecated { dst, src, offsets } => {
-                let offset_str = join(offsets, ", ");
-                f.write_str(format!("ldr {}, [{}, {}]", dst, src, offset_str).as_str())
-            }
-            ArmIns::BranchAndLinkDeprecated { addr } => f.write_str(format!("bl {}", addr).as_str()),
-            ArmIns::MoveDeprecated { dst, src } =>
+            ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
+            ArmIns::Move { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
-            ArmIns::AddImmDeprecated { dst, src, imm } => {
-                if dst == src {
-                    // ARM allows compressed format if source and destination are identical.
-                    f.write_str(format!("add {}, {}", src, imm).as_str())
-                } else {
-                    f.write_str(format!("add {}, {}, {}", dst, src, imm).as_str())
-                }
-            }
-            ArmIns::SubImmDeprecated { dst, src, imm } => {
-                if dst == src {
-                    // ARM allows compressed format if source and destination are identical.
-                    f.write_str(format!("sub {}, {}", src, imm).as_str())
-                } else {
-                    f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
-                }
-            }
-
-
-
-
             ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
             ArmIns::StoreOffset { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
@@ -116,6 +86,14 @@ impl std::fmt::Display for ArmIns {
             }
             ArmIns::LeftShift { dst, src, n_bits} => {
                 f.write_str(format!("lsl {}, {}, #{}", src, dst, n_bits).as_str())
+            }
+            ArmIns::SubImm { dst, src, imm } => {
+                if dst == src {
+                    // ARM allows compressed format if source and destination are identical.
+                    f.write_str(format!("sub {}, {}", src, imm).as_str())
+                } else {
+                    f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
+                }
             }
         }
     }

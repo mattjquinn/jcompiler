@@ -1,5 +1,8 @@
 # TODOs
 
+- Next: ctest_decimals.ijs; something is wrong with floating-point representation.
+- Then: all ctest_monadic_ tests that aren't passing
+
 - Make BasicBlock assert that all registers have been freed before
   providing its finalized list of instructions to the ASM writer
 - Don't assign registers directly, have a function do so per-scope

@@ -8,6 +8,7 @@ use super::instructions::{ArmIns};
 use super::ir::{IRNode};
 use backend::arm::registers::ArmRegister;
 use parser::{DyadicVerb, MonadicVerb};
+use getopts::Fail::ArgumentMissing;
 
 #[derive(Debug)]
 pub enum Offset {
@@ -111,15 +112,15 @@ impl GlobalContext {
         // the future append-only entry list
         if self.global_ident_to_offsets.len() > 0 {
             // Erases the global frame
-            postamble.push(format!("{}", ArmIns::AddImmDeprecated {
-                dst:"fp",
-                src:"fp",
+            postamble.push(format!("{}", ArmIns::AddImm {
+                dst: ArmRegister::FP,
+                src: ArmRegister::FP,
                 imm: (self.global_ident_to_offsets.len() * 4) as i32
             }));
             // Stack pointer must be moved up as well.
-            postamble.push(format!("{}",ArmIns::MoveDeprecated {
-                dst: "sp",
-                src: "fp"
+            postamble.push(format!("{}",ArmIns::Move {
+                dst: ArmRegister::SP,
+                src: ArmRegister::FP
             }));
         }
     }
@@ -188,7 +189,7 @@ impl BasicBlock {
         println!("Allocating new basic block with frame size {}", frame_size);
         let mut instructions = vec![
             // Frame pointer starts out at stack pointer.
-            ArmIns::MoveDeprecated { dst: "fp", src: "sp" } ];
+            ArmIns::Move { dst: ArmRegister::FP, src: ArmRegister::SP } ];
         let mut subbed = 0;
         while subbed < frame_size {
             let mut to_sub = frame_size - subbed;
@@ -197,15 +198,15 @@ impl BasicBlock {
                 to_sub = 256;
             }
             // Expand fp to size of frame.
-            instructions.push(ArmIns::SubImmDeprecated {
-                dst: "fp",
-                src: "fp",
+            instructions.push(ArmIns::SubImm {
+                dst: ArmRegister::FP,
+                src: ArmRegister::FP,
                 imm: to_sub
             });
             subbed += to_sub;
         }
         // Expand sp along with it.
-        instructions.push(ArmIns::MoveDeprecated { dst: "sp", src: "fp" });
+        instructions.push(ArmIns::Move { dst: ArmRegister::SP, src: ArmRegister::FP });
         BasicBlock {
             frame_size,
             frame_pointer: 0,
@@ -361,19 +362,26 @@ impl BasicBlock {
                 vec![Offset::Stack(Type::Double, offset)]
             }
             IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {
-                let memory_offset_idx = match &offset {
-                    Offset::Stack(_type, idx) => *idx,
+                let temp_reg = self.claim_register();
+                match &offset {
+                    Offset::Stack(_type, idx) => {
+                        self.instructions.push(ArmIns::LoadOffset {
+                            dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![*idx]});
+                    }
                     Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support application of monadic verb to a global variable.")
                 };
-                let temp_reg = self.claim_register();
-                self.instructions.push(ArmIns::LoadOffset {
-                    dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![memory_offset_idx]});
-                match verb {
-                    MonadicVerb::Increment => self.instructions.push(ArmIns::AddImm {
-                        dst: temp_reg.clone(), src: temp_reg.clone(), imm: 1 }),
-                    MonadicVerb::Square => self.instructions.push(ArmIns::Multiply {
-                        dst: temp_reg.clone(), src: temp_reg.clone(), mul: temp_reg.clone() }),
+                let dest_offset = match verb {
+                    MonadicVerb::Increment => {
+                        self.instructions.push(ArmIns::AddImm {
+                            dst: temp_reg.clone(), src: temp_reg.clone(), imm: 1 });
+                        offset.clone()  // reuse original offset
+                    },
+                    MonadicVerb::Square => {
+                        self.instructions.push(ArmIns::Multiply {
+                            dst: temp_reg.clone(), src: temp_reg.clone(), mul: temp_reg.clone() });
+                        offset.clone()  // reuse original offset
+                    },
                     MonadicVerb::Negate => {
                         let negation_reg = self.claim_register();
                         self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
@@ -381,13 +389,29 @@ impl BasicBlock {
                         self.instructions.push(ArmIns::Sub {
                             dst: temp_reg.clone(), src: negation_reg.clone(), sub: temp_reg.clone() });
                         self.free_register(negation_reg);
+                        offset.clone()  // reuse original offset
+                    },
+                    MonadicVerb::Ceiling => {
+                        // TODO: extract the integer and decimal parts of
+                        // the double; if decimal != 0, add 1 to integer part.
+                        // Return a new offset at the same index as the original,
+                        // but with Type::Integer. Include note about memory
+                        // fragmentation (we aren't reclaiming the 4 bytes used to
+                        // store the LSW of the original double).
+                        panic!("TODO: finish monadic ceiling impl")
                     }
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
-                }
-                self.instructions.push(ArmIns::StoreOffset {
-                    src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![memory_offset_idx]});
+                };
+                match &offset {
+                    Offset::Stack(_type, idx) => {
+                        self.instructions.push(ArmIns::StoreOffset {
+                            src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![*idx]});
+                    }
+                    Offset::Global(_type, _ident) =>
+                        unimplemented!("TODO: Support application of monadic verb to a global variable.")
+                };
                 self.free_register(temp_reg);
-                vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
+                vec![dest_offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
             },
             IRNode::ApplyDyadicVerbToMemoryOffsets{verb, lhs, rhs} => {
                 let lhs_reg = self.claim_register();

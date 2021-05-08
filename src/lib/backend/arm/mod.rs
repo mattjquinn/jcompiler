@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use self::instructions::{ArmIns};
 use self::support::{GlobalContext, BasicBlock, Offset, Type};
 use self::compiler::{register_globals, compute_frame_size, compile_expr};
+use backend::arm::registers::ArmRegister;
 
 mod instructions;
 mod macros;
@@ -74,13 +75,13 @@ impl ::Backend for ARMBackend {
                             jprint_offset(&val_offsets, &globalctx, &mut basic_block);
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
-                            basic_block.instructions.push(ArmIns::LoadDeprecated {
-                                dst: "r0".to_string(),
+                            basic_block.instructions.push(ArmIns::Load {
+                                dst: ArmRegister::R0,
                                 src: "=line_end_nl_fmt".to_string(),
                             });
                             basic_block
                                 .instructions
-                                .push(ArmIns::BranchAndLinkDeprecated { addr: "printf" });
+                                .push(ArmIns::BranchAndLink { addr: "printf" });
                         }
                     }
 
@@ -92,17 +93,17 @@ impl ::Backend for ARMBackend {
                         if to_add > 256 {
                             to_add = 256;
                         }
-                        basic_block.instructions.push(ArmIns::AddImmDeprecated {
-                            dst: "fp",
-                            src: "fp",
+                        basic_block.instructions.push(ArmIns::AddImm {
+                            dst: ArmRegister::FP,
+                            src: ArmRegister::FP,
                             imm: to_add
                         });
                         added += to_add;
                     }
                     // Stack pointer must be moved up as well.
-                    basic_block.instructions.push(ArmIns::MoveDeprecated {
-                        dst: "sp",
-                        src: "fp"
+                    basic_block.instructions.push(ArmIns::Move {
+                        dst: ArmRegister::SP,
+                        src: ArmRegister::FP,
                     });
 
                     basic_blocks.push(basic_block);
@@ -192,50 +193,66 @@ impl ::Backend for ARMBackend {
 fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
     for (idx, offset) in val_offsets.iter().enumerate() {
         match offset {
-            Offset::Stack(ty, i) if *ty == Type::Integer => {
-                basic_block.instructions.push(ArmIns::LoadOffsetDeprecated {
-                    dst: "r1",
-                    src: "fp",
+            Offset::Stack(Type::Integer, i) => {
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: ArmRegister::R1,
+                    src: ArmRegister::FP,
                     offsets: vec![*i],
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_int" });
+                    ArmIns::BranchAndLink { addr: "jprint_int" });
             },
-            Offset::Global(ty, ident) if *ty == Type::Integer => {
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r1".to_string(),
+            Offset::Stack(Type::Double, i) => {
+                // the MSW is expected in r3
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: ArmRegister::R3,
+                    src: ArmRegister::FP,
+                    offsets: vec![*i]
+                });
+                // the LSW is expected in r2
+                basic_block.instructions.push(ArmIns::LoadOffset {
+                    dst: ArmRegister::R2,
+                    src: ArmRegister::FP,
+                    offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
+                });
+                basic_block.instructions.push(
+                    ArmIns::BranchAndLink { addr: "jprint_double" });
+            }
+            Offset::Global(Type::Integer, ident) => {
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R1,
                     src: format!(".{}", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r1".to_string(),
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R1,
                     src: "[r1]".to_string(),
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_int" });
+                    ArmIns::BranchAndLink { addr: "jprint_int" });
             },
-            Offset::Global(ty, ident) if *ty == Type::Double => {
+            Offset::Global(Type::Double, ident) => {
                 // the LSW is expected in r2
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r2".to_string(),
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R2,
                     // no "_double" prefix because it is already included in the ident
                     src: format!(".{}_lsw", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r2".to_string(),
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R2,
                     src: "[r2]".to_string(),
                 });
                 // the MSW is expected in r3
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r3".to_string(),
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R3,
                     // no "_double" prefix because it is already included in the ident
                     src: format!(".{}_msw", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::LoadDeprecated {
-                    dst: "r3".to_string(),
+                basic_block.instructions.push(ArmIns::Load {
+                    dst: ArmRegister::R3,
                     src: "[r3]".to_string(),
                 });
                 basic_block.instructions.push(
-                    ArmIns::BranchAndLinkDeprecated { addr: "jprint_double" });
+                    ArmIns::BranchAndLink { addr: "jprint_double" });
             },
             /* fall-through for global offsets */
             Offset::Global(ty, i) => {
@@ -252,13 +269,13 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
 
         // Multiple printed terms are separated by space, except for the last item
         if idx != val_offsets.len() - 1 {
-            basic_block.instructions.push(ArmIns::LoadDeprecated {
-                dst: "r0".to_string(),
+            basic_block.instructions.push(ArmIns::Load {
+                dst: ArmRegister::R0,
                 src: "=space_fmt".to_string(),
             });
             basic_block
                 .instructions
-                .push(ArmIns::BranchAndLinkDeprecated { addr: "printf" });
+                .push(ArmIns::BranchAndLink { addr: "printf" });
         }
     }
 }
