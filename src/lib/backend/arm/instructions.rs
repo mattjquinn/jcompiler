@@ -5,6 +5,7 @@ use backend::arm::registers::ArmRegister;
 pub enum ArmIns {
     Move { dst: ArmRegister, src: ArmRegister },
     MoveImm { dst: ArmRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
+    MoveImmUnsigned { dst: ArmRegister, imm: u16 }, // TODO: is this width for imm true to actual ARM width?
     StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
     Store { dst: ArmRegister, src: ArmRegister },
     AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
@@ -32,6 +33,7 @@ impl std::fmt::Display for ArmIns {
             ArmIns::Move { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
             ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::MoveImmUnsigned { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
             ArmIns::StoreOffset { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())

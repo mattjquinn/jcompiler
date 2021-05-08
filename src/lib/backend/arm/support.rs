@@ -8,7 +8,6 @@ use super::instructions::{ArmIns};
 use super::ir::{IRNode};
 use backend::arm::registers::ArmRegister;
 use parser::{DyadicVerb, MonadicVerb};
-use getopts::Fail::ArgumentMissing;
 
 #[derive(Debug)]
 pub enum Offset {
@@ -283,32 +282,32 @@ impl BasicBlock {
                 { // LSW
                     let lsw_reg = self.claim_register();
                     {
-                        let byte1: i8 = (bits & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte1 as i32, dst: lsw_reg.clone() });
+                        let byte1 = (bits & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte1 as u16, dst: lsw_reg.clone() });
                     }
                     {
-                        let byte2: i8 = ((bits >> 8) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte2 as i32, dst: temp_reg.clone() });
+                        let byte2 = ((bits >> 8) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte2 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
                         self.instructions.push(ArmIns::Add {
                             dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
                     }
                     {
-                        let byte3: i8 = ((bits >> 16) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte3 as i32, dst: temp_reg.clone() });
+                        let byte3 = ((bits >> 16) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte3 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
                         self.instructions.push(ArmIns::Add {
                             dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
                     }
                     {
-                        let byte4: i8 = ((bits >> 24) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte4 as i32, dst: temp_reg.clone() });
+                        let byte4 = ((bits >> 24) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte4 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
                         self.instructions.push(ArmIns::Add {
@@ -322,32 +321,32 @@ impl BasicBlock {
                 { // MSW
                     let msw_reg = self.claim_register();
                     {
-                        let byte5: i8 = ((bits >> 32) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte5 as i32, dst: msw_reg.clone() });
+                        let byte5 = ((bits >> 32) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte5 as u16, dst: msw_reg.clone() });
                     }
                     {
-                        let byte6: i8 = ((bits >> 40) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte6 as i32, dst: temp_reg.clone() });
+                        let byte6 = ((bits >> 40) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte6 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
                         self.instructions.push(ArmIns::Add {
                             dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
                     }
                     {
-                        let byte7: i8 = ((bits >> 48) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte7 as i32, dst: temp_reg.clone() });
+                        let byte7 = ((bits >> 48) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte7 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
                         self.instructions.push(ArmIns::Add {
                             dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
                     }
                     {
-                        let byte8: i8 = ((bits >> 56) & 0xFF) as i8;
-                        self.instructions.push(ArmIns::MoveImm {
-                            imm: byte8 as i32, dst: temp_reg.clone() });
+                        let byte8 = ((bits >> 56) & 0xFF) as u8;
+                        self.instructions.push(ArmIns::MoveImmUnsigned {
+                            imm: byte8 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
                         self.instructions.push(ArmIns::Add {
