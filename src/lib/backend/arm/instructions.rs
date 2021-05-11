@@ -89,7 +89,7 @@ impl std::fmt::Display for ArmIns {
                 f.write_str(format!("str {}, [{}]", src, dst).as_str())
             }
             ArmIns::LeftShift { dst, src, n_bits} => {
-                f.write_str(format!("lsl {}, {}, #{}", src, dst, n_bits).as_str())
+                f.write_str(format!("lsl {}, {}, #{}", dst, src, n_bits).as_str())
             }
             ArmIns::SubImm { dst, src, imm } => {
                 if dst == src {
