@@ -106,24 +106,6 @@ impl GlobalContext {
         self.global_ident_to_offsets.insert(ident.clone(), global_offsets);
     }
 
-    pub fn cleanup_stack(&self, postamble: &mut Vec<String>) {
-        // TODO: This is incorrect; we need to compute using
-        // the future append-only entry list
-        if self.global_ident_to_offsets.len() > 0 {
-            // Erases the global frame
-            postamble.push(format!("{}", ArmIns::AddImm {
-                dst: ArmRegister::FP,
-                src: ArmRegister::FP,
-                imm: (self.global_ident_to_offsets.len() * 4) as i32
-            }));
-            // Stack pointer must be moved up as well.
-            postamble.push(format!("{}",ArmIns::Move {
-                dst: ArmRegister::SP,
-                src: ArmRegister::FP
-            }));
-        }
-    }
-
     pub fn emit_postamble_entries(&self, entries: &mut Vec<String>) {
         for ident in self.global_ident_to_offsets.keys() {
             let offsets = self.global_ident_to_offsets.get(ident).unwrap();
@@ -132,8 +114,8 @@ impl GlobalContext {
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!(".{}_idx{}_double_msw: .long {}_idx{}_double_msw", ident, idx, ident, idx));
-                        entries.push(format!(".{}_idx{}_double_lsw: .long {}_idx{}_double_lsw", ident, idx, ident, idx));
+                        entries.push(format!(".{}_idx{}_double_msw: .word {}_idx{}_double_msw", ident, idx, ident, idx));
+                        entries.push(format!(".{}_idx{}_double_lsw: .word {}_idx{}_double_lsw", ident, idx, ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {
@@ -157,8 +139,8 @@ impl GlobalContext {
             for offset in offsets {
                 match offset {
                     Offset::Global(Type::Double, _) => {
-                        entries.push(format!("{}_idx{}_double_msw: .long 0", ident, idx));
-                        entries.push(format!("{}_idx{}_double_lsw: .long 0", ident, idx));
+                        entries.push(format!("{}_idx{}_double_msw: .word 0", ident, idx));
+                        entries.push(format!("{}_idx{}_double_lsw: .word 0", ident, idx));
                         idx += 1
                     },
                     Offset::Global(Type::Integer, _) => {
@@ -232,6 +214,7 @@ impl BasicBlock {
     // TODO: make private
     pub fn stack_allocate_int(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
+        self._stack_allocate(4);  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         offset
     }
 
@@ -278,87 +261,52 @@ impl BasicBlock {
                 // Note: due to limited width of ARM's MOV immediate field,
                 // we split the initialization of both MSW and LWS over multiple
                 // per-byte instructions; probably could be optimized.
-                let temp_reg = self.claim_register();
                 { // LSW
                     let lsw_reg = self.claim_register();
                     {
-                        let byte1 = (bits & 0xFF) as u8;
+                        let half1 = (bits & 0xFFFF) as u16;
                         self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte1 as u16, dst: lsw_reg.clone() });
+                            imm: half1, dst: lsw_reg.clone() });
                     }
                     {
-                        let byte2 = ((bits >> 8) & 0xFF) as u8;
+                        let temp_reg = self.claim_register();
+                        let half2 = ((bits >> 16) & 0xFFFF) as u16;
                         self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte2 as u16, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
-                    }
-                    {
-                        let byte3 = ((bits >> 16) & 0xFF) as u8;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte3 as u16, dst: temp_reg.clone() });
+                            imm: half2, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
                         self.instructions.push(ArmIns::Add {
                             dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
-                    }
-                    {
-                        let byte4 = ((bits >> 24) & 0xFF) as u8;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte4 as u16, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                        self.free_register(temp_reg);
                     }
                     self.instructions.push(ArmIns::StoreOffset {
                         dst: ArmRegister::FP, src: lsw_reg.clone(),
-                        offsets: vec![offset + 4]}); // TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
+                        offsets: vec![offset + 4]});// TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
                     self.free_register(lsw_reg);
                 }
                 { // MSW
                     let msw_reg = self.claim_register();
                     {
-                        let byte5 = ((bits >> 32) & 0xFF) as u8;
+                        let half1 = ((bits >> 32) & 0xFFFF) as u16;
                         self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte5 as u16, dst: msw_reg.clone() });
+                            imm: half1, dst: msw_reg.clone() });
                     }
                     {
-                        let byte6 = ((bits >> 40) & 0xFF) as u8;
+                        let temp_reg = self.claim_register();
+                        let half2 = ((bits >> 48) & 0xFFFF) as u16;
                         self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte6 as u16, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 8 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
-                    }
-                    {
-                        let byte7 = ((bits >> 48) & 0xFF) as u8;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte7 as u16, dst: temp_reg.clone() });
+                            imm: half2 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
                         self.instructions.push(ArmIns::Add {
                             dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
-                    }
-                    {
-                        let byte8 = ((bits >> 56) & 0xFF) as u8;
-                        println!("Byte1 hex={}, binary={}", format!("{:x}", byte8), format!("{:08b}", byte8));
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: byte8 as u16, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 24 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                        self.free_register(temp_reg);
                     }
                     self.instructions.push(ArmIns::StoreOffset {
                         dst: ArmRegister::FP, src: msw_reg.clone(),
                         offsets: vec![offset]});
                     self.free_register(msw_reg);
                 }
-                self.free_register(temp_reg);
                 vec![Offset::Stack(Type::Double, offset)]
             }
             IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {

@@ -46,16 +46,6 @@ impl ::Backend for ARMBackend {
             for astnode in ast {
                 register_globals(&astnode, &mut global_idents, &mut ident_type_map);
             }
-            let mut globals_table : HashMap<String, i32> = HashMap::new();
-            if global_idents.len() > 0 {
-                // Assuming all values are 32-bit integers for now:
-                let mut global_bb = BasicBlock::new((global_idents.len() * 4) as i32);
-                for ident in global_idents {
-                    globals_table.insert(ident.clone(), global_bb.stack_allocate_int());
-                }
-                basic_blocks.push(global_bb);
-                println!("Globals table: {:?}", globals_table);
-            }
             GlobalContext {
                 global_ident_to_offsets: HashMap::new(),
             }
@@ -125,6 +115,7 @@ impl ::Backend for ARMBackend {
             "pos_int_fmt: .asciz \"%d\"".to_string(),
             "neg_int_fmt: .asciz \"_%d\"".to_string(),
             "pos_double_fmt: .asciz \"%g\"".to_string(),
+            "neg_double_fmt: .asciz \"_%g\"".to_string(),
             "line_end_nl_fmt:  .asciz \"\\n\"".to_string(),
             "space_fmt:  .asciz \" \"".to_string()];
         globalctx.emit_preamble_entries(&mut preamble);
@@ -150,14 +141,20 @@ impl ::Backend for ARMBackend {
             "rsblt r1, r1, #0".to_string(), // takes abs value of r1
             "bl jprint_int_main".to_string(),
             // === DOUBLE ==============================================
-            // TODO: Eventually support negatives using "cmp"
             "jprint_double:".to_string(),
             "push {lr}".to_string(),
+            "and r0, r2, #0x80000000".to_string(),
+            "cmp r0, #0x80000000".to_string(),  // true if MSB of MSW is negative
+            "beq jprint_double_neg".to_string(),
             "ldr r0, =pos_double_fmt".to_string(),
             "jprint_double_main:".to_string(),
             "bl printf".to_string(),
             "pop {lr}".to_string(),
             "bx lr".to_string(),
+            "jprint_double_neg:".to_string(),
+            "ldr r0, =neg_double_fmt".to_string(),
+            "bic r2, r2, 2147483648".to_string(), // clear the sign bit in MSW
+            "bl jprint_double_main".to_string(),
             // main
             "main:".to_string(),
             "push {ip, lr}".to_string(),
@@ -171,7 +168,6 @@ impl ::Backend for ARMBackend {
             }
         }
         let mut postamble = Vec::new();
-        globalctx.cleanup_stack(&mut postamble);
         postamble.push("pop {ip, pc}".to_string());
         globalctx.emit_postamble_entries(&mut postamble);
         for instr in postamble {
@@ -202,15 +198,15 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                     ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             Offset::Stack(Type::Double, i) => {
-                // the MSW is expected in r3
+                // the MSW is expected in r2
                 basic_block.instructions.push(ArmIns::LoadOffset {
-                    dst: ArmRegister::R3,
+                    dst: ArmRegister::R2,
                     src: ArmRegister::FP,
                     offsets: vec![*i]
                 });
-                // the LSW is expected in r2
+                // the LSW is expected in r3
                 basic_block.instructions.push(ArmIns::LoadOffset {
-                    dst: ArmRegister::R2,
+                    dst: ArmRegister::R3,
                     src: ArmRegister::FP,
                     offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
                 });
@@ -230,21 +226,21 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                     ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             Offset::Global(Type::Double, ident) => {
-                // the LSW is expected in r2
+                // the MSW is expected in r2
                 basic_block.instructions.push(ArmIns::Load {
                     dst: ArmRegister::R2,
                     // no "_double" prefix because it is already included in the ident
-                    src: format!(".{}_lsw", ident).to_string()
+                    src: format!(".{}_msw", ident).to_string()
                 });
                 basic_block.instructions.push(ArmIns::Load {
                     dst: ArmRegister::R2,
                     src: "[r2]".to_string(),
                 });
-                // the MSW is expected in r3
+                // the LSW is expected in r3
                 basic_block.instructions.push(ArmIns::Load {
                     dst: ArmRegister::R3,
                     // no "_double" prefix because it is already included in the ident
-                    src: format!(".{}_msw", ident).to_string()
+                    src: format!(".{}_lsw", ident).to_string()
                 });
                 basic_block.instructions.push(ArmIns::Load {
                     dst: ArmRegister::R3,

@@ -32,9 +32,9 @@ impl std::fmt::Display for ArmIns {
             ArmIns::BranchAndLink { addr } => f.write_str(format!("bl {}", addr).as_str()),
             ArmIns::Move { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
-            ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, #{}", dst, imm).as_str()),
             ArmIns::MoveImmUnsigned { dst, imm } => {
-                f.write_str(format!("mov {}, #0x{}", dst, format!("{:02x}", imm)).as_str())
+                f.write_str(format!("mov {}, #0x{}", dst, format!("{:04x}", imm)).as_str())
             },
             ArmIns::StoreOffset { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");

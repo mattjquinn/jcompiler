@@ -81,7 +81,7 @@ pub fn compile_expr(
 
 pub fn compute_frame_size(expr: &AstNode) -> i32 {
     match expr {
-        parser::AstNode::Integer(_int) => 4,
+        parser::AstNode::Integer(_int) => { 4 + 4 },  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         parser::AstNode::DoublePrecisionFloat(_double) => 8,
         parser::AstNode::Terms(terms) =>
             terms.iter().map(|e| compute_frame_size(e)).sum(),
