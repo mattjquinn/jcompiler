@@ -269,8 +269,8 @@ impl BasicBlock {
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
                 let bits = num.bits();
-                let hex_rep = format!("{:016x}", bits);
-                let binary_rep = format!("{:02b}", bits);
+                let hex_rep = format!("{:x}", bits);
+                let binary_rep = format!("{:064b}", bits);
                 println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
 
                 let offset = self.stack_allocate_double();
@@ -345,6 +345,7 @@ impl BasicBlock {
                     }
                     {
                         let byte8 = ((bits >> 56) & 0xFF) as u8;
+                        println!("Byte1 hex={}, binary={}", format!("{:x}", byte8), format!("{:08b}", byte8));
                         self.instructions.push(ArmIns::MoveImmUnsigned {
                             imm: byte8 as u16, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
@@ -362,10 +363,11 @@ impl BasicBlock {
             }
             IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {
                 let temp_reg = self.claim_register();
-                match &offset {
+                let offset_type = match &offset {
                     Offset::Stack(_type, idx) => {
                         self.instructions.push(ArmIns::LoadOffset {
                             dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![*idx]});
+                        _type.clone()
                     }
                     Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support application of monadic verb to a global variable.")
@@ -382,6 +384,9 @@ impl BasicBlock {
                         offset.clone()  // reuse original offset
                     },
                     MonadicVerb::Negate => {
+                        if offset_type != Type::Integer {
+                            panic!("TODO: support monadic negation for type: {}", offset_type)
+                        }
                         let negation_reg = self.claim_register();
                         self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
                         // subtract the immediate from 0

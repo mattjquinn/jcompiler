@@ -33,7 +33,9 @@ impl std::fmt::Display for ArmIns {
             ArmIns::Move { dst, src } =>
                 f.write_str(format!("mov {}, {}", dst, src).as_str()),
             ArmIns::MoveImm { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
-            ArmIns::MoveImmUnsigned { dst, imm } => f.write_str(format!("mov {}, {}", dst, imm).as_str()),
+            ArmIns::MoveImmUnsigned { dst, imm } => {
+                f.write_str(format!("mov {}, #0x{}", dst, format!("{:02x}", imm)).as_str())
+            },
             ArmIns::StoreOffset { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("str {}, [{}, {}]", src, dst, offset_str).as_str())

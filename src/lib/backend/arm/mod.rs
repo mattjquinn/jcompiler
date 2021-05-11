@@ -153,7 +153,6 @@ impl ::Backend for ARMBackend {
             // TODO: Eventually support negatives using "cmp"
             "jprint_double:".to_string(),
             "push {lr}".to_string(),
-            // printf expects r2 to contain MSW, r3 to contain LSW
             "ldr r0, =pos_double_fmt".to_string(),
             "jprint_double_main:".to_string(),
             "bl printf".to_string(),
