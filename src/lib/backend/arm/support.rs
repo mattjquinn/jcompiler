@@ -295,7 +295,7 @@ impl BasicBlock {
                         let temp_reg = self.claim_register();
                         let half2 = ((bits >> 48) & 0xFFFF) as u16;
                         self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: half2 as u16, dst: temp_reg.clone() });
+                            imm: half2, dst: temp_reg.clone() });
                         self.instructions.push(ArmIns::LeftShift {
                             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
                         self.instructions.push(ArmIns::Add {
@@ -310,38 +310,72 @@ impl BasicBlock {
                 vec![Offset::Stack(Type::Double, offset)]
             }
             IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {
-                let temp_reg = self.claim_register();
-                let offset_type = match &offset {
+                let (offset_type, offset_idx) = match &offset {
                     Offset::Stack(_type, idx) => {
-                        self.instructions.push(ArmIns::LoadOffset {
-                            dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![*idx]});
-                        _type.clone()
+                        (_type.clone(), *idx)
                     }
                     Offset::Global(_type, _ident) =>
                         unimplemented!("TODO: Support application of monadic verb to a global variable.")
                 };
-                let dest_offset = match verb {
+                match verb {
                     MonadicVerb::Increment => {
+                        if offset_type != Type::Integer {
+                            panic!("TODO: Support monadic increment of type: {}", offset_type)
+                        }
+                        let temp_reg = self.claim_register();
+                        self.instructions.push(ArmIns::LoadOffset {
+                            dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![offset_idx]});
                         self.instructions.push(ArmIns::AddImm {
                             dst: temp_reg.clone(), src: temp_reg.clone(), imm: 1 });
-                        offset.clone()  // reuse original offset
+                        self.instructions.push(ArmIns::StoreOffset {
+                            src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset_idx]});
+                        self.free_register(temp_reg);
+                        vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
                     },
                     MonadicVerb::Square => {
+                        if offset_type != Type::Integer {
+                            panic!("TODO: Support monadic square of type: {}", offset_type)
+                        }
+                        let temp_reg = self.claim_register();
+                        self.instructions.push(ArmIns::LoadOffset {
+                            dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![offset_idx]});
                         self.instructions.push(ArmIns::Multiply {
                             dst: temp_reg.clone(), src: temp_reg.clone(), mul: temp_reg.clone() });
-                        offset.clone()  // reuse original offset
+                        self.instructions.push(ArmIns::StoreOffset {
+                            src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset_idx]});
+                        self.free_register(temp_reg);
+                        vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
                     },
                     MonadicVerb::Negate => {
-                        if offset_type != Type::Integer {
-                            panic!("TODO: support monadic negation for type: {}", offset_type)
+                        match offset_type {
+                            Type::Integer => {
+                                let temp_reg = self.claim_register();
+                                let negation_reg = self.claim_register();
+                                self.instructions.push(ArmIns::LoadOffset {
+                                    dst: temp_reg.clone(), src: ArmRegister::FP, offsets: vec![offset_idx]});
+                                self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
+                                // subtract the immediate from 0
+                                self.instructions.push(ArmIns::Sub {
+                                    dst: temp_reg.clone(), src: negation_reg.clone(), sub: temp_reg.clone() });
+                                self.instructions.push(ArmIns::StoreOffset {
+                                    src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset_idx]});
+                                self.free_register(temp_reg);
+                                self.free_register(negation_reg);
+                                vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
+                            },
+                            Type::Double => {
+                                let msw_reg = self.claim_register();
+                                self.instructions.push(ArmIns::LoadOffset {
+                                    dst: msw_reg.clone(), src: ArmRegister::FP, offsets: vec![offset_idx]});
+                                self.instructions.push(ArmIns::ExclusiveOr {
+                                    dst: msw_reg.clone(), src: msw_reg.clone(), operand: 0x80000000 }); // flip the MSB of the MSW (2's complement sign bit)
+                                self.instructions.push(ArmIns::StoreOffset {
+                                    src: msw_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset_idx]});
+                                self.free_register(msw_reg);
+                                vec![offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
+                            }
+                            _ => panic!("TODO: support monadic negation for type: {}", offset_type)
                         }
-                        let negation_reg = self.claim_register();
-                        self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
-                        // subtract the immediate from 0
-                        self.instructions.push(ArmIns::Sub {
-                            dst: temp_reg.clone(), src: negation_reg.clone(), sub: temp_reg.clone() });
-                        self.free_register(negation_reg);
-                        offset.clone()  // reuse original offset
                     },
                     MonadicVerb::Ceiling => {
                         // TODO: extract the integer and decimal parts of
@@ -353,17 +387,7 @@ impl BasicBlock {
                         panic!("TODO: finish monadic ceiling impl")
                     }
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
-                };
-                match &offset {
-                    Offset::Stack(_type, idx) => {
-                        self.instructions.push(ArmIns::StoreOffset {
-                            src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![*idx]});
-                    }
-                    Offset::Global(_type, _ident) =>
-                        unimplemented!("TODO: Support application of monadic verb to a global variable.")
-                };
-                self.free_register(temp_reg);
-                vec![dest_offset.clone()]   // we return the same offset we were given, because we've updated it in-place on the stack
+                }
             },
             IRNode::ApplyDyadicVerbToMemoryOffsets{verb, lhs, rhs} => {
                 let lhs_reg = self.claim_register();

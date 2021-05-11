@@ -24,6 +24,7 @@ pub enum ArmIns {
     MoveLE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
     LeftShift { dst: ArmRegister, src: ArmRegister, n_bits: i8 },
     BranchAndLink { addr: &'static str },
+    ExclusiveOr { dst: ArmRegister, src: ArmRegister, operand: u32 },
 }
 
 impl std::fmt::Display for ArmIns {
@@ -98,6 +99,9 @@ impl std::fmt::Display for ArmIns {
                 } else {
                     f.write_str(format!("sub {}, {}, {}", dst, src, imm).as_str())
                 }
+            },
+            ArmIns::ExclusiveOr { dst, src, operand } => {
+                f.write_str(format!("eor {}, {}, #0x{}", dst, src, format!("{:08x}", operand)).as_str())
             }
         }
     }

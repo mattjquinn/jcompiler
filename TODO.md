@@ -1,8 +1,7 @@
 # TODOs
 
-- Next: ctest_decimals.ijs; something is wrong with floating-point representation.
-- Then: all ctest_monadic_ tests that aren't passing
-
+- Solve all ctest_monadic_ tests that aren't passing
+- Use LDMIA to load doubles into r2-r3 when printing, rather than two separate LDR instructions
 - Make BasicBlock assert that all registers have been freed before
   providing its finalized list of instructions to the ASM writer
 - Don't assign registers directly, have a function do so per-scope
