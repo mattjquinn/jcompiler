@@ -143,6 +143,24 @@ impl ::Backend for ARMBackend {
             // === DOUBLE ==============================================
             "jprint_double:".to_string(),
             "push {lr}".to_string(),
+            // If the double precision value has no fractional bits set,
+            // print it as an integer in an effort to match J's behavior.
+            "cmp r3, #0".to_string(), // are there are any significand bits set in the LSW?
+            "bne jprint_sign_check".to_string(),
+            "mov r8, #255".to_string(), // partial mask: 0xFF
+            "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
+            "orr r8, r8, #983040".to_string(), // partial mask: 0xF0000
+            "tst r2, r8".to_string(), // apply the full mask (0xFFFFF) to the LSW
+            "bne jprint_sign_check".to_string(), // if masked bits are clear, Z flag will be 1; we branch if Z flag is 0
+            "mov r0, r3".to_string(),
+            "mov r1, r2".to_string(),
+            "bl __aeabi_d2iz".to_string(), // convert the integral part (exponent) to an integer
+            "mov r1, r0".to_string(),  // the integer result is in r0
+            "bl jprint_int".to_string(), // print as an integer
+            "pop {lr}".to_string(),
+            "bx lr".to_string(),
+            // we jump here if the value does in fact have a fractional part
+            "jprint_sign_check:".to_string(),
             "and r0, r2, #0x80000000".to_string(),
             "cmp r0, #0x80000000".to_string(),  // true if MSB of MSW is negative
             "beq jprint_double_neg".to_string(),

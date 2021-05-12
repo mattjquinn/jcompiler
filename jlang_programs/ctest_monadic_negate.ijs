@@ -5,7 +5,7 @@
 ---7
 ---7.0
 ----8
-NB. ----8.0    this produces the correct answer, but is displayed as 8.00001 instead of 8
+----8.0
 -1234.5678
 --1234.5678
 ---1234.5678

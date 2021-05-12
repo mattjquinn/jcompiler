@@ -1,6 +1,9 @@
 # TODOs
 
 - Solve all ctest_monadic_ tests that aren't passing
+- Use movw and movt to replace shifting when loading double precision constants:
+  https://stackoverflow.com/questions/10261300/invalid-constant-after-fixup
+
 - Use LDMIA to load doubles into r2-r3 when printing, rather than two separate LDR instructions
 - Make BasicBlock assert that all registers have been freed before
   providing its finalized list of instructions to the ASM writer
