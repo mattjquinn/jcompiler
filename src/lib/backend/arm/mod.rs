@@ -181,7 +181,7 @@ impl ::Backend for ARMBackend {
 fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
     for (idx, offset) in val_offsets.iter().enumerate() {
         match offset {
-            Offset::Stack(Type::Integer, i) => {
+            Offset::Frame(Type::Integer, i) => {
                 basic_block.push(ArmIns::LoadOffset {
                     dst: ArmRegister::R1,
                     src: ArmRegister::FP,
@@ -190,7 +190,7 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
                 basic_block.push(
                     ArmIns::BranchAndLink { addr: "jprint_int" });
             },
-            Offset::Stack(Type::Double, i) => {
+            Offset::Frame(Type::Double, i) => {
                 // the MSW is expected in r2
                 basic_block.push(ArmIns::LoadOffset {
                     dst: ArmRegister::R2,

@@ -13,14 +13,14 @@ use parser::{DyadicVerb, MonadicVerb};
 
 #[derive(Debug)]
 pub enum Offset {
-    Stack(Type, i32),
-    Global(Type, String),
+    Frame(Type, i32),  // an offset in the stack or heap of a BasicBlock
+    Global(Type, String),  // an offset in the global storage space
 }
 
 impl std::fmt::Display for Offset {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            Offset::Stack(ty, i) => f.write_fmt(format_args!(
+            Offset::Frame(ty, i) => f.write_fmt(format_args!(
                 "Stack<offset={},type={}>", ty, i)),
             Offset::Global(ty, s) => f.write_fmt(format_args!(
                 "Global<offset={},type={}>", ty, s))
@@ -31,7 +31,7 @@ impl std::fmt::Display for Offset {
 impl std::clone::Clone for Offset {
     fn clone(&self) -> Self {
         match self {
-            Offset::Stack(ty, i) => Offset::Stack(ty.clone(), *i),
+            Offset::Frame(ty, i) => Offset::Frame(ty.clone(), *i),
             Offset::Global(ty, s) => Offset::Global(ty.clone(), s.clone())
         }
     }
@@ -80,7 +80,7 @@ impl GlobalContext {
         let mut idx = 0;
         for offset in offsets {
             match offset {
-                Offset::Stack(ty, _idx) => {
+                Offset::Frame(ty, _idx) => {
                     match ty {
                         Type::Double => {
                             // We only want one offset so we use _double to
@@ -124,7 +124,7 @@ impl GlobalContext {
                         entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
                         idx += 1
                     },
-                    Offset::Stack(_, _) => {
+                    Offset::Frame(_, _) => {
                         panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
                     }
                     _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
@@ -149,7 +149,7 @@ impl GlobalContext {
                         entries.push(format!("{}_idx{}: .word 0", ident, idx));
                         idx += 1
                     },
-                    Offset::Stack(_, _) => {
+                    Offset::Frame(_, _) => {
                         panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
                     }
                     _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
@@ -267,7 +267,8 @@ impl BasicBlock {
     }
 
     fn _heap_allocate(&mut self, width: i32) -> i32 {
-        if self.heap_pointer + width > self.heap_size {
+        let frame_size = self.stack_size + self.heap_size;
+        if self.heap_pointer + width > frame_size {
             panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
         }
         let offset = self.heap_pointer;
@@ -310,7 +311,7 @@ impl BasicBlock {
                 self.instructions.push(ArmIns::StoreOffset {
                     src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset]});
                 self.free_register(temp_reg);
-                vec![Offset::Stack(Type::Integer, offset)]
+                vec![Offset::Frame(Type::Integer, offset)]
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
                 let bits = num.bits();
@@ -369,11 +370,11 @@ impl BasicBlock {
                         offsets: vec![offset]});
                     self.free_register(msw_reg);
                 }
-                vec![Offset::Stack(Type::Double, offset)]
+                vec![Offset::Frame(Type::Double, offset)]
             }
             IRNode::ApplyMonadicVerbToMemoryOffset(verb, offset) => {
                 let (offset_type, offset_idx) = match &offset {
-                    Offset::Stack(_type, idx) => {
+                    Offset::Frame(_type, idx) => {
                         (_type.clone(), *idx)
                     }
                     Offset::Global(_type, _ident) =>
@@ -456,7 +457,7 @@ impl BasicBlock {
                 let rhs_reg = self.claim_register();
 
                 let l_type = match lhs {
-                    Offset::Stack(ty, i) => {
+                    Offset::Frame(ty, i) => {
                         self.instructions.push(
                             ArmIns::LoadOffset { dst: lhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
                         ty
@@ -472,7 +473,7 @@ impl BasicBlock {
                     }
                 };
                 let r_type = match rhs {
-                    Offset::Stack(ty, i) => {
+                    Offset::Frame(ty, i) => {
                         self.instructions.push(
                             ArmIns::LoadOffset { dst: rhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
                         ty
@@ -524,14 +525,14 @@ impl BasicBlock {
                 self.free_register(lhs_reg);
                 self.free_register(rhs_reg);
 
-                vec![Offset::Stack(unified_type, dest_offset)]
+                vec![Offset::Frame(unified_type, dest_offset)]
             },
             IRNode::ReduceMemoryOffsets(verb, expr_offsets) => {
                 // Initialize the accumulator to expr's last offset value
                 let accum_reg = self.claim_register();
                 let accum_offset = expr_offsets.last().unwrap();
                 match &accum_offset {
-                    Offset::Stack(_type, i) =>
+                    Offset::Frame(_type, i) =>
                         self.instructions.push(ArmIns::LoadOffset {
                             dst: accum_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
                     Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
@@ -541,7 +542,7 @@ impl BasicBlock {
                 let operand_reg = self.claim_register();
                 for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
                     match offset_idx {
-                        Offset::Stack(_type, i) =>
+                        Offset::Frame(_type, i) =>
                             self.instructions.push(ArmIns::LoadOffset {
                                 dst: operand_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
                         Offset::Global(_type, _ident) => unimplemented!("TODO: Support load from global.")
@@ -576,7 +577,7 @@ impl BasicBlock {
                 // Store the accumulator in expr's first offset, and return that
                 // single offset here.
                 match &accum_offset {
-                    Offset::Stack(_type, i) =>
+                    Offset::Frame(_type, i) =>
                         self.instructions.push(ArmIns::StoreOffset {
                             src: accum_reg.clone(), dst: ArmRegister::FP, offsets: vec![*i] }),
                     Offset::Global(_type, _ident) => unimplemented!("TODO: Support store to global.")
@@ -590,7 +591,7 @@ impl BasicBlock {
                 let mut idx = 0;
                 for offset in expr_offsets.iter() {
                     match offset {
-                        Offset::Stack(ty, i) => {
+                        Offset::Frame(ty, i) => {
                             match ty {
                                 Type::Integer => {
                                     let value_reg = self.claim_register();
@@ -719,4 +720,3 @@ pub fn unify_types(l_type: &Type, r_type: &Type) -> Type {
         _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
     }
 }
-
