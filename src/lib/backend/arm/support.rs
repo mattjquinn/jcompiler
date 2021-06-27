@@ -160,7 +160,7 @@ impl GlobalContext {
 #[derive(Debug)]
 pub struct BasicBlock {
     frame_pointer: i32,
-    pub frame_size: i32,  // TODO: make private
+    frame_size: i32,
     pub instructions: Vec<ArmIns>, // TODO: make private
     available_registers: LinkedHashSet<ArmRegister>
 }
@@ -199,6 +199,28 @@ impl BasicBlock {
                 ArmRegister::R3
             ].iter().cloned().collect()
         }
+    }
+
+    pub fn cleanup(&mut self) {
+        let mut added = 0;
+        while added < self.frame_size {
+            let mut to_add = self.frame_size - added;
+            // ctest_mixed_adds_mults appears to be blowing the immediate width...
+            if to_add > 256 {
+                to_add = 256;
+            }
+            self.instructions.push(ArmIns::AddImm {
+                dst: ArmRegister::FP,
+                src: ArmRegister::FP,
+                imm: to_add
+            });
+            added += to_add;
+        }
+        // Stack pointer must be moved up as well.
+        self.instructions.push(ArmIns::Move {
+            dst: ArmRegister::SP,
+            src: ArmRegister::FP,
+        });
     }
 
     // TODO: make private

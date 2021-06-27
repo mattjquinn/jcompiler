@@ -74,28 +74,7 @@ impl ::Backend for ARMBackend {
                                 .push(ArmIns::BranchAndLink { addr: "printf" });
                         }
                     }
-
-                    // Erases the frame for this block.
-                    let mut added = 0;
-                    while added < basic_block.frame_size {
-                        let mut to_add = basic_block.frame_size - added;
-                        // ctest_mixed_adds_mults appears to be blowing the immediate width...
-                        if to_add > 256 {
-                            to_add = 256;
-                        }
-                        basic_block.instructions.push(ArmIns::AddImm {
-                            dst: ArmRegister::FP,
-                            src: ArmRegister::FP,
-                            imm: to_add
-                        });
-                        added += to_add;
-                    }
-                    // Stack pointer must be moved up as well.
-                    basic_block.instructions.push(ArmIns::Move {
-                        dst: ArmRegister::SP,
-                        src: ArmRegister::FP,
-                    });
-
+                    basic_block.cleanup();
                     basic_blocks.push(basic_block);
                 }
                 _ => panic!("Not ready to compile top-level AST node: {:?}", astnode),
