@@ -79,26 +79,26 @@ pub fn compile_expr(
     }
 }
 
-pub fn compute_frame_size(expr: &AstNode) -> i32 {
+pub fn compute_stack_size(expr: &AstNode) -> i32 {
     match expr {
         parser::AstNode::Integer(_int) => { 4 + 4 },  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         parser::AstNode::DoublePrecisionFloat(_double) => 8,
         parser::AstNode::Terms(terms) =>
-            terms.iter().map(|e| compute_frame_size(e)).sum(),
+            terms.iter().map(|e| compute_stack_size(e)).sum(),
         parser::AstNode::MonadicOp {verb: _, expr} =>
-            compute_frame_size(expr),
+            compute_stack_size(expr),
         parser::AstNode::DyadicOp {verb: _, lhs, rhs} => {
-            let lhs_size = compute_frame_size(lhs);
-            let rhs_size = compute_frame_size(rhs);
+            let lhs_size = compute_stack_size(lhs);
+            let rhs_size = compute_stack_size(rhs);
             // the max term is where we'll store the intermediates; ideally
             // we'd optimize this by overwriting memory addresses that we know are
             // no longer used, but this requires care b/c we can't appropriate globals.
             lhs_size + rhs_size + max(lhs_size, rhs_size)
         }
         parser::AstNode::Reduce {verb: _, expr} =>
-            compute_frame_size(expr),
+            compute_stack_size(expr),
         parser::AstNode::GlobalVarAssgmt {ident: _, expr} =>
-            compute_frame_size(expr),
+            compute_stack_size(expr),
         parser::AstNode::Ident(_ident) => 0,
         _ => panic!("Not ready to compute frame size of expr: {:?}", expr)
     }

@@ -161,26 +161,33 @@ impl GlobalContext {
 
 #[derive(Debug)]
 pub struct BasicBlock {
-    frame_pointer: i32,
-    frame_size: i32,
+    stack_pointer: i32,
+    stack_size: i32,
+    heap_pointer: i32,
+    heap_size: i32,
     instructions: Vec<ArmIns>,
     available_registers: LinkedHashSet<ArmRegister>
 }
 
 impl BasicBlock {
-    pub fn new(frame_size: i32) -> BasicBlock {
-        println!("Allocating new basic block with frame size {}", frame_size);
+    pub fn new(stack_size: i32) -> BasicBlock {
+        let heap_size = 128; // eventually we'll want to be smarter/more flexible about this arbitrarily chosen default value
+        println!("Allocating new basic block with stack size {} and heap size {}", stack_size, heap_size);
         let mut instructions = vec![
             // Frame pointer starts out at stack pointer.
             ArmIns::Move { dst: ArmRegister::FP, src: ArmRegister::SP } ];
         let mut subbed = 0;
+        // Expand frame to accommodate stack + heap.
+        let frame_size = stack_size + heap_size;
         while subbed < frame_size {
             let mut to_sub = frame_size - subbed;
-            // ctest_mixed_adds_mults appears to be blowing the immediate width...
+            // the stack size for ctest_mixed_adds_mults appears to be blowing the immediate width...
+            // TODO: rather than iterating, we can calculate the appropriate mask to use here
+            // so as to do this in a single step; same with mirror code in the cleanup function.
             if to_sub > 256 {
                 to_sub = 256;
             }
-            // Expand fp to size of frame.
+            // Expand fp to size of stack + heap.
             instructions.push(ArmIns::SubImm {
                 dst: ArmRegister::FP,
                 src: ArmRegister::FP,
@@ -191,8 +198,10 @@ impl BasicBlock {
         // Expand sp along with it.
         instructions.push(ArmIns::Move { dst: ArmRegister::SP, src: ArmRegister::FP });
         BasicBlock {
-            frame_size,
-            frame_pointer: 0,
+            stack_pointer: 0,
+            stack_size,
+            heap_pointer: stack_size, // heap starts at end of stack
+            heap_size,
             instructions,
             available_registers: [
                 ArmRegister::R0,
@@ -205,8 +214,9 @@ impl BasicBlock {
 
     pub fn cleanup(&mut self) {
         let mut added = 0;
-        while added < self.frame_size {
-            let mut to_add = self.frame_size - added;
+        let frame_size = self.stack_size + self.heap_size;
+        while added < frame_size {
+            let mut to_add = frame_size - added;
             // ctest_mixed_adds_mults appears to be blowing the immediate width...
             if to_add > 256 {
                 to_add = 256;
@@ -235,27 +245,45 @@ impl BasicBlock {
         }
     }
 
-    // TODO: make private
-    pub fn _stack_allocate(&mut self, width: i32) -> i32 {
-        if self.frame_pointer + width > self.frame_size {
-            panic!("Attempted to allocate entity of width {} which overflows frame size of {}; frame pointer is {}", width, self.frame_size, self.frame_pointer);
+    fn _stack_allocate(&mut self, width: i32) -> i32 {
+        if self.stack_pointer + width > self.stack_size {
+            panic!("Stack allocation failed; adding width {} will overflow stack size of {}; stack pointer is {}", width, self.stack_size, self.stack_pointer);
         }
-        let offset = self.frame_pointer;
-        self.frame_pointer += width;
+        let offset = self.stack_pointer;
+        self.stack_pointer += width;
         offset
     }
 
-    // TODO: make private
-    pub fn stack_allocate_int(&mut self) -> i32 {
+    fn stack_allocate_int(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
         self._stack_allocate(4);  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         offset
     }
 
-    // TODO: make private
-    pub fn stack_allocate_double(&mut self) -> i32 {
+    fn stack_allocate_double(&mut self) -> i32 {
         // TODO: Do we make this return two offsets, one for MSW and one for LSW?
         let offset = self._stack_allocate(8);
+        offset
+    }
+
+    fn _heap_allocate(&mut self, width: i32) -> i32 {
+        if self.heap_pointer + width > self.heap_size {
+            panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
+        }
+        let offset = self.heap_pointer;
+        self.heap_pointer += width;
+        offset
+    }
+
+    fn heap_allocate_int(&mut self) -> i32 {
+        let offset = self._heap_allocate(4);
+        self._heap_allocate(4);  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
+        offset
+    }
+
+    fn heap_allocate_double(&mut self) -> i32 {
+        // TODO: Do we make this return two offsets, one for MSW and one for LSW?
+        let offset = self._heap_allocate(8);
         offset
     }
 
