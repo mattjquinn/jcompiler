@@ -32,7 +32,7 @@ impl ::Backend for ARMBackend {
         }
 
         let assembly_filename = format!("{}.s", output_path);
-        let assembly_file =
+        let mut assembly_file =
             File::create(&assembly_filename).expect("Intermediate file in which to write assembly");
         println!("Writing assembly file to {}", &assembly_filename);
 
@@ -65,13 +65,11 @@ impl ::Backend for ARMBackend {
                             jprint_offset(&val_offsets, &globalctx, &mut basic_block);
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
-                            basic_block.instructions.push(ArmIns::Load {
+                            basic_block.push(ArmIns::Load {
                                 dst: ArmRegister::R0,
                                 src: "=line_end_nl_fmt".to_string(),
                             });
-                            basic_block
-                                .instructions
-                                .push(ArmIns::BranchAndLink { addr: "printf" });
+                            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
                         }
                     }
                     basic_block.cleanup();
@@ -160,9 +158,7 @@ impl ::Backend for ARMBackend {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
         for basic_block in &basic_blocks {
-            for instr in &basic_block.instructions {
-                writeln!(&assembly_file, "{}", instr).expect("write failure");
-            }
+            basic_block.write_instructions_to_file(&mut assembly_file);
         }
         let mut postamble = Vec::new();
         postamble.push("pop {ip, pc}".to_string());
@@ -186,64 +182,64 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
     for (idx, offset) in val_offsets.iter().enumerate() {
         match offset {
             Offset::Stack(Type::Integer, i) => {
-                basic_block.instructions.push(ArmIns::LoadOffset {
+                basic_block.push(ArmIns::LoadOffset {
                     dst: ArmRegister::R1,
                     src: ArmRegister::FP,
                     offsets: vec![*i],
                 });
-                basic_block.instructions.push(
+                basic_block.push(
                     ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             Offset::Stack(Type::Double, i) => {
                 // the MSW is expected in r2
-                basic_block.instructions.push(ArmIns::LoadOffset {
+                basic_block.push(ArmIns::LoadOffset {
                     dst: ArmRegister::R2,
                     src: ArmRegister::FP,
                     offsets: vec![*i]
                 });
                 // the LSW is expected in r3
-                basic_block.instructions.push(ArmIns::LoadOffset {
+                basic_block.push(ArmIns::LoadOffset {
                     dst: ArmRegister::R3,
                     src: ArmRegister::FP,
                     offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
                 });
-                basic_block.instructions.push(
+                basic_block.push(
                     ArmIns::BranchAndLink { addr: "jprint_double" });
             }
             Offset::Global(Type::Integer, ident) => {
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R1,
                     src: format!(".{}", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R1,
                     src: "[r1]".to_string(),
                 });
-                basic_block.instructions.push(
+                basic_block.push(
                     ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             Offset::Global(Type::Double, ident) => {
                 // the MSW is expected in r2
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R2,
                     // no "_double" prefix because it is already included in the ident
                     src: format!(".{}_msw", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R2,
                     src: "[r2]".to_string(),
                 });
                 // the LSW is expected in r3
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R3,
                     // no "_double" prefix because it is already included in the ident
                     src: format!(".{}_lsw", ident).to_string()
                 });
-                basic_block.instructions.push(ArmIns::Load {
+                basic_block.push(ArmIns::Load {
                     dst: ArmRegister::R3,
                     src: "[r3]".to_string(),
                 });
-                basic_block.instructions.push(
+                basic_block.push(
                     ArmIns::BranchAndLink { addr: "jprint_double" });
             },
             /* fall-through for global offsets */
@@ -261,13 +257,11 @@ fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_blo
 
         // Multiple printed terms are separated by space, except for the last item
         if idx != val_offsets.len() - 1 {
-            basic_block.instructions.push(ArmIns::Load {
+            basic_block.push(ArmIns::Load {
                 dst: ArmRegister::R0,
                 src: "=space_fmt".to_string(),
             });
-            basic_block
-                .instructions
-                .push(ArmIns::BranchAndLink { addr: "printf" });
+            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
         }
     }
 }

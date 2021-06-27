@@ -3,6 +3,8 @@ use linked_hash_set::LinkedHashSet;
 
 use std::fmt::{Formatter, Error};
 use ieee754::Ieee754;
+use std::fs::File;
+use std::io::Write;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
@@ -161,7 +163,7 @@ impl GlobalContext {
 pub struct BasicBlock {
     frame_pointer: i32,
     frame_size: i32,
-    pub instructions: Vec<ArmIns>, // TODO: make private
+    instructions: Vec<ArmIns>,
     available_registers: LinkedHashSet<ArmRegister>
 }
 
@@ -221,6 +223,16 @@ impl BasicBlock {
             dst: ArmRegister::SP,
             src: ArmRegister::FP,
         });
+    }
+
+    pub fn push(&mut self, instruction: ArmIns) {
+        self.instructions.push(instruction)
+    }
+
+    pub fn write_instructions_to_file(&self, assembly_file: &mut File) {
+        for instr in &self.instructions {
+            writeln!(assembly_file, "{}", instr).expect("write failure");
+        }
     }
 
     // TODO: make private
