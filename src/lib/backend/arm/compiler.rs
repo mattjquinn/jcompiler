@@ -17,10 +17,10 @@ pub fn compile_expr(
 {
     match expr {
         parser::AstNode::Integer(int) => {
-            bb.ir(IRNode::PushIntegerOntoStack(*int))
+            bb.ir(IRNode::PushIntegerOntoStack(*int), &globalctx)
         },
         parser::AstNode::DoublePrecisionFloat(num) => {
-            bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num))
+            bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num), &globalctx)
         },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
@@ -33,7 +33,7 @@ pub fn compile_expr(
             let val_offsets = compile_expr(globalctx, global_bb, bb, expr);
             let mut out_offsets = vec![];
             for offset in &val_offsets {
-                out_offsets.extend(bb.ir(IRNode::ApplyMonadicVerbToMemoryOffset(verb.clone(), offset.clone())));
+                out_offsets.extend(bb.ir(IRNode::ApplyMonadicVerbToMemoryOffset(verb.clone(), offset.clone()), &globalctx));
             }
             out_offsets   // this should always be the same as val_offsets because we updated in-place on the stack
         },
@@ -58,17 +58,17 @@ pub fn compile_expr(
                     Left(l) => (l, repeated_offset),
                     Right(r) => (repeated_offset, r)
                 };
-                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToMemoryOffsets{verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}));
+                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToMemoryOffsets{verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, &globalctx));
             }
             dest_offsets
         },
         parser::AstNode::Reduce {verb, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            bb.ir(IRNode::ReduceMemoryOffsets(verb.clone(), expr_offsets))
+            bb.ir(IRNode::ReduceMemoryOffsets(verb.clone(), expr_offsets), &globalctx)
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            let out_offsets = bb.ir(IRNode::AssignMemoryOffsetsToGlobal{ ident: ident.clone(), offsets: expr_offsets });
+            let out_offsets = bb.ir(IRNode::AssignMemoryOffsetsToGlobal{ ident: ident.clone(), offsets: expr_offsets }, &globalctx);
             globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
             out_offsets
         },

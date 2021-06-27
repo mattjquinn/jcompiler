@@ -127,7 +127,7 @@ impl ::Backend for ARMBackend {
             "mov r8, #255".to_string(), // partial mask: 0xFF
             "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
             "orr r8, r8, #983040".to_string(), // partial mask: 0xF0000
-            "tst r2, r8".to_string(), // apply the full mask (0xFFFFF) to the LSW
+            "tst r2, r8".to_string(), // apply the full mask (0xFFFFF) to the fractional bits in the MSW
             "bne jprint_sign_check".to_string(), // if masked bits are clear, Z flag will be 1; we branch if Z flag is 0
             "mov r0, r3".to_string(),
             "mov r1, r2".to_string(),
@@ -150,6 +150,30 @@ impl ::Backend for ARMBackend {
             "ldr r0, =neg_double_fmt".to_string(),
             "bic r2, r2, 2147483648".to_string(), // clear the sign bit in MSW
             "bl jprint_double_main".to_string(),
+            // === CEILING =============================================
+            // expects msw in r1, lsw in r0; the return value (single integer) is in r0
+            "jcompiler_ceiling:".to_string(),
+            "push {lr}".to_string(),
+            "mov r9, #0".to_string(), // fractional flag; is 1 if fraction exists
+            "cmp r0, #0".to_string(), // are there are any significand bits set in the LSW?
+            "bne jcompiler_ceiling_has_fraction".to_string(),
+            "mov r8, #255".to_string(), // partial mask: 0xFF
+            "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
+            "orr r8, r8, #983040".to_string(), // partial mask: 0xF0000
+            "tst r1, r8".to_string(), // apply the full mask (0xFFFFF) to the fractional bits in the MSW
+            "beq jcompiler_ceiling_cast".to_string(), // if masked bits are clear, Z flag will be 1; we branch if Z flag is 1
+            "jcompiler_ceiling_has_fraction:".to_string(),
+            "mov r9, #1".to_string(), //  the input does have a fractional part
+            "jcompiler_ceiling_cast:".to_string(),
+            "bl __aeabi_d2iz".to_string(), // convert the integral part (exponent) to an integer; return value is in r0
+            "cmp r9, #0".to_string(),
+            "beq jcompiler_ceiling_done".to_string(), // if no fractional part, we are done
+            "cmp r0, #1".to_string(),
+            "blt jcompiler_ceiling_done".to_string(), // if result is <= 0, nothing to add
+            "add r0, r0, #1".to_string(), // add 1 if input was positive with a fractional part
+            "jcompiler_ceiling_done:".to_string(),
+            "pop {lr}".to_string(),
+            "bx lr".to_string(),
             // main
             "main:".to_string(),
             "push {ip, lr}".to_string(),
