@@ -6,14 +6,14 @@ use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
 use std::cmp::max;
 
-use super::support::{GlobalContext, BasicBlock, Offset, Type, unify_types};
+use super::support::{GlobalContext, BasicBlock, Pointer, Type, TypedValue, unify_types};
 use backend::arm::ir::IRNode;
 
 pub fn compile_expr(
     globalctx: &mut GlobalContext,
     global_bb: &mut BasicBlock,
     bb: &mut BasicBlock,
-    expr: &AstNode) -> Vec<Offset>
+    expr: &AstNode) -> Vec<TypedValue>
 {
     match expr {
         parser::AstNode::Integer(int) => {
@@ -30,12 +30,12 @@ pub fn compile_expr(
             val_offsets
         },
         parser::AstNode::MonadicOp {verb, expr} => {
-            let val_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            let mut out_offsets = vec![];
-            for offset in &val_offsets {
-                out_offsets.extend(bb.ir(IRNode::ApplyMonadicVerbToMemoryOffset(verb.clone(), offset.clone()), &globalctx));
+            let vals = compile_expr(globalctx, global_bb, bb, expr);
+            let mut out = vec![];
+            for val in &vals {
+                out.extend(bb.ir(IRNode::ApplyMonadicVerbToTypedValue(verb.clone(), val.clone()), &globalctx));
             }
-            out_offsets   // this should always be the same as val_offsets because we updated in-place on the stack
+            out   // this should always be the same as val_offsets because we updated in-place on the stack
         },
         parser::AstNode::DyadicOp {verb, lhs, rhs} => {
             let rhs_offsets = compile_expr(globalctx, global_bb, bb, rhs);
@@ -58,17 +58,17 @@ pub fn compile_expr(
                     Left(l) => (l, repeated_offset),
                     Right(r) => (repeated_offset, r)
                 };
-                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToMemoryOffsets{verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, &globalctx));
+                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToTypedValues {verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, &globalctx));
             }
             dest_offsets
         },
         parser::AstNode::Reduce {verb, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            bb.ir(IRNode::ReduceMemoryOffsets(verb.clone(), expr_offsets), &globalctx)
+            bb.ir(IRNode::ReduceTypedValues(verb.clone(), expr_offsets), &globalctx)
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            let out_offsets = bb.ir(IRNode::AssignMemoryOffsetsToGlobal{ ident: ident.clone(), offsets: expr_offsets }, &globalctx);
+            let out_offsets = bb.ir(IRNode::AssignTypedValuesToGlobal { ident: ident.clone(), offsets: expr_offsets }, &globalctx);
             globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
             out_offsets
         },

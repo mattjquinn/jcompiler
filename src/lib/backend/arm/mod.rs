@@ -5,7 +5,7 @@ use std::io::Write;
 use std::collections::{HashMap, HashSet};
 
 use self::instructions::{ArmIns};
-use self::support::{GlobalContext, BasicBlock, Offset, Type};
+use self::support::{GlobalContext, BasicBlock, TypedValue, Pointer, Type};
 use self::compiler::{register_globals, compile_expr};
 use backend::arm::registers::ArmRegister;
 
@@ -202,91 +202,89 @@ impl ::Backend for ARMBackend {
     }
 }
 
-fn jprint_offset(val_offsets: &Vec<Offset>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
-    for (idx, offset) in val_offsets.iter().enumerate() {
-        match offset {
-            Offset::Frame(Type::Integer, i) => {
-                basic_block.push(ArmIns::LoadOffset {
-                    dst: ArmRegister::R1,
-                    src: ArmRegister::FP,
-                    offsets: vec![*i],
-                });
-                basic_block.push(
-                    ArmIns::BranchAndLink { addr: "jprint_int" });
-            },
-            Offset::Frame(Type::Double, i) => {
-                // the MSW is expected in r2
-                basic_block.push(ArmIns::LoadOffset {
-                    dst: ArmRegister::R2,
-                    src: ArmRegister::FP,
-                    offsets: vec![*i]
-                });
-                // the LSW is expected in r3
-                basic_block.push(ArmIns::LoadOffset {
-                    dst: ArmRegister::R3,
-                    src: ArmRegister::FP,
-                    offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
-                });
-                basic_block.push(
-                    ArmIns::BranchAndLink { addr: "jprint_double" });
+fn jprint_offset(val_offsets: &Vec<TypedValue>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
+    for (idx, value) in val_offsets.iter().enumerate() {
+        match value {
+            TypedValue::Integer(pointer) => {
+                pointer.load(ArmRegister::R1, basic_block);
+                basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
             }
-            Offset::Global(Type::Integer, ident) => {
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R1,
-                    src: format!(".{}", ident).to_string()
-                });
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R1,
-                    src: "[r1]".to_string(),
-                });
-                basic_block.push(
-                    ArmIns::BranchAndLink { addr: "jprint_int" });
-            },
-            Offset::Global(Type::Double, ident) => {
-                // the MSW is expected in r2
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R2,
-                    // no "_double" prefix because it is already included in the ident
-                    src: format!(".{}_msw", ident).to_string()
-                });
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R2,
-                    src: "[r2]".to_string(),
-                });
-                // the LSW is expected in r3
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R3,
-                    // no "_double" prefix because it is already included in the ident
-                    src: format!(".{}_lsw", ident).to_string()
-                });
-                basic_block.push(ArmIns::Load {
-                    dst: ArmRegister::R3,
-                    src: "[r3]".to_string(),
-                });
-                basic_block.push(
-                    ArmIns::BranchAndLink { addr: "jprint_double" });
-            },
-            /* fall-through for global offsets */
-            Offset::Global(ty, i) => {
-                match ty {
-                    Type::Array(_) => {
-                        let offsets = globalctx.global_ident_to_offsets.get(i).unwrap();
-                        jprint_offset(offsets, globalctx, basic_block);
-                    },
-                    _ => panic!("TODO: Unexpected Global offset: {:?}", offset)
-                }
-            },
-            _ => panic!("TODO: unexpected offset used with jprint: {:?}", offset)
-        };
-
-        // Multiple printed terms are separated by space, except for the last item
-        if idx != val_offsets.len() - 1 {
-            basic_block.push(ArmIns::Load {
-                dst: ArmRegister::R0,
-                src: "=space_fmt".to_string(),
-            });
-            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
+            _ => panic!("TODO: Support jprint_offset for: {:?}", value)
         }
+        // match offset {
+        //     Pointer::Stack(Type::Double, i) => {
+        //         // the MSW is expected in r2
+        //         basic_block.push(ArmIns::LoadOffset {
+        //             dst: ArmRegister::R2,
+        //             src: ArmRegister::FP,
+        //             offsets: vec![*i]
+        //         });
+        //         // the LSW is expected in r3
+        //         basic_block.push(ArmIns::LoadOffset {
+        //             dst: ArmRegister::R3,
+        //             src: ArmRegister::FP,
+        //             offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
+        //         });
+        //         basic_block.push(
+        //             ArmIns::BranchAndLink { addr: "jprint_double" });
+        //     }
+        //     Pointer::Heap(Type::Integer, ident) => {
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R1,
+        //             src: format!(".{}", ident).to_string()
+        //         });
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R1,
+        //             src: "[r1]".to_string(),
+        //         });
+        //         basic_block.push(
+        //             ArmIns::BranchAndLink { addr: "jprint_int" });
+        //     },
+        //     Pointer::Heap(Type::Double, ident) => {
+        //         // the MSW is expected in r2
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R2,
+        //             // no "_double" prefix because it is already included in the ident
+        //             src: format!(".{}_msw", ident).to_string()
+        //         });
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R2,
+        //             src: "[r2]".to_string(),
+        //         });
+        //         // the LSW is expected in r3
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R3,
+        //             // no "_double" prefix because it is already included in the ident
+        //             src: format!(".{}_lsw", ident).to_string()
+        //         });
+        //         basic_block.push(ArmIns::Load {
+        //             dst: ArmRegister::R3,
+        //             src: "[r3]".to_string(),
+        //         });
+        //         basic_block.push(
+        //             ArmIns::BranchAndLink { addr: "jprint_double" });
+        //     },
+        //     /* fall-through for global offsets */
+        //     Pointer::Heap(ty, i) => {
+        //         match ty {
+        //             Type::Array(_) => {
+        //                 let offsets = globalctx.global_ident_to_offsets.get(i).unwrap();
+        //                 jprint_offset(offsets, globalctx, basic_block);
+        //             },
+        //             _ => panic!("TODO: Unexpected Global offset: {:?}", offset)
+        //         }
+        //     },
+        //     _ => panic!("TODO: unexpected offset used with jprint: {:?}", offset)
+        // };
+        //
+        // // Multiple printed terms are separated by space, except for the last item
+        // if idx != val_offsets.len() - 1 {
+        //     basic_block.push(ArmIns::Load {
+        //         dst: ArmRegister::R0,
+        //         src: "=space_fmt".to_string(),
+        //     });
+        //     basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
+        // }
     }
 }
 
