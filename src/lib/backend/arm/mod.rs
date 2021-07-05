@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use self::instructions::{ArmIns};
 use self::support::{GlobalContext, BasicBlock, Offset, Type};
-use self::compiler::{register_globals, compute_stack_size, compile_expr};
+use self::compiler::{register_globals, compile_expr};
 use backend::arm::registers::ArmRegister;
 
 mod instructions;
@@ -54,8 +54,8 @@ impl ::Backend for ARMBackend {
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
-                    let mut basic_block = BasicBlock::new(compute_stack_size(expr));
-                    let mut global_basic_block = BasicBlock::new(0);
+                    let mut basic_block = BasicBlock::new();
+                    let mut global_basic_block = BasicBlock::new();
                     let val_offsets = compile_expr(&mut globalctx, &mut global_basic_block, &mut basic_block, expr);
 
                     match &**expr {

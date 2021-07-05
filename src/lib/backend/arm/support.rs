@@ -171,8 +171,9 @@ pub struct BasicBlock {
 }
 
 impl BasicBlock {
-    pub fn new(stack_size: i32) -> BasicBlock {
+    pub fn new() -> BasicBlock {
         let heap_size = 128; // eventually we'll want to be smarter/more flexible about this arbitrarily chosen default value
+        let stack_size = 256;  // TODO: temporary default
         println!("Allocating new basic block with stack size {} and heap size {}", stack_size, heap_size);
         let mut instructions = vec![
             // Frame pointer starts out at stack pointer.
@@ -257,7 +258,6 @@ impl BasicBlock {
 
     fn stack_allocate_int(&mut self) -> i32 {
         let offset = self._stack_allocate(4);
-        self._stack_allocate(4);  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         offset
     }
 
@@ -279,7 +279,6 @@ impl BasicBlock {
 
     fn heap_allocate_int(&mut self) -> i32 {
         let offset = self._heap_allocate(4);
-        self._heap_allocate(4);  // something, per ctest_decimals, requires that we add 4 bytes of padding following integers; I'm not entirely sure why
         offset
     }
 
