@@ -149,23 +149,23 @@ impl GlobalContext {
 
     pub fn write_preamble_to_file(&self, assembly_file: &mut File) {
         let mut preamble = vec![];
-        let mut subbed = 0;
+        let mut added = 0;
         // The FP should start out where the SP is.
         preamble.push(ArmIns::Move { src: ArmRegister::SP, dst: ArmRegister::FP });
         // Expand heap.
-        while subbed < self.heap_size {
-            let mut to_sub = self.heap_size - subbed;
+        while added < self.heap_size {
+            let mut to_add = self.heap_size - added;
             // TODO: rather than iterating, we can calculate the appropriate mask to use here
             // so as to do this in a single step; same with mirror code in the cleanup function.
-            if to_sub > 256 {
-                to_sub = 256;
+            if to_add > 256 {
+                to_add = 256;
             }
-            preamble.push(ArmIns::SubImm {
+            preamble.push(ArmIns::AddImm {
                 dst: ArmRegister::FP,
                 src: ArmRegister::FP,
-                imm: to_sub
+                imm: to_add
             });
-            subbed += to_sub;
+            added += to_add;
         }
         // Stacks must appear after the heap, so we adjust the SP now.
         preamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
@@ -176,21 +176,21 @@ impl GlobalContext {
 
     pub fn write_postamble_to_file(&self, assembly_file: &mut File) {
         let mut postamble = vec![];
-        let mut added = 0;
+        let mut subbed = 0;
         // Cleanup heap.
-        while added < self.heap_size {
-            let mut to_add = self.heap_size - added;
+        while subbed < self.heap_size {
+            let mut to_sub = self.heap_size - subbed;
             // TODO: rather than iterating, we can calculate the appropriate mask to use here
             // so as to do this in a single step; same with mirror code in the cleanup function.
-            if to_add > 256 {
-                to_add = 256;
+            if to_sub > 256 {
+                to_sub = 256;
             }
-            postamble.push(ArmIns::AddImm {
+            postamble.push(ArmIns::SubImm {
                 dst: ArmRegister::FP,
                 src: ArmRegister::FP,
-                imm: to_add
+                imm: to_sub
             });
-            added += to_add;
+            subbed += to_sub;
         }
         // Reset SP as well
         postamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
@@ -200,12 +200,11 @@ impl GlobalContext {
     }
 
     fn _heap_allocate(&mut self, width: i32) -> i32 {
-        if self.heap_pointer + width > self.heap_size {
+        if self.heap_pointer - width < (-1 * self.heap_size) {
             panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
         }
-        let out = self.heap_pointer;
-        self.heap_pointer += width;
-        out
+        self.heap_pointer -= width;
+        self.heap_pointer
     }
 
     pub fn heap_allocate_int(&mut self) -> TypedValue {
@@ -264,22 +263,22 @@ impl BasicBlock {
         let stack_size = 128;  // TODO: temporary default
         println!("Allocating new basic block with stack size {}", stack_size);
         let mut instructions = vec![];
-        let mut subbed = 0;
+        let mut added = 0;
         // Expand stack.
-        while subbed < stack_size {
-            let mut to_sub = stack_size - subbed;
+        while added < stack_size {
+            let mut to_add = stack_size - added;
             // the stack size for ctest_mixed_adds_mults appears to be blowing the immediate width...
             // TODO: rather than iterating, we can calculate the appropriate mask to use here
             // so as to do this in a single step; same with mirror code in the cleanup function.
-            if to_sub > 256 {
-                to_sub = 256;
+            if to_add > 256 {
+                to_add = 256;
             }
-            instructions.push(ArmIns::SubImm {
+            instructions.push(ArmIns::AddImm {
                 dst: ArmRegister::SP,
                 src: ArmRegister::SP,
-                imm: to_sub
+                imm: to_add
             });
-            subbed += to_sub;
+            added += to_add;
         }
         BasicBlock {
             stack_pointer: 0,
@@ -295,21 +294,21 @@ impl BasicBlock {
     }
 
     pub fn cleanup(&mut self) {
-        let mut added = 0;
-        while added < self.stack_size {
-            let mut to_add = self.stack_size - added;
+        let mut subbed = 0;
+        while subbed < self.stack_size {
+            let mut to_sub = self.stack_size - subbed;
             // ctest_mixed_adds_mults appears to be blowing the immediate width...
             // TODO: rather than iterating, we can calculate the appropriate mask to use here
             // so as to do this in a single step; same with mirror code in the cleanup function.
-            if to_add > 256 {
-                to_add = 256;
+            if to_sub > 256 {
+                to_sub = 256;
             }
-            self.instructions.push(ArmIns::AddImm {
+            self.instructions.push(ArmIns::SubImm {
                 dst: ArmRegister::SP,
                 src: ArmRegister::SP,
-                imm: to_add
+                imm: to_sub
             });
-            added += to_add;
+            subbed += to_sub;
         }
     }
 
@@ -324,12 +323,11 @@ impl BasicBlock {
     }
 
     fn _stack_allocate(&mut self, width: i32) -> i32 {
-        if self.stack_pointer + width > self.stack_size {
+        if self.stack_pointer - width < (-1 * self.stack_size) {
             panic!("Stack allocation failed; adding width {} will overflow stack size of {}; stack pointer is {}", width, self.stack_size, self.stack_pointer);
         }
-        let out = self.stack_pointer;
-        self.stack_pointer += width;
-        out
+        self.stack_pointer -= width;
+        self.stack_pointer
     }
 
     fn stack_allocate_int(&mut self) -> TypedValue {
