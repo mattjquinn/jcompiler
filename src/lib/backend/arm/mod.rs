@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use self::instructions::{ArmIns};
 use self::support::{GlobalContext, BasicBlock, TypedValue, Pointer, Type};
-use self::compiler::{register_globals, compile_expr};
+use self::compiler::{compile_expr};
 use backend::arm::registers::ArmRegister;
 
 mod instructions;
@@ -37,26 +37,13 @@ impl ::Backend for ARMBackend {
         println!("Writing assembly file to {}", &assembly_filename);
 
         let mut basic_blocks = Vec::new();
-        let mut globalctx = {
-            // TODO: We can get rid of a lot of this now, save for the fact
-            // that there is a weird side-effect somewhere that requires us to keep this around
-            // for tests to pass.
-            let mut global_idents = HashSet::new();
-            let mut ident_type_map = HashMap::new();
-            for astnode in ast {
-                register_globals(&astnode, &mut global_idents, &mut ident_type_map);
-            }
-            GlobalContext {
-                global_ident_to_offsets: HashMap::new(),
-            }
-        };
+        let mut globalctx = GlobalContext::new();
 
         for astnode in ast {
             match astnode {
                 parser::AstNode::Print(expr) => {
                     let mut basic_block = BasicBlock::new();
-                    let mut global_basic_block = BasicBlock::new();
-                    let val_offsets = compile_expr(&mut globalctx, &mut global_basic_block, &mut basic_block, expr);
+                    let val_offsets = compile_expr(&mut globalctx, &mut basic_block, expr);
 
                     match &**expr {
                         // top-level global assignments aren't printed
@@ -94,9 +81,7 @@ impl ::Backend for ARMBackend {
             "pos_double_fmt: .asciz \"%g\"".to_string(),
             "neg_double_fmt: .asciz \"_%g\"".to_string(),
             "line_end_nl_fmt:  .asciz \"\\n\"".to_string(),
-            "space_fmt:  .asciz \" \"".to_string()];
-        globalctx.emit_preamble_entries(&mut preamble);
-        preamble.extend(vec![
+            "space_fmt:  .asciz \" \"".to_string(),
             ".text".to_string(),
             ".global main".to_string(),
             ".extern printf".to_string(),
@@ -177,16 +162,17 @@ impl ::Backend for ARMBackend {
             // main
             "main:".to_string(),
             "push {ip, lr}".to_string(),
-        ]);
+        ];
         for instr in preamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
+        globalctx.write_preamble_to_file(&mut assembly_file);
         for basic_block in &basic_blocks {
             basic_block.write_instructions_to_file(&mut assembly_file);
         }
+        globalctx.write_postamble_to_file(&mut assembly_file);
         let mut postamble = Vec::new();
         postamble.push("pop {ip, pc}".to_string());
-        globalctx.emit_postamble_entries(&mut postamble);
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }

@@ -8,5 +8,5 @@ pub enum IRNode {
     ApplyMonadicVerbToTypedValue(MonadicVerb, TypedValue),
     ApplyDyadicVerbToTypedValues {verb: DyadicVerb, lhs: TypedValue, rhs: TypedValue },
     ReduceTypedValues(DyadicVerb, Vec<TypedValue>),
-    AssignTypedValuesToGlobal {ident: String, offsets: Vec<TypedValue>}
+    AssignTypedValuesToGlobal {ident: String, values: Vec<TypedValue>}
 }

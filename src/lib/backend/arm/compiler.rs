@@ -11,35 +11,34 @@ use backend::arm::ir::IRNode;
 
 pub fn compile_expr(
     globalctx: &mut GlobalContext,
-    global_bb: &mut BasicBlock,
     bb: &mut BasicBlock,
     expr: &AstNode) -> Vec<TypedValue>
 {
     match expr {
         parser::AstNode::Integer(int) => {
-            bb.ir(IRNode::PushIntegerOntoStack(*int), &globalctx)
+            bb.ir(IRNode::PushIntegerOntoStack(*int), globalctx)
         },
         parser::AstNode::DoublePrecisionFloat(num) => {
-            bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num), &globalctx)
+            bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num), globalctx)
         },
         parser::AstNode::Terms(terms) => {
             let mut val_offsets = vec![];
             for term in terms {
-                val_offsets.extend(compile_expr(globalctx, global_bb, bb, term));
+                val_offsets.extend(compile_expr(globalctx, bb, term));
             }
             val_offsets
         },
         parser::AstNode::MonadicOp {verb, expr} => {
-            let vals = compile_expr(globalctx, global_bb, bb, expr);
+            let vals = compile_expr(globalctx, bb, expr);
             let mut out = vec![];
             for val in &vals {
-                out.extend(bb.ir(IRNode::ApplyMonadicVerbToTypedValue(verb.clone(), val.clone()), &globalctx));
+                out.extend(bb.ir(IRNode::ApplyMonadicVerbToTypedValue(verb.clone(), val.clone()), globalctx));
             }
             out   // this should always be the same as val_offsets because we updated in-place on the stack
         },
         parser::AstNode::DyadicOp {verb, lhs, rhs} => {
-            let rhs_offsets = compile_expr(globalctx, global_bb, bb, rhs);
-            let lhs_offsets = compile_expr(globalctx, global_bb, bb, lhs);
+            let rhs_offsets = compile_expr(globalctx, bb, rhs);
+            let lhs_offsets = compile_expr(globalctx, bb, lhs);
             if rhs_offsets.len() != lhs_offsets.len()
                 && (lhs_offsets.len() != 1 && rhs_offsets.len() != 1) {
                 panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_offsets.len(), rhs_offsets.len())
@@ -58,52 +57,22 @@ pub fn compile_expr(
                     Left(l) => (l, repeated_offset),
                     Right(r) => (repeated_offset, r)
                 };
-                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToTypedValues {verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, &globalctx));
+                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToTypedValues {verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, globalctx));
             }
             dest_offsets
         },
         parser::AstNode::Reduce {verb, expr} => {
-            let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            bb.ir(IRNode::ReduceTypedValues(verb.clone(), expr_offsets), &globalctx)
+            let expr_offsets = compile_expr(globalctx, bb, expr);
+            bb.ir(IRNode::ReduceTypedValues(verb.clone(), expr_offsets), globalctx)
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
-            let expr_offsets = compile_expr(globalctx, global_bb, bb, expr);
-            let out_offsets = bb.ir(IRNode::AssignTypedValuesToGlobal { ident: ident.clone(), offsets: expr_offsets }, &globalctx);
-            globalctx.add_and_set_global_ident_offsets(ident, &out_offsets);
-            out_offsets
+            let values = compile_expr(globalctx, bb, expr);
+            let heap_values = bb.ir(IRNode::AssignTypedValuesToGlobal { ident: ident.clone(), values }, globalctx);
+            globalctx.set_ident_values(ident, &heap_values);
+            heap_values
         },
-        parser::AstNode::Ident(ident) =>
-            globalctx.global_ident_to_offsets.get(ident).unwrap().clone()
-        ,
+        parser::AstNode::Ident(ident) => globalctx.get_ident_values(ident),
         _ => panic!("Not ready to compile expression: {:?}", expr),
-    }
-}
-
-pub fn register_globals(expr: &AstNode,
-                    registered_idents: &mut HashSet<String>,
-                    ident_type_map: &mut HashMap<String, Type>) {
-    match expr {
-        parser::AstNode::Print(expr) =>
-            register_globals(expr, registered_idents, ident_type_map),
-        parser::AstNode::Integer(_int) => (),
-        parser::AstNode::DoublePrecisionFloat(_double) => (),
-        parser::AstNode::Terms(terms) =>
-            terms.iter().for_each(|e| register_globals(e, registered_idents, ident_type_map)),
-        parser::AstNode::MonadicOp {verb: _, expr} =>
-            register_globals(expr, registered_idents, ident_type_map),
-        parser::AstNode::DyadicOp {verb: _, lhs, rhs} => {
-            register_globals(lhs, registered_idents, ident_type_map);
-            register_globals(rhs, registered_idents, ident_type_map);
-        }
-        parser::AstNode::Reduce {verb: _, expr} =>
-            register_globals(expr, registered_idents, ident_type_map),
-        parser::AstNode::GlobalVarAssgmt {ident, expr} => {
-            registered_idents.insert(ident.clone());
-            ident_type_map.insert(ident.clone(), determine_type(expr, &ident_type_map).unwrap());
-            register_globals(expr, registered_idents, ident_type_map)
-        },
-        parser::AstNode::Ident(_ident) => (),
-        _ => panic!("Not ready to register globals declared in expr: {:?}", expr)
     }
 }
 

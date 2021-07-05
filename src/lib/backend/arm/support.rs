@@ -19,12 +19,26 @@ pub enum Pointer {
 }
 
 impl Pointer {
-    pub fn load(&self, dst: ArmRegister, basic_block: &mut BasicBlock) {
-        let (src, offset) = match self {
+
+    fn get_offset(&self) -> (ArmRegister, i32) {
+        match self {
             Pointer::Stack(offset) => (ArmRegister::SP, *offset),
             Pointer::Heap(offset) => (ArmRegister::FP, *offset)
-        };
+        }
+    }
+
+    pub fn load(&self, dst: ArmRegister, basic_block: &mut BasicBlock) {
+        let (src, offset) = self.get_offset();
         basic_block.push(ArmIns::LoadOffset {
+            dst,
+            src,
+            offsets: vec![offset]
+        });
+    }
+
+    pub fn store(&self, src: ArmRegister, basic_block: &mut BasicBlock) {
+        let (dst, offset) = self.get_offset();
+        basic_block.push(ArmIns::StoreOffset {
             dst,
             src,
             offsets: vec![offset]
@@ -77,113 +91,163 @@ pub enum TypedValue {
     Double{ msw: Pointer, lsw: Pointer }
 }
 
-/**
- * It remains to be seen whether globals should be
- * loaded as ARM global variables, or managed via a special
- * global basic block. The latter would give us the ability
- * to more aggressively free up memory, at the cost of greater
- * complexity.
- */
+impl TypedValue {
+    pub fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> TypedValue {
+        match self {
+            TypedValue::Integer(src) => {
+                match src {
+                    Pointer::Heap(_) => self.clone(),
+                    Pointer::Stack(_) => {
+                        let out = globalctx.heap_allocate_int();
+                        match &out {
+                            TypedValue::Integer(dst) => {
+                                let transfer_reg = basic_block.claim_register();
+                                src.load(transfer_reg.clone(), basic_block);
+                                dst.store(transfer_reg.clone(), basic_block);
+                                basic_block.free_register(transfer_reg);
+                            },
+                            _ => panic!("Unreachable")
+                        }
+                        out
+                    }
+                }
+            },
+            TypedValue::Double { msw, lsw } => {
+                match (msw, lsw) {
+                    (Pointer::Heap(_), Pointer::Heap(_)) => self.clone(), // TODO: increment refcount
+                    (Pointer::Heap(_), Pointer::Stack(_)) => {
+                        panic!("TODO: persist stack Double MSW to Heap")
+                    },
+                    (Pointer::Stack(_), Pointer::Heap(_)) => {
+                        panic!("TODO: persist stack Double LSW to Heap")
+                    }
+                    (Pointer::Stack(_), Pointer::Stack(_)) => {
+                        panic!("TODO: persist stack Double both MSW and LSW to Heap")
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct GlobalContext {
-    // TODO: we need a map of idents to lifetime offsets;
-    // those lifetime offsets should be written to global memory
-    pub global_ident_to_offsets: HashMap<String, Vec<TypedValue>>
+    ident_map: HashMap<String, Vec<TypedValue>>,
+    heap_pointer: i32,
+    heap_size: i32
 }
 
 impl GlobalContext {
 
-    // TODO: make a note about optimization
-    // TODO: history needs to be in an append only array
-    pub fn add_and_set_global_ident_offsets(&mut self, ident: &String, offsets: &Vec<TypedValue>) {
-        panic!("TODO: Transition add_and_set_global_ident_offsets");
-        // let mut global_offsets = vec![];
-        // // TODO: idx is used all wrong here, it must be globally incremented in the context of an ident
-        // let mut idx = 0;
-        // for offset in offsets {
-        //     match offset {
-        //         Pointer::Stack(ty, _idx) => {
-        //             match ty {
-        //                 Type::Double => {
-        //                     // We only want one offset so we use _double to
-        //                     // indicate there is an MSW and LSW that get their own addresses. If we use two
-        //                     // offsets here then we'll attempt to print the MSW and LSW separately.
-        //                     // TODO: Rely on the type system more.
-        //                     global_offsets.push(Pointer::Heap(ty.clone(), format!("{}_idx{}_double", ident, idx)));
-        //                     idx += 1
-        //                 },
-        //                 Type::Integer => {
-        //                     global_offsets.push(Pointer::Heap(ty.clone(), format!("{}_idx{}", ident, idx)));
-        //                     idx += 1
-        //                 }
-        //                 Type::Array(_) => {
-        //                     panic!("TODO: Support setting global idents for array of offsets")
-        //                 }
-        //             };
-        //         }
-        //         Pointer::Heap(_ty, _ident) => {
-        //             // TODO: should this be modified in any way?
-        //             global_offsets.push(offset.clone());
-        //         }
-        //     }
-        // }
-        // self.global_ident_to_offsets.insert(ident.clone(), global_offsets);
+    pub fn new() -> GlobalContext {
+        GlobalContext {
+            ident_map: HashMap::new(),
+            heap_size: 128,
+            heap_pointer: 0
+        }
     }
 
-    pub fn emit_postamble_entries(&self, entries: &mut Vec<String>) {
-
-        // TODO: This should go away after the transition to a process-extent heap
-
-        // for ident in self.global_ident_to_offsets.keys() {
-        //     let offsets = self.global_ident_to_offsets.get(ident).unwrap();
-        //     // TODO: idx is used all wrong here, it must be globally incremented in the context of an ident
-        //     let mut idx = 0;
-        //     for offset in offsets {
-        //         match offset {
-        //             Pointer::Heap(Type::Double, _) => {
-        //                 entries.push(format!(".{}_idx{}_double_msw: .word {}_idx{}_double_msw", ident, idx, ident, idx));
-        //                 entries.push(format!(".{}_idx{}_double_lsw: .word {}_idx{}_double_lsw", ident, idx, ident, idx));
-        //                 idx += 1
-        //             },
-        //             Pointer::Heap(Type::Integer, _) => {
-        //                 entries.push(format!(".{}_idx{}: .word {}_idx{}", ident, idx, ident, idx));
-        //                 idx += 1
-        //             },
-        //             Pointer::Stack(_, _) => {
-        //                 panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
-        //             }
-        //             _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
-        //         }
-        //     }
-        // }
+    pub fn write_preamble_to_file(&self, assembly_file: &mut File) {
+        let mut preamble = vec![];
+        let mut subbed = 0;
+        // The FP should start out where the SP is.
+        preamble.push(ArmIns::Move { src: ArmRegister::SP, dst: ArmRegister::FP });
+        // Expand heap.
+        while subbed < self.heap_size {
+            let mut to_sub = self.heap_size - subbed;
+            // TODO: rather than iterating, we can calculate the appropriate mask to use here
+            // so as to do this in a single step; same with mirror code in the cleanup function.
+            if to_sub > 256 {
+                to_sub = 256;
+            }
+            preamble.push(ArmIns::SubImm {
+                dst: ArmRegister::FP,
+                src: ArmRegister::FP,
+                imm: to_sub
+            });
+            subbed += to_sub;
+        }
+        // Stacks must appear after the heap, so we adjust the SP now.
+        preamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
+        for instr in preamble {
+            writeln!(assembly_file, "{}", instr).expect("write failure");
+        }
     }
 
-    pub fn emit_preamble_entries(&self, entries: &mut Vec<String>) {
+    pub fn write_postamble_to_file(&self, assembly_file: &mut File) {
+        let mut postamble = vec![];
+        let mut added = 0;
+        // Cleanup heap.
+        while added < self.heap_size {
+            let mut to_add = self.heap_size - added;
+            // TODO: rather than iterating, we can calculate the appropriate mask to use here
+            // so as to do this in a single step; same with mirror code in the cleanup function.
+            if to_add > 256 {
+                to_add = 256;
+            }
+            postamble.push(ArmIns::AddImm {
+                dst: ArmRegister::FP,
+                src: ArmRegister::FP,
+                imm: to_add
+            });
+            added += to_add;
+        }
+        // Reset SP as well
+        postamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
+        for instr in postamble {
+            writeln!(assembly_file, "{}", instr).expect("write failure");
+        }
+    }
 
-        // TODO: This should go away after the transition to a process-extent heap
+    fn _heap_allocate(&mut self, width: i32) -> i32 {
+        if self.heap_pointer + width > self.heap_size {
+            panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
+        }
+        let out = self.heap_pointer;
+        self.heap_pointer += width;
+        out
+    }
 
-        // for ident in self.global_ident_to_offsets.keys() {
-        //     let offsets = self.global_ident_to_offsets.get(ident).unwrap();
-        //     // TODO: idx is used all wrong here, it must be unique per ident
-        //     let mut idx = 0;
-        //     for offset in offsets {
-        //         match offset {
-        //             Pointer::Heap(Type::Double, _) => {
-        //                 entries.push(format!("{}_idx{}_double_msw: .word 0", ident, idx));
-        //                 entries.push(format!("{}_idx{}_double_lsw: .word 0", ident, idx));
-        //                 idx += 1
-        //             },
-        //             Pointer::Heap(Type::Integer, _) => {
-        //                 entries.push(format!("{}_idx{}: .word 0", ident, idx));
-        //                 idx += 1
-        //             },
-        //             Pointer::Stack(_, _) => {
-        //                 panic!("A stack offset was found in the GlobalContext; this should never happen: {:?}", offset)
-        //             }
-        //             _ => panic!("Unsupported offset in emit_preamble_entries: {:?}", offset)
-        //         }
-        //     }
-        // }
+    pub fn heap_allocate_int(&mut self) -> TypedValue {
+        let offset = self._heap_allocate(4);
+        TypedValue::Integer(Pointer::Heap(offset))
+    }
+
+    pub fn heap_allocate_double(&mut self) -> TypedValue {
+        let msw = Pointer::Heap(self._heap_allocate(4));
+        let lsw = Pointer::Heap(self._heap_allocate(4));
+        TypedValue::Double{msw, lsw}
+    }
+
+    pub fn set_ident_values(&mut self, ident: &String, values: &Vec<TypedValue>) {
+        for value in values {
+            // Caller is responsible for migrating values to Heap first if necessary; enforce that here.
+            match value {
+                TypedValue::Integer(pointer) => {
+                    match pointer {
+                        Pointer::Stack(_) => panic!("Attempted to make a Stack pointer global."),
+                        Pointer::Heap(_) => {} // OK
+                    }
+                },
+                TypedValue::Double {msw, lsw} => {
+                    match (msw, lsw) {
+                        (Pointer::Stack(_), Pointer::Stack(_)) => panic!("Attempted to make a Stack MSW and LSW global."),
+                        (Pointer::Stack(_), Pointer::Heap(_)) => panic!("Attempted to make a Stack MSW global."),
+                        (Pointer::Heap(_), Pointer::Stack(_)) => panic!("Attempted to make a Stack LSW global."),
+                        (Pointer::Heap(_), Pointer::Heap(_)) => {} // OK
+                    }
+                }
+            }
+        }
+
+        // TODO: There could be previous values in the heap that we lose by overwriting
+        // here. We should implement refcounting so that we can deallocate those that will
+        // no longer be referred to after this insert.
+        self.ident_map.insert(ident.clone(), values.clone());
+    }
+
+    pub fn get_ident_values(&mut self, ident: &String) -> Vec<TypedValue> {
+        self.ident_map.get(ident).unwrap().clone()
     }
 }
 
@@ -191,46 +255,35 @@ impl GlobalContext {
 pub struct BasicBlock {
     stack_pointer: i32,
     stack_size: i32,
-    heap_pointer: i32,
-    heap_size: i32,
     instructions: Vec<ArmIns>,
     available_registers: LinkedHashSet<ArmRegister>
 }
 
 impl BasicBlock {
     pub fn new() -> BasicBlock {
-        let heap_size = 128; // eventually we'll want to be smarter/more flexible about this arbitrarily chosen default value
-        let stack_size = 256;  // TODO: temporary default
-        println!("Allocating new basic block with stack size {} and heap size {}", stack_size, heap_size);
-        let mut instructions = vec![
-            // Frame pointer starts out at stack pointer.
-            ArmIns::Move { dst: ArmRegister::FP, src: ArmRegister::SP } ];
+        let stack_size = 128;  // TODO: temporary default
+        println!("Allocating new basic block with stack size {}", stack_size);
+        let mut instructions = vec![];
         let mut subbed = 0;
-        // Expand frame to accommodate stack + heap.
-        let frame_size = stack_size + heap_size;
-        while subbed < frame_size {
-            let mut to_sub = frame_size - subbed;
+        // Expand stack.
+        while subbed < stack_size {
+            let mut to_sub = stack_size - subbed;
             // the stack size for ctest_mixed_adds_mults appears to be blowing the immediate width...
             // TODO: rather than iterating, we can calculate the appropriate mask to use here
             // so as to do this in a single step; same with mirror code in the cleanup function.
             if to_sub > 256 {
                 to_sub = 256;
             }
-            // Expand fp to size of stack + heap.
             instructions.push(ArmIns::SubImm {
-                dst: ArmRegister::FP,
-                src: ArmRegister::FP,
+                dst: ArmRegister::SP,
+                src: ArmRegister::SP,
                 imm: to_sub
             });
             subbed += to_sub;
         }
-        // Expand sp along with it.
-        instructions.push(ArmIns::Move { dst: ArmRegister::SP, src: ArmRegister::FP });
         BasicBlock {
             stack_pointer: 0,
             stack_size,
-            heap_pointer: stack_size, // heap starts at end of stack
-            heap_size,
             instructions,
             available_registers: [
                 ArmRegister::R0,
@@ -243,25 +296,21 @@ impl BasicBlock {
 
     pub fn cleanup(&mut self) {
         let mut added = 0;
-        let frame_size = self.stack_size + self.heap_size;
-        while added < frame_size {
-            let mut to_add = frame_size - added;
+        while added < self.stack_size {
+            let mut to_add = self.stack_size - added;
             // ctest_mixed_adds_mults appears to be blowing the immediate width...
+            // TODO: rather than iterating, we can calculate the appropriate mask to use here
+            // so as to do this in a single step; same with mirror code in the cleanup function.
             if to_add > 256 {
                 to_add = 256;
             }
             self.instructions.push(ArmIns::AddImm {
-                dst: ArmRegister::FP,
-                src: ArmRegister::FP,
+                dst: ArmRegister::SP,
+                src: ArmRegister::SP,
                 imm: to_add
             });
             added += to_add;
         }
-        // Stack pointer must be moved up as well.
-        self.instructions.push(ArmIns::Move {
-            dst: ArmRegister::SP,
-            src: ArmRegister::FP,
-        });
     }
 
     pub fn push(&mut self, instruction: ArmIns) {
@@ -278,126 +327,112 @@ impl BasicBlock {
         if self.stack_pointer + width > self.stack_size {
             panic!("Stack allocation failed; adding width {} will overflow stack size of {}; stack pointer is {}", width, self.stack_size, self.stack_pointer);
         }
-        let offset = self.stack_pointer;
+        let out = self.stack_pointer;
         self.stack_pointer += width;
-        offset
+        out
     }
 
-    fn stack_allocate_int(&mut self) -> i32 {
+    fn stack_allocate_int(&mut self) -> TypedValue {
         let offset = self._stack_allocate(4);
-        offset
+        TypedValue::Integer(Pointer::Stack(offset))
     }
 
-    fn stack_allocate_double(&mut self) -> i32 {
-        // TODO: Do we make this return two offsets, one for MSW and one for LSW?
-        let offset = self._stack_allocate(8);
-        offset
+    fn stack_allocate_double(&mut self) -> TypedValue {
+        let msw = Pointer::Stack(self._stack_allocate(4));
+        let lsw = Pointer::Stack(self._stack_allocate(4));
+        TypedValue::Double{msw, lsw}
     }
 
-    fn _heap_allocate(&mut self, width: i32) -> i32 {
-        let frame_size = self.stack_size + self.heap_size;
-        if self.heap_pointer + width > frame_size {
-            panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
-        }
-        let offset = self.heap_pointer;
-        self.heap_pointer += width;
-        offset
-    }
-
-    fn heap_allocate_int(&mut self) -> i32 {
-        let offset = self._heap_allocate(4);
-        offset
-    }
-
-    fn heap_allocate_double(&mut self) -> i32 {
-        // TODO: Do we make this return two offsets, one for MSW and one for LSW?
-        let offset = self._heap_allocate(8);
-        offset
-    }
-
-    fn claim_register(&mut self) -> ArmRegister {
+    pub fn claim_register(&mut self) -> ArmRegister {
         match self.available_registers.pop_front() {
             Some(r) => r,
             None => panic!("No register is available to claim.")
         }
     }
 
-    fn free_register(&mut self, reg: ArmRegister) {
+    pub fn free_register(&mut self, reg: ArmRegister) {
         if self.available_registers.contains(&reg) {
             panic!("Attempted to free register {} but it is not claimed.", reg)
         }
         self.available_registers.insert(reg);
     }
 
-    pub fn ir(&mut self, instruction: IRNode, globalctx: &GlobalContext) -> Vec<TypedValue> {
+    pub fn ir(&mut self,
+              instruction: IRNode,
+              globalctx: &mut GlobalContext) -> Vec<TypedValue> {
         match instruction {
             IRNode::PushIntegerOntoStack(imm) => {
-                let temp_reg = self.claim_register();
-                self.instructions.push(ArmIns::MoveImm { imm, dst: temp_reg.clone() });
-                let offset = self.stack_allocate_int();
-                self.instructions.push(ArmIns::StoreOffset {
-                    src: temp_reg.clone(), dst: ArmRegister::FP, offsets: vec![offset]});
-                self.free_register(temp_reg);
-                vec![TypedValue::Integer(Pointer::Stack(offset))]
+                let val = self.stack_allocate_int();
+                match &val {
+                    TypedValue::Integer(dst) => {
+                        let transfer_reg = self.claim_register();
+                        self.push(ArmIns::MoveImm { imm, dst: transfer_reg.clone() });
+                        dst.store(transfer_reg.clone(), self);
+                        self.free_register(transfer_reg);
+                    },
+                    _ => panic!("Unreachable")
+                }
+                vec![val]
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
-                let bits = num.bits();
-                let hex_rep = format!("{:x}", bits);
-                let binary_rep = format!("{:064b}", bits);
-                println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
-
-                let offset = self.stack_allocate_double();
-
-                // Note: due to limited width of ARM's MOV immediate field,
-                // we split the initialization of both MSW and LWS over multiple
-                // per-byte instructions; probably could be optimized.
-                { // LSW
-                    let lsw_reg = self.claim_register();
-                    {
-                        let half1 = (bits & 0xFFFF) as u16;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: half1, dst: lsw_reg.clone() });
-                    }
-                    {
-                        let temp_reg = self.claim_register();
-                        let half2 = ((bits >> 16) & 0xFFFF) as u16;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: half2, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
-                        self.free_register(temp_reg);
-                    }
-                    self.instructions.push(ArmIns::StoreOffset {
-                        dst: ArmRegister::FP, src: lsw_reg.clone(),
-                        offsets: vec![offset + 4]});// TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
-                    self.free_register(lsw_reg);
-                }
-                { // MSW
-                    let msw_reg = self.claim_register();
-                    {
-                        let half1 = ((bits >> 32) & 0xFFFF) as u16;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: half1, dst: msw_reg.clone() });
-                    }
-                    {
-                        let temp_reg = self.claim_register();
-                        let half2 = ((bits >> 48) & 0xFFFF) as u16;
-                        self.instructions.push(ArmIns::MoveImmUnsigned {
-                            imm: half2, dst: temp_reg.clone() });
-                        self.instructions.push(ArmIns::LeftShift {
-                            src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
-                        self.instructions.push(ArmIns::Add {
-                            dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
-                        self.free_register(temp_reg);
-                    }
-                    self.instructions.push(ArmIns::StoreOffset {
-                        dst: ArmRegister::FP, src: msw_reg.clone(),
-                        offsets: vec![offset]});
-                    self.free_register(msw_reg);
-                }
-                vec![TypedValue::Double{msw: Pointer::Stack(offset), lsw: Pointer::Stack(offset+4)}]
+                panic!("TODO: handle stack allocation for Double")
+                // let bits = num.bits();
+                // let hex_rep = format!("{:x}", bits);
+                // let binary_rep = format!("{:064b}", bits);
+                // println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
+                //
+                // let offset = self.stack_allocate_double();
+                //
+                // // Note: due to limited width of ARM's MOV immediate field,
+                // // we split the initialization of both MSW and LWS over multiple
+                // // per-byte instructions; probably could be optimized.
+                // { // LSW
+                //     let lsw_reg = self.claim_register();
+                //     {
+                //         let half1 = (bits & 0xFFFF) as u16;
+                //         self.instructions.push(ArmIns::MoveImmUnsigned {
+                //             imm: half1, dst: lsw_reg.clone() });
+                //     }
+                //     {
+                //         let temp_reg = self.claim_register();
+                //         let half2 = ((bits >> 16) & 0xFFFF) as u16;
+                //         self.instructions.push(ArmIns::MoveImmUnsigned {
+                //             imm: half2, dst: temp_reg.clone() });
+                //         self.instructions.push(ArmIns::LeftShift {
+                //             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                //         self.instructions.push(ArmIns::Add {
+                //             dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                //         self.free_register(temp_reg);
+                //     }
+                //     self.instructions.push(ArmIns::StoreOffset {
+                //         dst: ArmRegister::FP, src: lsw_reg.clone(),
+                //         offsets: vec![offset + 4]});// TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
+                //     self.free_register(lsw_reg);
+                // }
+                // { // MSW
+                //     let msw_reg = self.claim_register();
+                //     {
+                //         let half1 = ((bits >> 32) & 0xFFFF) as u16;
+                //         self.instructions.push(ArmIns::MoveImmUnsigned {
+                //             imm: half1, dst: msw_reg.clone() });
+                //     }
+                //     {
+                //         let temp_reg = self.claim_register();
+                //         let half2 = ((bits >> 48) & 0xFFFF) as u16;
+                //         self.instructions.push(ArmIns::MoveImmUnsigned {
+                //             imm: half2, dst: temp_reg.clone() });
+                //         self.instructions.push(ArmIns::LeftShift {
+                //             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                //         self.instructions.push(ArmIns::Add {
+                //             dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                //         self.free_register(temp_reg);
+                //     }
+                //     self.instructions.push(ArmIns::StoreOffset {
+                //         dst: ArmRegister::FP, src: msw_reg.clone(),
+                //         offsets: vec![offset]});
+                //     self.free_register(msw_reg);
+                // }
+                // vec![TypedValue::Double{msw: Pointer::Stack(offset), lsw: Pointer::Stack(offset+4)}]
             }
             IRNode::ApplyMonadicVerbToTypedValue(verb, offset) => {
                 panic!("TODO: Support ApplyMonadicVerbToTypedValue");
@@ -754,129 +789,127 @@ impl BasicBlock {
                 // self.free_register(accum_reg.clone());
                 // vec![accum_offset.clone()]
             },
-            IRNode::AssignTypedValuesToGlobal {ident, offsets: expr_offsets} => {
-                panic!("TODO: Support AssignTypedValuesToGlobal");
-                // let mut out_offsets = vec![];
-                // let mut idx = 0;
-                // for offset in expr_offsets.iter() {
-                //     match offset {
-                //         Pointer::Stack(ty, i) => {
-                //             match ty {
-                //                 Type::Integer => {
-                //                     let value_reg = self.claim_register();
-                //                     let indirection_reg = self.claim_register();
-                //                     self.instructions.push(ArmIns::LoadOffset {
-                //                         dst: value_reg.clone(),
-                //                         src: ArmRegister::FP,
-                //                         offsets: vec![*i]
-                //                     });
-                //                     // This load/store sequence looks confusing; it is putting the
-                //                     // address of the element in the global var, into which the value
-                //                     // will be placed, into the indirection register, and when the
-                //                     // store of the value occurs, the value will "pass through"
-                //                     // the address in the indirection register to end up in the global
-                //                     // address space.
-                //                     self.instructions.push(ArmIns::Load {
-                //                         src: format!(".{}_idx{}", ident, idx),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     idx += 1;
-                //                     self.instructions.push(ArmIns::Store {
-                //                         src: value_reg.clone(),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     self.free_register(value_reg);
-                //                     self.free_register(indirection_reg);
-                //                 },
-                //                 Type::Double => {
-                //                     let msw_reg = self.claim_register();
-                //                     let lsw_reg = self.claim_register();
-                //                     let indirection_reg = self.claim_register();
-                //                     self.instructions.push(ArmIns::LoadOffset {
-                //                         dst: msw_reg.clone(),
-                //                         src: ArmRegister::FP,
-                //                         offsets: vec![*i]
-                //                     });
-                //                     self.instructions.push(ArmIns::LoadOffset {
-                //                         dst: lsw_reg.clone(),
-                //                         src: ArmRegister::FP,
-                //                         offsets: vec![*i + 4] // TODO: if statically type the offset as a DoubleOffset(msw, lsw) we won't have to do this
-                //                     });
-                //                     // This load/store sequence looks confusing; it is putting the
-                //                     // address of the element in the global var, into which the value
-                //                     // will be placed, into the indirection register, and when the
-                //                     // store of the value occurs, the value will "pass through"
-                //                     // the address in the indirection register to end up in the global
-                //                     // address space.
-                //                     self.instructions.push(ArmIns::Load {
-                //                         src: format!(".{}_idx{}_double_msw", ident, idx),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     self.instructions.push(ArmIns::Store {
-                //                         src: msw_reg.clone(),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     self.instructions.push(ArmIns::Load {
-                //                         src: format!(".{}_idx{}_double_lsw", ident, idx),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     self.instructions.push(ArmIns::Store {
-                //                         src: lsw_reg.clone(),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     idx += 1;
-                //                     self.free_register(msw_reg);
-                //                     self.free_register(lsw_reg);
-                //                     self.free_register(indirection_reg);
-                //                 },
-                //                 Type::Array(_) =>
-                //                     panic!("TODO: Load stack array offsets into value registers")
-                //             }
-                //         },
-                //         Pointer::Heap(ty, global_ident) => {
-                //             match ty {
-                //                 Type::Integer => {
-                //                     let value_reg = self.claim_register();
-                //                     let indirection_reg = self.claim_register();
-                //                     // TODO: make this be ArmIns::LoadIdentifierAddress
-                //                     self.instructions.push(ArmIns::Load {
-                //                         dst: value_reg.clone(),
-                //                         src: format!("{}", global_ident).to_string()
-                //                     });
-                //                     // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
-                //                     self.instructions.push(ArmIns::Load {
-                //                         dst: value_reg.clone(),
-                //                         src: format!("[{}]", value_reg.clone()).to_string(),
-                //                     });
-                //                     // This load/store sequence looks confusing; it is putting the
-                //                     // address of the element in the global var, into which the value
-                //                     // will be placed, into the indirection register, and when the
-                //                     // store of the value occurs, the value will "pass through"
-                //                     // the address in the indirection register to end up in the global
-                //                     // address space.
-                //                     self.instructions.push(ArmIns::Load {
-                //                         src: format!(".{}_idx{}", ident, idx),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     idx += 1;
-                //                     self.instructions.push(ArmIns::Store {
-                //                         src: value_reg.clone(),
-                //                         dst: indirection_reg.clone()
-                //                     });
-                //                     self.free_register(value_reg);
-                //                     self.free_register(indirection_reg);
-                //                 }
-                //                 Type::Double =>
-                //                     panic!("TODO: Load global MSW and LSW offsets into value registers"),
-                //                 Type::Array(_) =>
-                //                     panic!("TODO: Load global array offsets into value registers")
-                //             }
-                //         }
-                //     };
-                //     println!("In GlobalVarAssgmt, adding offset: {:?}", offset);
-                //     out_offsets.push(offset.clone())
-                // }
-                // out_offsets
+            IRNode::AssignTypedValuesToGlobal {ident, values} => {
+                let mut out = vec![];
+                let mut idx = 0;
+                for value in values.iter() {
+                    out.push(value.persist_to_heap(self, globalctx));
+                    // match offset {
+                    //     Pointer::Stack(ty, i) => {
+                    //         match ty {
+                    //             Type::Integer => {
+                    //                 let value_reg = self.claim_register();
+                    //                 let indirection_reg = self.claim_register();
+                    //                 self.instructions.push(ArmIns::LoadOffset {
+                    //                     dst: value_reg.clone(),
+                    //                     src: ArmRegister::FP,
+                    //                     offsets: vec![*i]
+                    //                 });
+                    //                 // This load/store sequence looks confusing; it is putting the
+                    //                 // address of the element in the global var, into which the value
+                    //                 // will be placed, into the indirection register, and when the
+                    //                 // store of the value occurs, the value will "pass through"
+                    //                 // the address in the indirection register to end up in the global
+                    //                 // address space.
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     src: format!(".{}_idx{}", ident, idx),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 idx += 1;
+                    //                 self.instructions.push(ArmIns::Store {
+                    //                     src: value_reg.clone(),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 self.free_register(value_reg);
+                    //                 self.free_register(indirection_reg);
+                    //             },
+                    //             Type::Double => {
+                    //                 let msw_reg = self.claim_register();
+                    //                 let lsw_reg = self.claim_register();
+                    //                 let indirection_reg = self.claim_register();
+                    //                 self.instructions.push(ArmIns::LoadOffset {
+                    //                     dst: msw_reg.clone(),
+                    //                     src: ArmRegister::FP,
+                    //                     offsets: vec![*i]
+                    //                 });
+                    //                 self.instructions.push(ArmIns::LoadOffset {
+                    //                     dst: lsw_reg.clone(),
+                    //                     src: ArmRegister::FP,
+                    //                     offsets: vec![*i + 4] // TODO: if statically type the offset as a DoubleOffset(msw, lsw) we won't have to do this
+                    //                 });
+                    //                 // This load/store sequence looks confusing; it is putting the
+                    //                 // address of the element in the global var, into which the value
+                    //                 // will be placed, into the indirection register, and when the
+                    //                 // store of the value occurs, the value will "pass through"
+                    //                 // the address in the indirection register to end up in the global
+                    //                 // address space.
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     src: format!(".{}_idx{}_double_msw", ident, idx),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 self.instructions.push(ArmIns::Store {
+                    //                     src: msw_reg.clone(),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     src: format!(".{}_idx{}_double_lsw", ident, idx),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 self.instructions.push(ArmIns::Store {
+                    //                     src: lsw_reg.clone(),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 idx += 1;
+                    //                 self.free_register(msw_reg);
+                    //                 self.free_register(lsw_reg);
+                    //                 self.free_register(indirection_reg);
+                    //             },
+                    //             Type::Array(_) =>
+                    //                 panic!("TODO: Load stack array offsets into value registers")
+                    //         }
+                    //     },
+                    //     Pointer::Heap(ty, global_ident) => {
+                    //         match ty {
+                    //             Type::Integer => {
+                    //                 let value_reg = self.claim_register();
+                    //                 let indirection_reg = self.claim_register();
+                    //                 // TODO: make this be ArmIns::LoadIdentifierAddress
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     dst: value_reg.clone(),
+                    //                     src: format!("{}", global_ident).to_string()
+                    //                 });
+                    //                 // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     dst: value_reg.clone(),
+                    //                     src: format!("[{}]", value_reg.clone()).to_string(),
+                    //                 });
+                    //                 // This load/store sequence looks confusing; it is putting the
+                    //                 // address of the element in the global var, into which the value
+                    //                 // will be placed, into the indirection register, and when the
+                    //                 // store of the value occurs, the value will "pass through"
+                    //                 // the address in the indirection register to end up in the global
+                    //                 // address space.
+                    //                 self.instructions.push(ArmIns::Load {
+                    //                     src: format!(".{}_idx{}", ident, idx),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 idx += 1;
+                    //                 self.instructions.push(ArmIns::Store {
+                    //                     src: value_reg.clone(),
+                    //                     dst: indirection_reg.clone()
+                    //                 });
+                    //                 self.free_register(value_reg);
+                    //                 self.free_register(indirection_reg);
+                    //             }
+                    //             Type::Double =>
+                    //                 panic!("TODO: Load global MSW and LSW offsets into value registers"),
+                    //             Type::Array(_) =>
+                    //                 panic!("TODO: Load global array offsets into value registers")
+                    //         }
+                    //     }
+                    // };
+                }
+                out
             }
         }
     }
