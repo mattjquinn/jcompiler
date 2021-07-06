@@ -1,5 +1,5 @@
 use parser::{DyadicVerb, MonadicVerb};
-use super::support::{TypedValue};
+use super::compiler::{TypedValue};
 
 #[derive(Debug)]
 pub enum IRNode {

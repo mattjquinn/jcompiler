@@ -4,13 +4,11 @@ use std::fs::File;
 use std::io::Write;
 
 use self::instructions::{ArmIns};
-use self::support::{GlobalContext, BasicBlock, TypedValue};
-use self::compiler::{compile_expr};
+use self::compiler::{GlobalContext, BasicBlock, TypedValue, compile_expr};
 use backend::arm::registers::ArmRegister;
 
 mod instructions;
 mod macros;
-mod support;
 mod compiler;
 mod registers;
 mod ir;
