@@ -2,10 +2,9 @@ use getopts::{Matches, Options};
 use parser;
 use std::fs::File;
 use std::io::Write;
-use std::collections::{HashMap, HashSet};
 
 use self::instructions::{ArmIns};
-use self::support::{GlobalContext, BasicBlock, TypedValue, Pointer, Type};
+use self::support::{GlobalContext, BasicBlock, TypedValue};
 use self::compiler::{compile_expr};
 use backend::arm::registers::ArmRegister;
 
@@ -43,13 +42,13 @@ impl ::Backend for ARMBackend {
             match astnode {
                 parser::AstNode::Print(expr) => {
                     let mut basic_block = BasicBlock::new();
-                    let val_offsets = compile_expr(&mut globalctx, &mut basic_block, expr);
+                    let values = compile_expr(&mut globalctx, &mut basic_block, expr);
 
                     match &**expr {
                         // top-level global assignments aren't printed
                         parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
                         _ => {
-                            jprint_offset(&val_offsets, &globalctx, &mut basic_block);
+                            jprint_value(&values, &mut basic_block);
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
                             basic_block.push(ArmIns::Load {
@@ -73,7 +72,7 @@ impl ::Backend for ARMBackend {
 
         // TODO: Move boilerplate writing of preamble/postamble elsewhere.
         println!("Writing ARM...");
-        let mut preamble = vec![
+        let preamble = vec![
             ".arch armv7-a".to_string(),
             ".data".to_string(),
             "pos_int_fmt: .asciz \"%d\"".to_string(),
@@ -188,82 +187,21 @@ impl ::Backend for ARMBackend {
     }
 }
 
-fn jprint_offset(val_offsets: &Vec<TypedValue>, globalctx: &GlobalContext, basic_block: &mut BasicBlock) {
-    for (idx, value) in val_offsets.iter().enumerate() {
-        match value {
+fn jprint_value(values: &Vec<TypedValue>, basic_block: &mut BasicBlock) {
+    for (idx, value) in values.iter().enumerate() {
+        match &value {
             TypedValue::Integer(pointer) => {
                 pointer.read(ArmRegister::R1, basic_block);
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
+            },
+            TypedValue::Double { msw, lsw } => {
+                msw.read(ArmRegister::R2, basic_block); // the MSW is expected in r2
+                lsw.read(ArmRegister::R3, basic_block); // the LSW is expected in r3
+                basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
             }
-            _ => panic!("TODO: Support jprint_offset for: {:?}", value)
         }
-        // match offset {
-        //     Pointer::Stack(Type::Double, i) => {
-        //         // the MSW is expected in r2
-        //         basic_block.push(ArmIns::LoadOffset {
-        //             dst: ArmRegister::R2,
-        //             src: ArmRegister::FP,
-        //             offsets: vec![*i]
-        //         });
-        //         // the LSW is expected in r3
-        //         basic_block.push(ArmIns::LoadOffset {
-        //             dst: ArmRegister::R3,
-        //             src: ArmRegister::FP,
-        //             offsets: vec![*i + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
-        //         });
-        //         basic_block.push(
-        //             ArmIns::BranchAndLink { addr: "jprint_double" });
-        //     }
-        //     Pointer::Heap(Type::Integer, ident) => {
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R1,
-        //             src: format!(".{}", ident).to_string()
-        //         });
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R1,
-        //             src: "[r1]".to_string(),
-        //         });
-        //         basic_block.push(
-        //             ArmIns::BranchAndLink { addr: "jprint_int" });
-        //     },
-        //     Pointer::Heap(Type::Double, ident) => {
-        //         // the MSW is expected in r2
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R2,
-        //             // no "_double" prefix because it is already included in the ident
-        //             src: format!(".{}_msw", ident).to_string()
-        //         });
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R2,
-        //             src: "[r2]".to_string(),
-        //         });
-        //         // the LSW is expected in r3
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R3,
-        //             // no "_double" prefix because it is already included in the ident
-        //             src: format!(".{}_lsw", ident).to_string()
-        //         });
-        //         basic_block.push(ArmIns::Load {
-        //             dst: ArmRegister::R3,
-        //             src: "[r3]".to_string(),
-        //         });
-        //         basic_block.push(
-        //             ArmIns::BranchAndLink { addr: "jprint_double" });
-        //     },
-        //     /* fall-through for global offsets */
-        //     Pointer::Heap(ty, i) => {
-        //         match ty {
-        //             Type::Array(_) => {
-        //                 let offsets = globalctx.global_ident_to_offsets.get(i).unwrap();
-        //                 jprint_offset(offsets, globalctx, basic_block);
-        //             },
-        //             _ => panic!("TODO: Unexpected Global offset: {:?}", offset)
-        //         }
-        //     },
-        //     _ => panic!("TODO: unexpected offset used with jprint: {:?}", offset)
-        // };
         // Multiple printed terms are separated by space, except for the last item
-        if idx != val_offsets.len() - 1 {
+        if idx != values.len() - 1 {
             basic_block.push(ArmIns::Load {
                 dst: ArmRegister::R0,
                 src: "=space_fmt".to_string(),

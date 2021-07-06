@@ -1,12 +1,10 @@
 use parser;
-use std::collections::{HashMap, HashSet};
 
 use parser::{AstNode};
 use itertools::Itertools;
 use itertools::EitherOrBoth::{Both, Left, Right};
-use std::cmp::max;
 
-use super::support::{GlobalContext, BasicBlock, Pointer, Type, TypedValue, unify_types};
+use super::support::{GlobalContext, BasicBlock, TypedValue};
 use backend::arm::ir::IRNode;
 
 pub fn compile_expr(
@@ -22,48 +20,48 @@ pub fn compile_expr(
             bb.ir(IRNode::PushDoublePrecisionFloatOntoStack(*num), globalctx)
         },
         parser::AstNode::Terms(terms) => {
-            let mut val_offsets = vec![];
+            let mut values = vec![];
             for term in terms {
-                val_offsets.extend(compile_expr(globalctx, bb, term));
+                values.extend(compile_expr(globalctx, bb, term));
             }
-            val_offsets
+            values
         },
         parser::AstNode::MonadicOp {verb, expr} => {
             let vals = compile_expr(globalctx, bb, expr);
             let mut out = vec![];
             for val in &vals {
-                out.extend(bb.ir(IRNode::ApplyMonadicVerbToTypedValue(verb.clone(), val.clone()), globalctx));
+                out.extend(bb.ir(IRNode::ApplyMonadicVerbToTypedValue(*verb, val.clone()), globalctx));
             }
-            out   // this should always be the same as val_offsets because we updated in-place on the stack
+            out   // this should always be the same as vals because we updated in-place on the stack
         },
         parser::AstNode::DyadicOp {verb, lhs, rhs} => {
-            let rhs_offsets = compile_expr(globalctx, bb, rhs);
-            let lhs_offsets = compile_expr(globalctx, bb, lhs);
-            if rhs_offsets.len() != lhs_offsets.len()
-                && (lhs_offsets.len() != 1 && rhs_offsets.len() != 1) {
-                panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_offsets.len(), rhs_offsets.len())
+            let rhs_values = compile_expr(globalctx, bb, rhs);
+            let lhs_values = compile_expr(globalctx, bb, lhs);
+            if rhs_values.len() != lhs_values.len()
+                && (lhs_values.len() != 1 && rhs_values.len() != 1) {
+                panic!("Dyadic op lhs has length {}, rhs has length {}; don't know how to proceed.", lhs_values.len(), rhs_values.len())
             }
 
             // If the LHS and RHS are different lengths, the shorter of the two is repeated to the length of the other.
-            let repeated_offset = match lhs_offsets.len() {
-                1 => lhs_offsets.get(0).unwrap(),
-                _ => rhs_offsets.get(0).unwrap()
+            let repeated_value = match lhs_values.len() {
+                1 => lhs_values.get(0).unwrap(),
+                _ => rhs_values.get(0).unwrap()
             };
 
-            let mut dest_offsets = vec![];
-            for pair in lhs_offsets.iter().zip_longest(rhs_offsets.iter()) {
+            let mut dest_values = vec![];
+            for pair in lhs_values.iter().zip_longest(rhs_values.iter()) {
                 let (l, r) = match pair {
                     Both(l, r) => (l, r),
-                    Left(l) => (l, repeated_offset),
-                    Right(r) => (repeated_offset, r)
+                    Left(l) => (l, repeated_value),
+                    Right(r) => (repeated_value, r)
                 };
-                dest_offsets.extend(bb.ir(IRNode::ApplyDyadicVerbToTypedValues {verb: verb.clone(), lhs: l.clone(), rhs: r.clone()}, globalctx));
+                dest_values.extend(bb.ir(IRNode::ApplyDyadicVerbToTypedValues {verb: *verb, lhs: l.clone(), rhs: r.clone()}, globalctx));
             }
-            dest_offsets
+            dest_values
         },
         parser::AstNode::Reduce {verb, expr} => {
-            let expr_offsets = compile_expr(globalctx, bb, expr);
-            bb.ir(IRNode::ReduceTypedValues(verb.clone(), expr_offsets), globalctx)
+            let values = compile_expr(globalctx, bb, expr);
+            bb.ir(IRNode::ReduceTypedValues(*verb, values), globalctx)
         },
         parser::AstNode::GlobalVarAssgmt {ident, expr} => {
             let values = compile_expr(globalctx, bb, expr);
@@ -75,19 +73,3 @@ pub fn compile_expr(
         _ => panic!("Not ready to compile expression: {:?}", expr),
     }
 }
-
-fn determine_type(expr: &AstNode, ident_type_map: &HashMap<String, Type>) -> Option<Type> {
-    match expr {
-        parser::AstNode::Integer(_int) => Some(Type::Integer),
-        parser::AstNode::DoublePrecisionFloat(_double) => Some(Type::Double),
-        parser::AstNode::Ident(ident) => Some(ident_type_map.get(ident).unwrap().clone()),
-        parser::AstNode::DyadicOp{verb: _, lhs, rhs} =>
-            Some(unify_types(
-                &determine_type(lhs, &ident_type_map).unwrap(),
-                &determine_type(rhs, &ident_type_map).unwrap())),
-        parser::AstNode::Terms(terms) =>
-            Some(Type::Array(terms.len() as u16)),
-        _ => panic!("TODO: Unprepared to determine type of {:?}", expr)
-    }
-}
-

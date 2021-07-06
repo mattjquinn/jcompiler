@@ -10,7 +10,7 @@ use pest::Parser;
 #[grammar = "j.pest"]
 pub struct JParser;
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum MonadicVerb {
     Increment = 1,
     Square = 2,
@@ -21,7 +21,7 @@ pub enum MonadicVerb {
     ShapeOf = 7,
 }
 
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum DyadicVerb {
     Plus = 1,
     Times = 2,

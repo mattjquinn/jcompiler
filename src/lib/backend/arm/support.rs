@@ -10,12 +10,11 @@ use super::instructions::{ArmIns};
 use super::ir::{IRNode};
 use backend::arm::registers::ArmRegister;
 use parser::{DyadicVerb, MonadicVerb};
-use backend::arm::registers::ArmRegister::{R2, FP};
 
 #[derive(Debug)]
 pub enum Pointer {
-    Stack(i32),  // a (negative) offset from sp into the line-extent stack
-    Heap(i32),  // a (negative) offset from fp into the process-extent heap
+    Stack(i32),  // an offset from sp into the line-extent stack
+    Heap(i32),  // an offset from fp into the process-extent heap
 }
 
 impl Pointer {
@@ -49,10 +48,10 @@ impl Pointer {
 impl std::fmt::Display for Pointer {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         match self {
-            Pointer::Stack(i) => f.write_fmt(format_args!(
-                "Stack<offset={}>", i)),
-            Pointer::Heap(s) => f.write_fmt(format_args!(
-                "Heap<offset={}>", s))
+            Pointer::Stack(i) =>
+                f.write_fmt(format_args!("Stack<offset={}>", i)),
+            Pointer::Heap(s) =>
+                f.write_fmt(format_args!("Heap<offset={}>", s))
         }
     }
 }
@@ -66,30 +65,24 @@ impl std::clone::Clone for Pointer {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Type {
-    Integer,
-    Double,
-    Array(u16)  // length of array; no element type (can be mixed)
+#[derive(Debug, Clone)]
+pub enum TypedValue {
+    Integer(Pointer),
+    Double{ msw: Pointer, lsw: Pointer },
+    // Array(u16)  // length of array; no element type (can be mixed)
 }
 
-impl std::fmt::Display for Type {
+impl std::fmt::Display for TypedValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        // TODO: there must be a more concise way to do this
         match self {
-            Type::Integer => f.write_str("Integer"),
-            Type::Double => f.write_str("Double"),
-            Type::Array(len) =>
-                f.write_fmt(format_args!("Array[{}]", len)),
+            TypedValue::Integer(pointer) =>
+                f.write_fmt(format_args!("TypedValue::Integer<pointer={}>", pointer)),
+            TypedValue::Double{ msw, lsw } =>
+                f.write_fmt(format_args!("TypedValue::Double<msw={},lsw={}>", msw, lsw))
         }
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum TypedValue {
-    Integer(Pointer),
-    Double{ msw: Pointer, lsw: Pointer }
-}
 
 impl TypedValue {
     pub fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> TypedValue {
@@ -461,7 +454,7 @@ impl BasicBlock {
                                 self.free_register(increment_reg);
                                 vec![value]   // we've updated the existing value in-place
                             },
-                            TypedValue::Double{msw, lsw} =>
+                            TypedValue::Double{msw: _, lsw: _} =>
                                 panic!("TODO: Support monadic increment of typed value: {:?}", value)
                         }
                     },
@@ -479,7 +472,7 @@ impl BasicBlock {
                                 self.free_register(multiply_reg);
                                 vec![value]   // we've updated the existing value in-place
                             },
-                            TypedValue::Double{msw, lsw} =>
+                            TypedValue::Double{msw: _, lsw: _} =>
                                 panic!("TODO: Support monadic square of typed value: {:?}", value)
                         }
                     },
@@ -500,9 +493,9 @@ impl BasicBlock {
                                 pointer.write(temp_reg, self);
                                 self.free_register(temp_reg);
                                 self.free_register(negation_reg);
-                                vec![value]   // we've updated the existing offset in-place on the stack
+                                vec![value]   // we've updated the existing value in-place on the stack
                             },
-                            TypedValue::Double{msw, lsw} => {
+                            TypedValue::Double{msw, lsw: _} => {
                                 let msw_reg = self.claim_register();
                                 msw.read(msw_reg, self);
                                 self.instructions.push(ArmIns::ExclusiveOr {
@@ -512,7 +505,7 @@ impl BasicBlock {
                                 }); // flip the MSB of the MSW (2's complement sign bit)
                                 msw.write(msw_reg, self);
                                 self.free_register(msw_reg);
-                                vec![value]   // we've updated the existing offset in-place on the stack
+                                vec![value]   // we've updated the existing value in-place on the stack
                             }
                         }
                     },
@@ -536,7 +529,6 @@ impl BasicBlock {
                                 // we can reuse its space later on.
                                 vec![new_value]
                             }
-                            _ => panic!("TODO: support monadic ceiling for typed value: {:?}", value)
                         }
                     }
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
@@ -632,136 +624,13 @@ impl BasicBlock {
                 // TODO: we should decrement refcounts of all input values before returning
                 vec![out_value]
             },
-            IRNode::AssignTypedValuesToGlobal {ident, values} => {
+            IRNode::AssignTypedValuesToGlobal {ident: _, values} => {
                 let mut out = vec![];
-                let mut idx = 0;
                 for value in values.iter() {
                     out.push(value.persist_to_heap(self, globalctx));
-                    // match offset {
-                    //     Pointer::Stack(ty, i) => {
-                    //         match ty {
-                    //             Type::Integer => {
-                    //                 let value_reg = self.claim_register();
-                    //                 let indirection_reg = self.claim_register();
-                    //                 self.instructions.push(ArmIns::LoadOffset {
-                    //                     dst: value_reg.clone(),
-                    //                     src: ArmRegister::FP,
-                    //                     offsets: vec![*i]
-                    //                 });
-                    //                 // This load/store sequence looks confusing; it is putting the
-                    //                 // address of the element in the global var, into which the value
-                    //                 // will be placed, into the indirection register, and when the
-                    //                 // store of the value occurs, the value will "pass through"
-                    //                 // the address in the indirection register to end up in the global
-                    //                 // address space.
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     src: format!(".{}_idx{}", ident, idx),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 idx += 1;
-                    //                 self.instructions.push(ArmIns::Store {
-                    //                     src: value_reg.clone(),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 self.free_register(value_reg);
-                    //                 self.free_register(indirection_reg);
-                    //             },
-                    //             Type::Double => {
-                    //                 let msw_reg = self.claim_register();
-                    //                 let lsw_reg = self.claim_register();
-                    //                 let indirection_reg = self.claim_register();
-                    //                 self.instructions.push(ArmIns::LoadOffset {
-                    //                     dst: msw_reg.clone(),
-                    //                     src: ArmRegister::FP,
-                    //                     offsets: vec![*i]
-                    //                 });
-                    //                 self.instructions.push(ArmIns::LoadOffset {
-                    //                     dst: lsw_reg.clone(),
-                    //                     src: ArmRegister::FP,
-                    //                     offsets: vec![*i + 4] // TODO: if statically type the offset as a DoubleOffset(msw, lsw) we won't have to do this
-                    //                 });
-                    //                 // This load/store sequence looks confusing; it is putting the
-                    //                 // address of the element in the global var, into which the value
-                    //                 // will be placed, into the indirection register, and when the
-                    //                 // store of the value occurs, the value will "pass through"
-                    //                 // the address in the indirection register to end up in the global
-                    //                 // address space.
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     src: format!(".{}_idx{}_double_msw", ident, idx),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 self.instructions.push(ArmIns::Store {
-                    //                     src: msw_reg.clone(),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     src: format!(".{}_idx{}_double_lsw", ident, idx),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 self.instructions.push(ArmIns::Store {
-                    //                     src: lsw_reg.clone(),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 idx += 1;
-                    //                 self.free_register(msw_reg);
-                    //                 self.free_register(lsw_reg);
-                    //                 self.free_register(indirection_reg);
-                    //             },
-                    //             Type::Array(_) =>
-                    //                 panic!("TODO: Load stack array offsets into value registers")
-                    //         }
-                    //     },
-                    //     Pointer::Heap(ty, global_ident) => {
-                    //         match ty {
-                    //             Type::Integer => {
-                    //                 let value_reg = self.claim_register();
-                    //                 let indirection_reg = self.claim_register();
-                    //                 // TODO: make this be ArmIns::LoadIdentifierAddress
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     dst: value_reg.clone(),
-                    //                     src: format!("{}", global_ident).to_string()
-                    //                 });
-                    //                 // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     dst: value_reg.clone(),
-                    //                     src: format!("[{}]", value_reg.clone()).to_string(),
-                    //                 });
-                    //                 // This load/store sequence looks confusing; it is putting the
-                    //                 // address of the element in the global var, into which the value
-                    //                 // will be placed, into the indirection register, and when the
-                    //                 // store of the value occurs, the value will "pass through"
-                    //                 // the address in the indirection register to end up in the global
-                    //                 // address space.
-                    //                 self.instructions.push(ArmIns::Load {
-                    //                     src: format!(".{}_idx{}", ident, idx),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 idx += 1;
-                    //                 self.instructions.push(ArmIns::Store {
-                    //                     src: value_reg.clone(),
-                    //                     dst: indirection_reg.clone()
-                    //                 });
-                    //                 self.free_register(value_reg);
-                    //                 self.free_register(indirection_reg);
-                    //             }
-                    //             Type::Double =>
-                    //                 panic!("TODO: Load global MSW and LSW offsets into value registers"),
-                    //             Type::Array(_) =>
-                    //                 panic!("TODO: Load global array offsets into value registers")
-                    //         }
-                    //     }
-                    // };
                 }
                 out
             }
         }
-    }
-}
-
-pub fn unify_types(l_type: &Type, r_type: &Type) -> Type {
-    match (l_type, r_type) {
-        (Type::Integer, Type::Integer) => Type::Integer,
-        (Type::Double, Type::Double) => Type::Double,
-        _ => unimplemented!("TODO: Support unification of type {} with {}", l_type, r_type)
     }
 }
