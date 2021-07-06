@@ -71,94 +71,94 @@ impl ::Backend for ARMBackend {
         // TODO: Move boilerplate writing of preamble/postamble elsewhere.
         println!("Writing ARM...");
         let preamble = vec![
-            ".arch armv7-a".to_string(),
-            ".data".to_string(),
-            "pos_int_fmt: .asciz \"%d\"".to_string(),
-            "neg_int_fmt: .asciz \"_%d\"".to_string(),
-            "pos_double_fmt: .asciz \"%g\"".to_string(),
-            "neg_double_fmt: .asciz \"_%g\"".to_string(),
-            "line_end_nl_fmt:  .asciz \"\\n\"".to_string(),
-            "space_fmt:  .asciz \" \"".to_string(),
-            ".text".to_string(),
-            ".global main".to_string(),
-            ".extern printf".to_string(),
-            ".syntax unified".to_string(),
+            ".arch armv7-a",
+            ".data",
+            "pos_int_fmt: .asciz \"%d\"",
+            "neg_int_fmt: .asciz \"_%d\"",
+            "pos_double_fmt: .asciz \"%g\"",
+            "neg_double_fmt: .asciz \"_%g\"",
+            "line_end_nl_fmt:  .asciz \"\\n\"",
+            "space_fmt:  .asciz \" \"",
+            ".text",
+            ".global main",
+            ".extern printf",
+            ".syntax unified",
             // printing related functions
             // TODO: combine these into their common parts
             // === INTEGER ==============================================
-            "jprint_int:".to_string(),
-            "push {lr}".to_string(),
-            "cmp r1, #0".to_string(),
-            "blt jprint_int_neg".to_string(),
-            "ldr r0, =pos_int_fmt".to_string(),
-            "jprint_int_main:".to_string(),
-            "bl printf".to_string(),
-            "pop {lr}".to_string(),
-            "bx lr".to_string(),
-            "jprint_int_neg:".to_string(),
-            "ldr r0, =neg_int_fmt".to_string(),
-            "rsblt r1, r1, #0".to_string(), // takes abs value of r1
-            "bl jprint_int_main".to_string(),
+            "jprint_int:",
+            "push {lr}",
+            "cmp r1, #0",
+            "blt jprint_int_neg",
+            "ldr r0, =pos_int_fmt",
+            "jprint_int_main:",
+            "bl printf",
+            "pop {lr}",
+            "bx lr",
+            "jprint_int_neg:",
+            "ldr r0, =neg_int_fmt",
+            "rsblt r1, r1, #0", // takes abs value of r1
+            "bl jprint_int_main",
             // === DOUBLE ==============================================
-            "jprint_double:".to_string(),
-            "push {lr}".to_string(),
+            "jprint_double:",
+            "push {lr}",
             // If the double precision value has no fractional bits set,
             // print it as an integer in an effort to match J's behavior.
-            "cmp r3, #0".to_string(), // are there are any significand bits set in the LSW?
-            "bne jprint_sign_check".to_string(),
-            "mov r8, #255".to_string(), // partial mask: 0xFF
-            "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
-            "orr r8, r8, #983040".to_string(), // partial mask: 0xF0000
-            "tst r2, r8".to_string(), // apply the full mask (0xFFFFF) to the fractional bits in the MSW
-            "bne jprint_sign_check".to_string(), // if masked bits are clear, Z flag will be 1; we branch if Z flag is 0
-            "mov r0, r3".to_string(),
-            "mov r1, r2".to_string(),
-            "bl __aeabi_d2iz".to_string(), // convert the integral part (exponent) to an integer
-            "mov r1, r0".to_string(),  // the integer result is in r0
-            "bl jprint_int".to_string(), // print as an integer
-            "pop {lr}".to_string(),
-            "bx lr".to_string(),
+            "cmp r3, #0", // are there are any significand bits set in the LSW?
+            "bne jprint_sign_check",
+            "mov r8, #255", // partial mask: 0xFF
+            "orr r8, r8, #65280", // partial mask: 0xFF00
+            "orr r8, r8, #983040", // partial mask: 0xF0000
+            "tst r2, r8", // apply the full mask (0xFFFFF) to the fractional bits in the MSW
+            "bne jprint_sign_check", // if masked bits are clear, Z flag will be 1; we branch if Z flag is 0
+            "mov r0, r3",
+            "mov r1, r2",
+            "bl __aeabi_d2iz", // convert the integral part (exponent) to an integer
+            "mov r1, r0",  // the integer result is in r0
+            "bl jprint_int", // print as an integer
+            "pop {lr}",
+            "bx lr",
             // we jump here if the value does in fact have a fractional part
-            "jprint_sign_check:".to_string(),
-            "and r0, r2, #0x80000000".to_string(),
-            "cmp r0, #0x80000000".to_string(),  // true if MSB of MSW is negative
-            "beq jprint_double_neg".to_string(),
-            "ldr r0, =pos_double_fmt".to_string(),
-            "jprint_double_main:".to_string(),
-            "bl printf".to_string(),
-            "pop {lr}".to_string(),
-            "bx lr".to_string(),
-            "jprint_double_neg:".to_string(),
-            "ldr r0, =neg_double_fmt".to_string(),
-            "bic r2, r2, 2147483648".to_string(), // clear the sign bit in MSW
-            "bl jprint_double_main".to_string(),
+            "jprint_sign_check:",
+            "and r0, r2, #0x80000000",
+            "cmp r0, #0x80000000",  // true if MSB of MSW is negative
+            "beq jprint_double_neg",
+            "ldr r0, =pos_double_fmt",
+            "jprint_double_main:",
+            "bl printf",
+            "pop {lr}",
+            "bx lr",
+            "jprint_double_neg:",
+            "ldr r0, =neg_double_fmt",
+            "bic r2, r2, 2147483648", // clear the sign bit in MSW
+            "bl jprint_double_main",
             // === CEILING =============================================
             // expects msw in r1, lsw in r0; the return value (single integer) is in r0
-            "jcompiler_ceiling:".to_string(),
-            "push {lr}".to_string(),
-            "mov r9, #0".to_string(), // fractional flag; is 1 if fraction exists
-            "cmp r0, #0".to_string(), // are there are any significant bits set in the LSW?
-            "bne jcompiler_ceiling_has_fraction".to_string(),
-            "mov r8, #255".to_string(), // partial mask: 0xFF
-            "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
-            "orr r8, r8, #983040".to_string(), // partial mask: 0xF0000
-            "tst r1, r8".to_string(), // apply the full mask (0xFFFFF) to the fractional bits in the MSW
-            "beq jcompiler_ceiling_cast".to_string(), // if masked bits are clear, Z flag will be 1; we branch if Z flag is 1
-            "jcompiler_ceiling_has_fraction:".to_string(),
-            "mov r9, #1".to_string(), //  the input does have a fractional part
-            "jcompiler_ceiling_cast:".to_string(),
-            "bl __aeabi_d2iz".to_string(), // convert the integral part (exponent) to an integer; return value is in r0
-            "cmp r9, #0".to_string(),
-            "beq jcompiler_ceiling_done".to_string(), // if no fractional part, we are done
-            "cmp r0, #0".to_string(),
-            "ble jcompiler_ceiling_done".to_string(), // if result is <= 0, nothing to add
-            "add r0, r0, #1".to_string(), // add 1 if input was positive with a fractional part
-            "jcompiler_ceiling_done:".to_string(),
-            "pop {lr}".to_string(),
-            "bx lr".to_string(),
+            "jcompiler_ceiling:",
+            "push {lr}",
+            "mov r9, #0", // fractional flag; is 1 if fraction exists
+            "cmp r0, #0", // are there are any significant bits set in the LSW?
+            "bne jcompiler_ceiling_has_fraction",
+            "mov r8, #255", // partial mask: 0xFF
+            "orr r8, r8, #65280", // partial mask: 0xFF00
+            "orr r8, r8, #983040", // partial mask: 0xF0000
+            "tst r1, r8", // apply the full mask (0xFFFFF) to the fractional bits in the MSW
+            "beq jcompiler_ceiling_cast", // if masked bits are clear, Z flag will be 1; we branch if Z flag is 1
+            "jcompiler_ceiling_has_fraction:",
+            "mov r9, #1", //  the input does have a fractional part
+            "jcompiler_ceiling_cast:",
+            "bl __aeabi_d2iz", // convert the integral part (exponent) to an integer; return value is in r0
+            "cmp r9, #0",
+            "beq jcompiler_ceiling_done", // if no fractional part, we are done
+            "cmp r0, #0",
+            "ble jcompiler_ceiling_done", // if result is <= 0, nothing to add
+            "add r0, r0, #1", // add 1 if input was positive with a fractional part
+            "jcompiler_ceiling_done:",
+            "pop {lr}",
+            "bx lr",
             // main
-            "main:".to_string(),
-            "push {ip, lr}".to_string(),
+            "main:",
+            "push {ip, lr}",
         ];
         for instr in preamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
