@@ -192,7 +192,7 @@ fn jprint_offset(val_offsets: &Vec<TypedValue>, globalctx: &GlobalContext, basic
     for (idx, value) in val_offsets.iter().enumerate() {
         match value {
             TypedValue::Integer(pointer) => {
-                pointer.load(ArmRegister::R1, basic_block);
+                pointer.read(ArmRegister::R1, basic_block);
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
             }
             _ => panic!("TODO: Support jprint_offset for: {:?}", value)

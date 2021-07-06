@@ -27,7 +27,7 @@ impl Pointer {
         }
     }
 
-    pub fn load(&self, dst: ArmRegister, basic_block: &mut BasicBlock) {
+    pub fn read(&self, dst: ArmRegister, basic_block: &mut BasicBlock) {
         let (src, offset) = self.get_offset();
         basic_block.push(ArmIns::LoadOffset {
             dst,
@@ -36,7 +36,7 @@ impl Pointer {
         });
     }
 
-    pub fn store(&self, src: ArmRegister, basic_block: &mut BasicBlock) {
+    pub fn write(&self, src: ArmRegister, basic_block: &mut BasicBlock) {
         let (dst, offset) = self.get_offset();
         basic_block.push(ArmIns::StoreOffset {
             dst,
@@ -102,8 +102,8 @@ impl TypedValue {
                         match &out {
                             TypedValue::Integer(dst) => {
                                 let transfer_reg = basic_block.claim_register();
-                                src.load(transfer_reg, basic_block);
-                                dst.store(transfer_reg, basic_block);
+                                src.read(transfer_reg, basic_block);
+                                dst.write(transfer_reg, basic_block);
                                 basic_block.free_register(transfer_reg);
                             },
                             _ => panic!("Unreachable")
@@ -126,10 +126,10 @@ impl TypedValue {
                         match &out {
                             TypedValue::Double { msw: msw_heap, lsw: lsw_heap} => {
                                 let transfer_reg = basic_block.claim_register();
-                                msw.load(transfer_reg, basic_block);
-                                msw_heap.store(transfer_reg, basic_block);
-                                lsw.load(transfer_reg, basic_block);
-                                lsw_heap.store(transfer_reg, basic_block);
+                                msw.read(transfer_reg, basic_block);
+                                msw_heap.write(transfer_reg, basic_block);
+                                lsw.read(transfer_reg, basic_block);
+                                lsw_heap.write(transfer_reg, basic_block);
                                 basic_block.free_register(transfer_reg);
                                 out
                             },
@@ -379,7 +379,7 @@ impl BasicBlock {
                     TypedValue::Integer(dst) => {
                         let transfer_reg = self.claim_register();
                         self.push(ArmIns::MoveImm { imm, dst: transfer_reg.clone() });
-                        dst.store(transfer_reg.clone(), self);
+                        dst.write(transfer_reg.clone(), self);
                         self.free_register(transfer_reg);
                     },
                     _ => panic!("Unreachable")
@@ -416,7 +416,7 @@ impl BasicBlock {
                                     dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
                                 self.free_register(temp_reg);
                             }
-                            lsw.store(lsw_reg, self);
+                            lsw.write(lsw_reg, self);
                             self.free_register(lsw_reg);
                         }
                         { // MSW
@@ -437,7 +437,7 @@ impl BasicBlock {
                                     dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
                                 self.free_register(temp_reg);
                             }
-                            msw.store(msw_reg, self);
+                            msw.write(msw_reg, self);
                             self.free_register(msw_reg);
                         }
                         vec![out]
@@ -451,13 +451,13 @@ impl BasicBlock {
                         match &value {
                             TypedValue::Integer(pointer) => {
                                 let increment_reg = self.claim_register();
-                                pointer.load(increment_reg, self);
+                                pointer.read(increment_reg, self);
                                 self.push(ArmIns::AddImm {
                                     dst: increment_reg,
                                     src: increment_reg,
                                     imm: 1
                                 });
-                                pointer.store(increment_reg, self);
+                                pointer.write(increment_reg, self);
                                 self.free_register(increment_reg);
                                 vec![value]   // we've updated the existing value in-place
                             },
@@ -469,13 +469,13 @@ impl BasicBlock {
                         match &value {
                             TypedValue::Integer(pointer) => {
                                 let multiply_reg = self.claim_register();
-                                pointer.load(multiply_reg, self);
+                                pointer.read(multiply_reg, self);
                                 self.instructions.push(ArmIns::Multiply {
                                     dst: multiply_reg,
                                     src: multiply_reg,
                                     mul: multiply_reg,
                                 });
-                                pointer.store(multiply_reg, self);
+                                pointer.write(multiply_reg, self);
                                 self.free_register(multiply_reg);
                                 vec![value]   // we've updated the existing value in-place
                             },
@@ -488,7 +488,7 @@ impl BasicBlock {
                             TypedValue::Integer(pointer) => {
                                 let temp_reg = self.claim_register();
                                 let negation_reg = self.claim_register();
-                                pointer.load(temp_reg, self);
+                                pointer.read(temp_reg, self);
                                 self.instructions.push(ArmIns::MoveImm {
                                     dst: negation_reg, imm: 0 });
                                 // subtract the immediate from 0
@@ -497,20 +497,20 @@ impl BasicBlock {
                                     src: negation_reg,
                                     sub: temp_reg
                                 });
-                                pointer.store(temp_reg, self);
+                                pointer.write(temp_reg, self);
                                 self.free_register(temp_reg);
                                 self.free_register(negation_reg);
                                 vec![value]   // we've updated the existing offset in-place on the stack
                             },
                             TypedValue::Double{msw, lsw} => {
                                 let msw_reg = self.claim_register();
-                                msw.load(msw_reg, self);
+                                msw.read(msw_reg, self);
                                 self.instructions.push(ArmIns::ExclusiveOr {
                                     dst: msw_reg,
                                     src: msw_reg,
                                     operand: 0x80000000
                                 }); // flip the MSB of the MSW (2's complement sign bit)
-                                msw.store(msw_reg, self);
+                                msw.write(msw_reg, self);
                                 self.free_register(msw_reg);
                                 vec![value]   // we've updated the existing offset in-place on the stack
                             }
@@ -522,13 +522,13 @@ impl BasicBlock {
                             TypedValue::Double { msw, lsw } => {
                                 // We could call "modf" in math.h, but we don't actually need the fractional part.
                                 // TODO: we should be claiming these registers by name from the BasicBlock
-                                msw.load(ArmRegister::R1, self); // the MSW is expected in r1
-                                lsw.load(ArmRegister::R0, self); // the MSW is expected in r0
+                                msw.read(ArmRegister::R1, self); // the MSW is expected in r1
+                                lsw.read(ArmRegister::R0, self); // the MSW is expected in r0
                                 self.push(ArmIns::BranchAndLink { addr: "jcompiler_ceiling" });
                                 let new_value = self.stack_allocate_int();
                                 match &new_value {
                                     TypedValue::Integer(pointer) => {
-                                        pointer.store(ArmRegister::R0, self);
+                                        pointer.write(ArmRegister::R0, self);
                                     },
                                     _ => panic!("Unreachable")
                                 }
@@ -548,8 +548,8 @@ impl BasicBlock {
                     (TypedValue::Integer(lhsptr), TypedValue::Integer(rhsptr)) => {
                         let lhs_reg = self.claim_register();
                         let rhs_reg = self.claim_register();
-                        lhsptr.load(lhs_reg, self);
-                        rhsptr.load(rhs_reg, self);
+                        lhsptr.read(lhs_reg, self);
+                        rhsptr.read(rhs_reg, self);
                         match verb {
                             DyadicVerb::Plus =>
                                 self.instructions.push(
@@ -588,7 +588,7 @@ impl BasicBlock {
                         }
                         let out_value = self.stack_allocate_int();
                         match &out_value {
-                            TypedValue::Integer(pointer) => pointer.store(rhs_reg, self),
+                            TypedValue::Integer(pointer) => pointer.write(rhs_reg, self),
                             _ => panic!("Unreachable")
                         }
                         self.free_register(lhs_reg);
@@ -598,65 +598,39 @@ impl BasicBlock {
                     (_, _) => panic!("TODO: Support dyadic verb on types lhs={:?}, rhs={:?}", lhs, rhs)
                 }
             },
-            IRNode::ReduceTypedValues(verb, expr_offsets) => {
-                panic!("TODO: Support ReduceTypedValues");
-                // // Initialize the accumulator to expr's last offset value
-                // let accum_reg = self.claim_register();
-                // let accum_offset = expr_offsets.last().unwrap();
-                // match &accum_offset {
-                //     Pointer::Stack(_type, i) =>
-                //         self.instructions.push(ArmIns::LoadOffset {
-                //             dst: accum_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
-                //     Pointer::Heap(_type, _ident) => unimplemented!("TODO: Support load from global.")
-                // }
-                //
-                // // Accumulate from right to left.
-                // let operand_reg = self.claim_register();
-                // for offset_idx in expr_offsets[0..expr_offsets.len()-1].iter().rev() {
-                //     match offset_idx {
-                //         Pointer::Stack(_type, i) =>
-                //             self.instructions.push(ArmIns::LoadOffset {
-                //                 dst: operand_reg.clone(), src: ArmRegister::FP, offsets: vec![*i] }),
-                //         Pointer::Heap(_type, _ident) => unimplemented!("TODO: Support load from global.")
-                //     };
-                //     match verb {
-                //         DyadicVerb::Plus => {
-                //             self.instructions.push(ArmIns::Add {
-                //                 dst: accum_reg.clone(),
-                //                 src: operand_reg.clone(),
-                //                 add: accum_reg.clone()
-                //             });
-                //         },
-                //         DyadicVerb::Minus => {
-                //             self.instructions.push(ArmIns::Sub {
-                //                 dst: accum_reg.clone(),
-                //                 src: operand_reg.clone(),
-                //                 sub: accum_reg.clone()
-                //             });
-                //         },
-                //         DyadicVerb::Times => {
-                //             self.instructions.push(ArmIns::Multiply {
-                //                 dst: accum_reg.clone(),
-                //                 src: operand_reg.clone(),
-                //                 mul: accum_reg.clone()
-                //             });
-                //         },
-                //         _ => unimplemented!("TODO: Support reduction of monadic verb: {:?}", verb)
-                //     }
-                // }
-                // self.free_register(operand_reg);
-                //
-                // // Store the accumulator in expr's first offset, and return that
-                // // single offset here.
-                // match &accum_offset {
-                //     Pointer::Stack(_type, i) =>
-                //         self.instructions.push(ArmIns::StoreOffset {
-                //             src: accum_reg.clone(), dst: ArmRegister::FP, offsets: vec![*i] }),
-                //     Pointer::Heap(_type, _ident) => unimplemented!("TODO: Support store to global.")
-                // };
-                //
-                // self.free_register(accum_reg.clone());
-                // vec![accum_offset.clone()]
+            IRNode::ReduceTypedValues(verb, values) => {
+                // Initialize the accumulator to the last value
+                let accum_reg = self.claim_register();
+                let accum_value = values.last().unwrap();
+                match &accum_value {
+                    TypedValue::Integer(pointer) => pointer.read(accum_reg, self),
+                    _ => panic!("TODO: Support initial accumulation value: {:?}", accum_value)
+                }
+
+                // Accumulate from right to left.
+                let operand_reg = self.claim_register();
+                for value in values[0..values.len()-1].iter().rev() {
+                    match &value {
+                        TypedValue::Integer(pointer) => pointer.read(operand_reg, self),
+                        _ => panic!("TODO: Support accumulation operand: {:?}", value)
+                    }
+                    match verb {
+                        DyadicVerb::Plus => self.push(ArmIns::Add { dst: accum_reg, src: operand_reg, add: accum_reg }),
+                        DyadicVerb::Minus => self.push(ArmIns::Sub { dst: accum_reg, src: operand_reg, sub: accum_reg }),
+                        DyadicVerb::Times => self.push(ArmIns::Multiply { dst: accum_reg, src: operand_reg, mul: accum_reg }),
+                        _ => unimplemented!("TODO: Support reduction of monadic verb: {:?}", verb)
+                    }
+                }
+                self.free_register(operand_reg);
+
+                let out_value = self.stack_allocate_int();
+                match &out_value {
+                    TypedValue::Integer(pointer) => pointer.write(accum_reg, self),
+                    _ => panic!("Unreachable")
+                };
+                self.free_register(accum_reg.clone());
+                // TODO: we should decrement refcounts of all input values before returning
+                vec![out_value]
             },
             IRNode::AssignTypedValuesToGlobal {ident, values} => {
                 let mut out = vec![];
