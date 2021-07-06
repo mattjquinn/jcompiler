@@ -543,80 +543,60 @@ impl BasicBlock {
                 }
             },
             IRNode::ApplyDyadicVerbToTypedValues {verb, lhs, rhs} => {
-                panic!("TODO: Support ApplyDyadicVerbToTypedValues");
-                // let lhs_reg = self.claim_register();
-                // let rhs_reg = self.claim_register();
-                //
-                // let l_type = match lhs {
-                //     Pointer::Stack(ty, i) => {
-                //         self.instructions.push(
-                //             ArmIns::LoadOffset { dst: lhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
-                //         ty
-                //     },
-                //     Pointer::Heap(ty, ident) => {
-                //         self.instructions.push(
-                //             // TODO: make this be ArmIns::LoadIdentifierAddress
-                //             ArmIns::Load { dst: lhs_reg.clone(), src: format!(".{}", ident).to_string() });
-                //         self.instructions.push(
-                //             // TODO: make this be ArmIns::LoadFromDereferencedAddressInRegister
-                //             ArmIns::Load { dst: lhs_reg.clone(), src: format!("[{}]", lhs_reg).to_string() });
-                //         ty
-                //     }
-                // };
-                // let r_type = match rhs {
-                //     Pointer::Stack(ty, i) => {
-                //         self.instructions.push(
-                //             ArmIns::LoadOffset { dst: rhs_reg.clone(), src: ArmRegister::FP, offsets: vec![i] });
-                //         ty
-                //     }
-                //     // TODO: it's not clear why this is unimplemented when we seem to implement it for the left-hand side above
-                //     Pointer::Heap(_type, _ident) => unimplemented!("TODO: Support load from global.")
-                // };
-                // let unified_type = unify_types(&l_type, &r_type);
-                // match verb {
-                //     DyadicVerb::Plus =>
-                //         self.instructions.push(
-                //             ArmIns::Add { dst: rhs_reg.clone(), src: lhs_reg.clone(), add: rhs_reg.clone() }),
-                //     DyadicVerb::Times =>
-                //         self.instructions.push(
-                //             ArmIns::Multiply { dst: rhs_reg.clone(), src: lhs_reg.clone(), mul: rhs_reg.clone() }),
-                //     DyadicVerb::Minus =>
-                //         self.instructions.push(
-                //             ArmIns::Sub { dst: rhs_reg.clone(), src: lhs_reg.clone(), sub: rhs_reg.clone() }),
-                //     DyadicVerb::LessThan => {
-                //         self.instructions.push(
-                //             ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
-                //         self.instructions.push(
-                //             ArmIns::MoveLT { dst: rhs_reg.clone(), src: 1 });
-                //         self.instructions.push(
-                //             ArmIns::MoveGE { dst: rhs_reg.clone(), src: 0 });
-                //     },
-                //     DyadicVerb::Equal => {
-                //         self.instructions.push(
-                //             ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
-                //         self.instructions.push(
-                //             ArmIns::MoveEQ { dst: rhs_reg.clone(), src: 1 });
-                //         self.instructions.push(
-                //             ArmIns::MoveNE { dst: rhs_reg.clone(), src: 0 });
-                //     }
-                //     DyadicVerb::LargerThan => {
-                //         self.instructions.push(
-                //             ArmIns::Compare { lhs: lhs_reg.clone(), rhs: rhs_reg.clone() });
-                //         self.instructions.push(
-                //             ArmIns::MoveGT { dst: rhs_reg.clone(), src: 1 });
-                //         self.instructions.push(
-                //             ArmIns::MoveLE { dst: rhs_reg.clone(), src: 0 });
-                //     }
-                //     _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
-                // }
-                // let dest_offset = self._stack_allocate(4);
-                // self.instructions.push(ArmIns::StoreOffset {
-                //     src: rhs_reg.clone(), dst: ArmRegister::FP, offsets: vec![dest_offset] });
-                //
-                // self.free_register(lhs_reg);
-                // self.free_register(rhs_reg);
-                //
-                // vec![Pointer::Stack(unified_type, dest_offset)]
+
+                match (&lhs, &rhs) {
+                    (TypedValue::Integer(lhsptr), TypedValue::Integer(rhsptr)) => {
+                        let lhs_reg = self.claim_register();
+                        let rhs_reg = self.claim_register();
+                        lhsptr.load(lhs_reg, self);
+                        rhsptr.load(rhs_reg, self);
+                        match verb {
+                            DyadicVerb::Plus =>
+                                self.instructions.push(
+                                    ArmIns::Add { dst: rhs_reg, src: lhs_reg, add: rhs_reg }),
+                            DyadicVerb::Times =>
+                                self.instructions.push(
+                                    ArmIns::Multiply { dst: rhs_reg, src: lhs_reg, mul: rhs_reg }),
+                            DyadicVerb::Minus =>
+                                self.instructions.push(
+                                    ArmIns::Sub { dst: rhs_reg, src: lhs_reg, sub: rhs_reg }),
+                            DyadicVerb::LessThan => {
+                                self.instructions.push(
+                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                                self.instructions.push(
+                                    ArmIns::MoveLT { dst: rhs_reg, src: 1 });
+                                self.instructions.push(
+                                    ArmIns::MoveGE { dst: rhs_reg, src: 0 });
+                            },
+                            DyadicVerb::Equal => {
+                                self.instructions.push(
+                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                                self.instructions.push(
+                                    ArmIns::MoveEQ { dst: rhs_reg, src: 1 });
+                                self.instructions.push(
+                                    ArmIns::MoveNE { dst: rhs_reg, src: 0 });
+                            }
+                            DyadicVerb::LargerThan => {
+                                self.instructions.push(
+                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                                self.instructions.push(
+                                    ArmIns::MoveGT { dst: rhs_reg, src: 1 });
+                                self.instructions.push(
+                                    ArmIns::MoveLE { dst: rhs_reg, src: 0 });
+                            }
+                            _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
+                        }
+                        let out_value = self.stack_allocate_int();
+                        match &out_value {
+                            TypedValue::Integer(pointer) => pointer.store(rhs_reg, self),
+                            _ => panic!("Unreachable")
+                        }
+                        self.free_register(lhs_reg);
+                        self.free_register(rhs_reg);
+                        vec![out_value]
+                    },
+                    (_, _) => panic!("TODO: Support dyadic verb on types lhs={:?}, rhs={:?}", lhs, rhs)
+                }
             },
             IRNode::ReduceTypedValues(verb, expr_offsets) => {
                 panic!("TODO: Support ReduceTypedValues");
