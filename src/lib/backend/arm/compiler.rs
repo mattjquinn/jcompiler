@@ -375,8 +375,8 @@ impl BasicBlock {
                 match &val {
                     TypedValue::Integer(dst) => {
                         let transfer_reg = self.claim_register();
-                        self.push(ArmIns::MoveImm { imm, dst: transfer_reg.clone() });
-                        dst.write(transfer_reg.clone(), self);
+                        self.push(ArmIns::MoveImm { imm, dst: transfer_reg });
+                        dst.write(transfer_reg, self);
                         self.free_register(transfer_reg);
                     },
                     _ => panic!("Unreachable")
@@ -400,17 +400,17 @@ impl BasicBlock {
                             {
                                 let half1 = (bits & 0xFFFF) as u16;
                                 self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half1, dst: lsw_reg.clone() });
+                                    imm: half1, dst: lsw_reg });
                             }
                             {
                                 let temp_reg = self.claim_register();
                                 let half2 = ((bits >> 16) & 0xFFFF) as u16;
                                 self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half2, dst: temp_reg.clone() });
+                                    imm: half2, dst: temp_reg });
                                 self.push(ArmIns::LeftShift {
-                                    src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                                    src: temp_reg, dst: temp_reg, n_bits: 16 });
                                 self.push(ArmIns::Add {
-                                    dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                                    dst: lsw_reg, src: lsw_reg, add: temp_reg });
                                 self.free_register(temp_reg);
                             }
                             lsw.write(lsw_reg, self);
@@ -421,17 +421,17 @@ impl BasicBlock {
                             {
                                 let half1 = ((bits >> 32) & 0xFFFF) as u16;
                                 self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half1, dst: msw_reg.clone() });
+                                    imm: half1, dst: msw_reg });
                             }
                             {
                                 let temp_reg = self.claim_register();
                                 let half2 = ((bits >> 48) & 0xFFFF) as u16;
                                 self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half2, dst: temp_reg.clone() });
+                                    imm: half2, dst: temp_reg });
                                 self.push(ArmIns::LeftShift {
-                                    src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                                    src: temp_reg, dst: temp_reg, n_bits: 16 });
                                 self.push(ArmIns::Add {
-                                    dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                                    dst: msw_reg, src: msw_reg, add: temp_reg });
                                 self.free_register(temp_reg);
                             }
                             msw.write(msw_reg, self);
@@ -624,7 +624,7 @@ impl BasicBlock {
                     TypedValue::Integer(pointer) => pointer.write(accum_reg, self),
                     _ => panic!("Unreachable")
                 };
-                self.free_register(accum_reg.clone());
+                self.free_register(accum_reg);
                 // TODO: we should decrement refcounts of all input values before returning
                 vec![out_value]
             },
