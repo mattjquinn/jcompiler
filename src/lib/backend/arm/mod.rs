@@ -140,7 +140,7 @@ impl ::Backend for ARMBackend {
             "jcompiler_ceiling:".to_string(),
             "push {lr}".to_string(),
             "mov r9, #0".to_string(), // fractional flag; is 1 if fraction exists
-            "cmp r0, #0".to_string(), // are there are any significand bits set in the LSW?
+            "cmp r0, #0".to_string(), // are there are any significant bits set in the LSW?
             "bne jcompiler_ceiling_has_fraction".to_string(),
             "mov r8, #255".to_string(), // partial mask: 0xFF
             "orr r8, r8, #65280".to_string(), // partial mask: 0xFF00
@@ -153,8 +153,8 @@ impl ::Backend for ARMBackend {
             "bl __aeabi_d2iz".to_string(), // convert the integral part (exponent) to an integer; return value is in r0
             "cmp r9, #0".to_string(),
             "beq jcompiler_ceiling_done".to_string(), // if no fractional part, we are done
-            "cmp r0, #1".to_string(),
-            "blt jcompiler_ceiling_done".to_string(), // if result is <= 0, nothing to add
+            "cmp r0, #0".to_string(),
+            "ble jcompiler_ceiling_done".to_string(), // if result is <= 0, nothing to add
             "add r0, r0, #1".to_string(), // add 1 if input was positive with a fractional part
             "jcompiler_ceiling_done:".to_string(),
             "pop {lr}".to_string(),
@@ -262,15 +262,14 @@ fn jprint_offset(val_offsets: &Vec<TypedValue>, globalctx: &GlobalContext, basic
         //     },
         //     _ => panic!("TODO: unexpected offset used with jprint: {:?}", offset)
         // };
-        //
-        // // Multiple printed terms are separated by space, except for the last item
-        // if idx != val_offsets.len() - 1 {
-        //     basic_block.push(ArmIns::Load {
-        //         dst: ArmRegister::R0,
-        //         src: "=space_fmt".to_string(),
-        //     });
-        //     basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
-        // }
+        // Multiple printed terms are separated by space, except for the last item
+        if idx != val_offsets.len() - 1 {
+            basic_block.push(ArmIns::Load {
+                dst: ArmRegister::R0,
+                src: "=space_fmt".to_string(),
+            });
+            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
+        }
     }
 }
 

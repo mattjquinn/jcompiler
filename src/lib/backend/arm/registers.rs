@@ -1,6 +1,6 @@
 use std::fmt::{Formatter, Error};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum ArmRegister {
     R0,
     R1,

@@ -96,14 +96,14 @@ impl TypedValue {
         match self {
             TypedValue::Integer(src) => {
                 match src {
-                    Pointer::Heap(_) => self.clone(),
+                    Pointer::Heap(_) => self.clone(),  // already on the heap, nothing to do
                     Pointer::Stack(_) => {
                         let out = globalctx.heap_allocate_int();
                         match &out {
                             TypedValue::Integer(dst) => {
                                 let transfer_reg = basic_block.claim_register();
-                                src.load(transfer_reg.clone(), basic_block);
-                                dst.store(transfer_reg.clone(), basic_block);
+                                src.load(transfer_reg, basic_block);
+                                dst.store(transfer_reg, basic_block);
                                 basic_block.free_register(transfer_reg);
                             },
                             _ => panic!("Unreachable")
@@ -116,13 +116,25 @@ impl TypedValue {
                 match (msw, lsw) {
                     (Pointer::Heap(_), Pointer::Heap(_)) => self.clone(), // TODO: increment refcount
                     (Pointer::Heap(_), Pointer::Stack(_)) => {
-                        panic!("TODO: persist stack Double MSW to Heap")
+                        panic!("TODO: persist only stack Double MSW to Heap")
                     },
                     (Pointer::Stack(_), Pointer::Heap(_)) => {
-                        panic!("TODO: persist stack Double LSW to Heap")
+                        panic!("TODO: persist only stack Double LSW to Heap")
                     }
                     (Pointer::Stack(_), Pointer::Stack(_)) => {
-                        panic!("TODO: persist stack Double both MSW and LSW to Heap")
+                        let out = globalctx.heap_allocate_double();
+                        match &out {
+                            TypedValue::Double { msw: msw_heap, lsw: lsw_heap} => {
+                                let transfer_reg = basic_block.claim_register();
+                                msw.load(transfer_reg, basic_block);
+                                msw_heap.store(transfer_reg, basic_block);
+                                lsw.load(transfer_reg, basic_block);
+                                lsw_heap.store(transfer_reg, basic_block);
+                                basic_block.free_register(transfer_reg);
+                                out
+                            },
+                            _ => panic!("Unreachable")
+                        }
                     }
                 }
             }
@@ -375,283 +387,160 @@ impl BasicBlock {
                 vec![val]
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
-                panic!("TODO: handle stack allocation for Double")
-                // let bits = num.bits();
-                // let hex_rep = format!("{:x}", bits);
-                // let binary_rep = format!("{:064b}", bits);
-                // println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
-                //
-                // let offset = self.stack_allocate_double();
-                //
-                // // Note: due to limited width of ARM's MOV immediate field,
-                // // we split the initialization of both MSW and LWS over multiple
-                // // per-byte instructions; probably could be optimized.
-                // { // LSW
-                //     let lsw_reg = self.claim_register();
-                //     {
-                //         let half1 = (bits & 0xFFFF) as u16;
-                //         self.instructions.push(ArmIns::MoveImmUnsigned {
-                //             imm: half1, dst: lsw_reg.clone() });
-                //     }
-                //     {
-                //         let temp_reg = self.claim_register();
-                //         let half2 = ((bits >> 16) & 0xFFFF) as u16;
-                //         self.instructions.push(ArmIns::MoveImmUnsigned {
-                //             imm: half2, dst: temp_reg.clone() });
-                //         self.instructions.push(ArmIns::LeftShift {
-                //             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
-                //         self.instructions.push(ArmIns::Add {
-                //             dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
-                //         self.free_register(temp_reg);
-                //     }
-                //     self.instructions.push(ArmIns::StoreOffset {
-                //         dst: ArmRegister::FP, src: lsw_reg.clone(),
-                //         offsets: vec![offset + 4]});// TODO: if we have a DoubleOffset(msw,lsw) we won't need the manual + 4
-                //     self.free_register(lsw_reg);
-                // }
-                // { // MSW
-                //     let msw_reg = self.claim_register();
-                //     {
-                //         let half1 = ((bits >> 32) & 0xFFFF) as u16;
-                //         self.instructions.push(ArmIns::MoveImmUnsigned {
-                //             imm: half1, dst: msw_reg.clone() });
-                //     }
-                //     {
-                //         let temp_reg = self.claim_register();
-                //         let half2 = ((bits >> 48) & 0xFFFF) as u16;
-                //         self.instructions.push(ArmIns::MoveImmUnsigned {
-                //             imm: half2, dst: temp_reg.clone() });
-                //         self.instructions.push(ArmIns::LeftShift {
-                //             src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
-                //         self.instructions.push(ArmIns::Add {
-                //             dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
-                //         self.free_register(temp_reg);
-                //     }
-                //     self.instructions.push(ArmIns::StoreOffset {
-                //         dst: ArmRegister::FP, src: msw_reg.clone(),
-                //         offsets: vec![offset]});
-                //     self.free_register(msw_reg);
-                // }
-                // vec![TypedValue::Double{msw: Pointer::Stack(offset), lsw: Pointer::Stack(offset+4)}]
+                let bits = num.bits();
+                let hex_rep = format!("{:x}", bits);
+                let binary_rep = format!("{:064b}", bits);
+                println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
+
+                let out = self.stack_allocate_double();
+                match &out {
+                    TypedValue::Double { msw, lsw } => {
+                        // Note: due to limited width of ARM's MOV immediate field,
+                        // we split the initialization of both MSW and LWS over multiple
+                        // per-byte instructions; probably could be optimized.
+                        { // LSW
+                            let lsw_reg = self.claim_register();
+                            {
+                                let half1 = (bits & 0xFFFF) as u16;
+                                self.push(ArmIns::MoveImmUnsigned {
+                                    imm: half1, dst: lsw_reg.clone() });
+                            }
+                            {
+                                let temp_reg = self.claim_register();
+                                let half2 = ((bits >> 16) & 0xFFFF) as u16;
+                                self.push(ArmIns::MoveImmUnsigned {
+                                    imm: half2, dst: temp_reg.clone() });
+                                self.push(ArmIns::LeftShift {
+                                    src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                                self.push(ArmIns::Add {
+                                    dst: lsw_reg.clone(), src: lsw_reg.clone(), add: temp_reg.clone() });
+                                self.free_register(temp_reg);
+                            }
+                            lsw.store(lsw_reg, self);
+                            self.free_register(lsw_reg);
+                        }
+                        { // MSW
+                            let msw_reg = self.claim_register();
+                            {
+                                let half1 = ((bits >> 32) & 0xFFFF) as u16;
+                                self.push(ArmIns::MoveImmUnsigned {
+                                    imm: half1, dst: msw_reg.clone() });
+                            }
+                            {
+                                let temp_reg = self.claim_register();
+                                let half2 = ((bits >> 48) & 0xFFFF) as u16;
+                                self.push(ArmIns::MoveImmUnsigned {
+                                    imm: half2, dst: temp_reg.clone() });
+                                self.push(ArmIns::LeftShift {
+                                    src: temp_reg.clone(), dst: temp_reg.clone(), n_bits: 16 });
+                                self.push(ArmIns::Add {
+                                    dst: msw_reg.clone(), src: msw_reg.clone(), add: temp_reg.clone() });
+                                self.free_register(temp_reg);
+                            }
+                            msw.store(msw_reg, self);
+                            self.free_register(msw_reg);
+                        }
+                        vec![out]
+                    },
+                    _ => panic!("Unreachable")
+                }
             }
-            IRNode::ApplyMonadicVerbToTypedValue(verb, offset) => {
-                panic!("TODO: Support ApplyMonadicVerbToTypedValue");
-                // let (offset_type, offset_idx) = match &offset {
-                //     Pointer::Stack(idx) => (idx.clone()),
-                //     Pointer::Heap(ident) => {
-                //         // If this is a global offset, we need to copy it into the heap.
-                //         match &ty {
-                //             Type::Integer => {
-                //                 let temp_reg = self.claim_register();
-                //                 let heap_offset = self.heap_allocate_int();
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!(".{}", ident).to_string()
-                //                 });
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!("[{}]", temp_reg.clone())
-                //                 });
-                //                 self.push(ArmIns::StoreOffset {
-                //                     src: temp_reg.clone(),
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![heap_offset]
-                //                 });
-                //                 self.free_register(temp_reg);
-                //                 (Type::Integer, heap_offset)
-                //             },
-                //             Type::Double => {
-                //                 let temp_reg = self.claim_register();
-                //                 let heap_offset = self.heap_allocate_double();
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!(".{}_msw", ident).to_string()
-                //                 });
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!("[{}]", temp_reg.clone())
-                //                 });
-                //                 self.push(ArmIns::StoreOffset {
-                //                     src: temp_reg.clone(),
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![heap_offset]
-                //                 });
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!(".{}_lsw", ident).to_string()
-                //                 });
-                //                 self.push(ArmIns::Load {
-                //                     dst: temp_reg.clone(),
-                //                     src: format!("[{}]", temp_reg.clone())
-                //                 });
-                //                 self.push(ArmIns::StoreOffset {
-                //                     src: temp_reg.clone(),
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![heap_offset + 4]
-                //                 });
-                //                 self.free_register(temp_reg);
-                //                 (Type::Integer, heap_offset)
-                //             },
-                //             _ => panic!("TODO: allocate heap space for type: {}", ty)
-                //         }
-                //     }
-                // };
-                // let new_offset = match verb {
-                //     MonadicVerb::Increment => {
-                //         if offset_type != Type::Integer {
-                //             panic!("TODO: Support monadic increment of type: {}", offset_type)
-                //         }
-                //         let temp_reg = self.claim_register();
-                //         self.instructions.push(ArmIns::LoadOffset {
-                //             dst: temp_reg.clone(),
-                //             src: ArmRegister::FP,
-                //             offsets: vec![offset_idx]
-                //         });
-                //         self.instructions.push(ArmIns::AddImm {
-                //             dst: temp_reg.clone(),
-                //             src: temp_reg.clone(),
-                //             imm: 1
-                //         });
-                //         self.instructions.push(ArmIns::StoreOffset {
-                //             src: temp_reg.clone(),
-                //             dst: ArmRegister::FP,
-                //             offsets: vec![offset_idx]
-                //         });
-                //         self.free_register(temp_reg);
-                //         None   // we've updated the existing offset in-place on the stack
-                //     },
-                //     MonadicVerb::Square => {
-                //         if offset_type != Type::Integer {
-                //             panic!("TODO: Support monadic square of type: {}", offset_type)
-                //         }
-                //         let temp_reg = self.claim_register();
-                //         self.instructions.push(ArmIns::LoadOffset {
-                //             dst: temp_reg.clone(),
-                //             src: ArmRegister::FP,
-                //             offsets: vec![offset_idx]
-                //         });
-                //         self.instructions.push(ArmIns::Multiply {
-                //             dst: temp_reg.clone(),
-                //             src: temp_reg.clone(),
-                //             mul: temp_reg.clone()
-                //         });
-                //         self.instructions.push(ArmIns::StoreOffset {
-                //             src: temp_reg.clone(),
-                //             dst: ArmRegister::FP,
-                //             offsets: vec![offset_idx]
-                //         });
-                //         self.free_register(temp_reg);
-                //         None   // we've updated the existing offset in-place on the stack
-                //     },
-                //     MonadicVerb::Negate => {
-                //         match offset_type {
-                //             Type::Integer => {
-                //                 let temp_reg = self.claim_register();
-                //                 let negation_reg = self.claim_register();
-                //                 self.instructions.push(ArmIns::LoadOffset {
-                //                     dst: temp_reg.clone(),
-                //                     src: ArmRegister::FP,
-                //                     offsets: vec![offset_idx]
-                //                 });
-                //                 self.instructions.push(ArmIns::MoveImm { dst: negation_reg.clone(), imm: 0 });
-                //                 // subtract the immediate from 0
-                //                 self.instructions.push(ArmIns::Sub {
-                //                     dst: temp_reg.clone(),
-                //                     src: negation_reg.clone(),
-                //                     sub: temp_reg.clone()
-                //                 });
-                //                 self.instructions.push(ArmIns::StoreOffset {
-                //                     src: temp_reg.clone(),
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![offset_idx]
-                //                 });
-                //                 self.free_register(temp_reg);
-                //                 self.free_register(negation_reg);
-                //                 None   // we've updated the existing offset in-place on the stack
-                //             },
-                //             Type::Double => {
-                //                 let msw_reg = self.claim_register();
-                //                 self.instructions.push(ArmIns::LoadOffset {
-                //                     dst: msw_reg.clone(),
-                //                     src: ArmRegister::FP,
-                //                     offsets: vec![offset_idx]
-                //                 });
-                //                 self.instructions.push(ArmIns::ExclusiveOr {
-                //                     dst: msw_reg.clone(),
-                //                     src: msw_reg.clone(),
-                //                     operand: 0x80000000
-                //                 }); // flip the MSB of the MSW (2's complement sign bit)
-                //                 self.instructions.push(ArmIns::StoreOffset {
-                //                     src: msw_reg.clone(),
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![offset_idx]
-                //                 });
-                //                 self.free_register(msw_reg);
-                //                 None   // we've updated the existing offset in-place on the stack
-                //             }
-                //             _ => panic!("TODO: support monadic negation for type: {}", offset_type)
-                //         }
-                //     },
-                //     MonadicVerb::Ceiling => {
-                //         match offset_type {
-                //             Type::Integer => None, // nothing to do
-                //             Type::Double => {
-                //                 // We could call "modf" in math.h, but we don't actually need the fractional part.
-                //                 // the MSW is expected in r1
-                //                 self.push(ArmIns::LoadOffset {
-                //                     dst: ArmRegister::R1,
-                //                     src: ArmRegister::FP,
-                //                     offsets: vec![offset_idx]
-                //                 });
-                //                 // the LSW is expected in r0
-                //                 self.push(ArmIns::LoadOffset {
-                //                     dst: ArmRegister::R0,
-                //                     src: ArmRegister::FP,
-                //                     offsets: vec![offset_idx + 4]  // if we had DoubleOffset(msw, lsw) we wouldn't need the manual + 4 here
-                //                 });
-                //                 self.push(ArmIns::BranchAndLink {
-                //                     addr: "jcompiler_ceiling"
-                //                 });
-                //                 let out_offset_idx = self.heap_allocate_int();
-                //                 self.instructions.push(ArmIns::StoreOffset {
-                //                     src: ArmRegister::R0,
-                //                     dst: ArmRegister::FP,
-                //                     offsets: vec![out_offset_idx]
-                //                 });
-                //                 // Note: by returning a new offset here without reclaiming
-                //                 // the original Double offset, we are introducing memory
-                //                 // fragmentation, albeit minor.
-                //                 Some(Pointer::Stack(Type::Integer, out_offset_idx))
-                //             }
-                //             _ => panic!("TODO: support monadic ceiling for type: {}", offset_type)
-                //         }
-                //     }
-                //     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
-                // };
-                // // TODO: Much needs to happen here.
-                // // If we are given a Global offset, we need to write back to it
-                // // before returning. The code to load from globals is above; we should
-                // // move it to the Offset impl so that we can reuse it. I think the interface
-                // // should be opaque to pass-through writes, meaning this code should only
-                // // concern itself with registers, not having to do all the loading/storing
-                // // from offsets. A global Offset should be able to be read/written to/from a
-                // // register without needing to allocate intermediate stack/heap space. Those
-                // // instructions shouldn't need to be generated here.
-                // //
-                // // The tricky part will getting rid of the Some() return value above. We
-                // // should only ever return the Offset we're given in this monadic apply routine,
-                // // but in some cases we need to swap out the type/offset for a different one.
-                // // We probably need to start operating over the concept of a JValue, which may
-                // // be backed by either a Global offset or a Stack/Heap offset. The interface
-                // // should concern itself with read/writing to/from registers only, and everything
-                // // else should be taken care of behind the scenes. Stack/Heap offsets should
-                // // become invalid when their parent BasicBlock goes out of scope.
-                // //
-                // // When done: uncomment the NB. lines in ctest_monadic_ceiling
-                // match new_offset {
-                //     None => vec![offset],
-                //     Some(new) => vec![new]
-                // }
+            IRNode::ApplyMonadicVerbToTypedValue(verb, value) => {
+                match verb {
+                    MonadicVerb::Increment => {
+                        match &value {
+                            TypedValue::Integer(pointer) => {
+                                let increment_reg = self.claim_register();
+                                pointer.load(increment_reg, self);
+                                self.push(ArmIns::AddImm {
+                                    dst: increment_reg,
+                                    src: increment_reg,
+                                    imm: 1
+                                });
+                                pointer.store(increment_reg, self);
+                                self.free_register(increment_reg);
+                                vec![value]   // we've updated the existing value in-place
+                            },
+                            TypedValue::Double{msw, lsw} =>
+                                panic!("TODO: Support monadic increment of typed value: {:?}", value)
+                        }
+                    },
+                    MonadicVerb::Square => {
+                        match &value {
+                            TypedValue::Integer(pointer) => {
+                                let multiply_reg = self.claim_register();
+                                pointer.load(multiply_reg, self);
+                                self.instructions.push(ArmIns::Multiply {
+                                    dst: multiply_reg,
+                                    src: multiply_reg,
+                                    mul: multiply_reg,
+                                });
+                                pointer.store(multiply_reg, self);
+                                self.free_register(multiply_reg);
+                                vec![value]   // we've updated the existing value in-place
+                            },
+                            TypedValue::Double{msw, lsw} =>
+                                panic!("TODO: Support monadic square of typed value: {:?}", value)
+                        }
+                    },
+                    MonadicVerb::Negate => {
+                        match &value {
+                            TypedValue::Integer(pointer) => {
+                                let temp_reg = self.claim_register();
+                                let negation_reg = self.claim_register();
+                                pointer.load(temp_reg, self);
+                                self.instructions.push(ArmIns::MoveImm {
+                                    dst: negation_reg, imm: 0 });
+                                // subtract the immediate from 0
+                                self.instructions.push(ArmIns::Sub {
+                                    dst: temp_reg,
+                                    src: negation_reg,
+                                    sub: temp_reg
+                                });
+                                pointer.store(temp_reg, self);
+                                self.free_register(temp_reg);
+                                self.free_register(negation_reg);
+                                vec![value]   // we've updated the existing offset in-place on the stack
+                            },
+                            TypedValue::Double{msw, lsw} => {
+                                let msw_reg = self.claim_register();
+                                msw.load(msw_reg, self);
+                                self.instructions.push(ArmIns::ExclusiveOr {
+                                    dst: msw_reg,
+                                    src: msw_reg,
+                                    operand: 0x80000000
+                                }); // flip the MSB of the MSW (2's complement sign bit)
+                                msw.store(msw_reg, self);
+                                self.free_register(msw_reg);
+                                vec![value]   // we've updated the existing offset in-place on the stack
+                            }
+                        }
+                    },
+                    MonadicVerb::Ceiling => {
+                        match &value {
+                            TypedValue::Integer(_) => vec![value], // nothing to do
+                            TypedValue::Double { msw, lsw } => {
+                                // We could call "modf" in math.h, but we don't actually need the fractional part.
+                                // TODO: we should be claiming these registers by name from the BasicBlock
+                                msw.load(ArmRegister::R1, self); // the MSW is expected in r1
+                                lsw.load(ArmRegister::R0, self); // the MSW is expected in r0
+                                self.push(ArmIns::BranchAndLink { addr: "jcompiler_ceiling" });
+                                let new_value = self.stack_allocate_int();
+                                match &new_value {
+                                    TypedValue::Integer(pointer) => {
+                                        pointer.store(ArmRegister::R0, self);
+                                    },
+                                    _ => panic!("Unreachable")
+                                }
+                                // TODO: we should decrement the old value's refcount so
+                                // we can reuse its space later on.
+                                vec![new_value]
+                            }
+                            _ => panic!("TODO: support monadic ceiling for typed value: {:?}", value)
+                        }
+                    }
+                    _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
+                }
             },
             IRNode::ApplyDyadicVerbToTypedValues {verb, lhs, rhs} => {
                 panic!("TODO: Support ApplyDyadicVerbToTypedValues");
