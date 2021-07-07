@@ -1,12 +1,15 @@
 #!/bin/sh
 
+# WARNING: be extremely careful when upgrading to newer Linaro versions. As a smoke check,
+# write a simple main.c and use the gcc command below to compile it alongside the library include.
+# Past upgrade attempts have resulted in "multiple definitions for ..." errors which couldn't be resolved.
 export ARM_LINARO_CROSS_COMPILER_PATH="/opt/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
 
 # These commands below were taken from the output of running:
 #
-#    $ $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-gcc -v -static <in.c> -o <out>
+#    $ $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-gcc -v -static <in.c> jarm.c -o <out>
 #
-# where <in.c> was a simple C program that included "stdio.h".
+# where <in.c> was a simple C program that included "stdio.h" and called to i.e. jprint_int.
 
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-as \
         -march=armv7-a \
