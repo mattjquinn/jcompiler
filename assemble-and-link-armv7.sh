@@ -11,6 +11,12 @@ export ARM_LINARO_CROSS_COMPILER_PATH="/opt/gcc-linaro-7.4.1-2019.02-x86_64_arm-
 #
 # where <in.c> was a simple C program that included "stdio.h" and called to i.e. jprint_int.
 
+$ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-gcc \
+        -v \
+        -static \
+        -o jarm.o \
+        -c c_defns/jarm.c
+
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-as \
         -march=armv7-a \
         -mfloat-abi=hard \
@@ -43,6 +49,7 @@ $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-ld \
         -L$ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/lib \
         -L$ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/usr/lib \
         $1.o \
+        jarm.o \
         --start-group -lgcc -lgcc_eh -lc --end-group \
         $ARM_LINARO_CROSS_COMPILER_PATH/lib/gcc/arm-linux-gnueabihf/7.4.1/crtend.o \
         $ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/usr/lib/crtn.o

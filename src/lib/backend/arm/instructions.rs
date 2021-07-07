@@ -1,30 +1,31 @@
 use itertools::free::join;
-use backend::arm::registers::ArmRegister;
+use backend::arm::registers::{CoreRegister, ExtensionRegister};
 
 #[derive(Debug)]
 pub enum ArmIns {
-    Move { dst: ArmRegister, src: ArmRegister },
-    MoveImm { dst: ArmRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
-    MoveImmUnsigned { dst: ArmRegister, imm: u16 }, // TODO: is this width for imm true to actual ARM width?
-    StoreOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
-    Store { dst: ArmRegister, src: ArmRegister },
-    AddImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
-    SubImm { dst: ArmRegister, src: ArmRegister, imm: i32 },
-    Load { dst: ArmRegister, src: String },
-    LoadOffset { dst: ArmRegister, src: ArmRegister, offsets: Vec<i32> },
-    Multiply { dst: ArmRegister, src: ArmRegister, mul: ArmRegister },
-    Sub { dst: ArmRegister, src: ArmRegister, sub: ArmRegister },
-    Add { dst: ArmRegister, src: ArmRegister, add: ArmRegister },
-    Compare { lhs: ArmRegister, rhs: ArmRegister },
-    MoveLT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    MoveGE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    MoveEQ { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    MoveNE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    MoveGT { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    MoveLE { dst: ArmRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
-    LeftShift { dst: ArmRegister, src: ArmRegister, n_bits: i8 },
+    Move { dst: CoreRegister, src: CoreRegister },
+    MoveImm { dst: CoreRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
+    MoveImmUnsigned { dst: CoreRegister, imm: u16 }, // TODO: is this width for imm true to actual ARM width?
+    StoreOffset { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
+    Store { dst: CoreRegister, src: CoreRegister },
+    AddImm { dst: CoreRegister, src: CoreRegister, imm: i32 },
+    SubImm { dst: CoreRegister, src: CoreRegister, imm: i32 },
+    Load { dst: CoreRegister, src: String },
+    LoadOffset { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
+    Multiply { dst: CoreRegister, src: CoreRegister, mul: CoreRegister },
+    Sub { dst: CoreRegister, src: CoreRegister, sub: CoreRegister },
+    Add { dst: CoreRegister, src: CoreRegister, add: CoreRegister },
+    Compare { lhs: CoreRegister, rhs: CoreRegister },
+    MoveLT { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveGE { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveEQ { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveNE { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveGT { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    MoveLE { dst: CoreRegister, src: i8 },  // can probably be wider than i8, need to check highest acceptable width
+    LeftShift { dst: CoreRegister, src: CoreRegister, n_bits: i8 },
     BranchAndLink { addr: &'static str },
-    ExclusiveOr { dst: ArmRegister, src: ArmRegister, operand: u32 },
+    ExclusiveOr { dst: CoreRegister, src: CoreRegister, operand: u32 },
+    LoadExtensionRegisterWidth64 { dst: ExtensionRegister, src: CoreRegister, offsets: Vec<i32> }
 }
 
 impl std::fmt::Display for ArmIns {
@@ -102,6 +103,10 @@ impl std::fmt::Display for ArmIns {
             },
             ArmIns::ExclusiveOr { dst, src, operand } => {
                 f.write_str(format!("eor {}, {}, #0x{}", dst, src, format!("{:08x}", operand)).as_str())
+            }
+            ArmIns::LoadExtensionRegisterWidth64 { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("vldr.64 {}, [{}, {}]", dst, src, offset_str).as_str())
             }
         }
     }

@@ -13,7 +13,7 @@ use std::io::Write;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
-use backend::arm::registers::ArmRegister;
+use backend::arm::registers::CoreRegister;
 use parser::{DyadicVerb, MonadicVerb};
 
 #[derive(Debug)]
@@ -24,14 +24,14 @@ pub enum Pointer {
 
 impl Pointer {
 
-    fn get_offset(&self) -> (ArmRegister, i32) {
+    fn get_offset(&self) -> (CoreRegister, i32) {
         match self {
-            Pointer::Stack(offset) => (ArmRegister::SP, *offset),
-            Pointer::Heap(offset) => (ArmRegister::FP, *offset)
+            Pointer::Stack(offset) => (CoreRegister::SP, *offset),
+            Pointer::Heap(offset) => (CoreRegister::FP, *offset)
         }
     }
 
-    pub fn read(&self, dst: ArmRegister, basic_block: &mut BasicBlock) {
+    pub fn read(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
         let (src, offset) = self.get_offset();
         basic_block.push(ArmIns::LoadOffset {
             dst,
@@ -40,13 +40,33 @@ impl Pointer {
         });
     }
 
-    pub fn write(&self, src: ArmRegister, basic_block: &mut BasicBlock) {
+    pub fn write(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
         let (dst, offset) = self.get_offset();
         basic_block.push(ArmIns::StoreOffset {
             dst,
             src,
             offsets: vec![offset]
         });
+    }
+
+    pub fn read_address(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
+        let (src, offset) = self.get_offset();
+        basic_block.push(ArmIns::AddImm {
+            dst,
+            src,
+            imm: offset
+        });
+    }
+
+    pub fn copy_to_stack_offset(&self, dst_stack_offset: i32, basic_block: &mut BasicBlock) {
+        let transfer_reg = basic_block.claim_register();
+        self.read(transfer_reg, basic_block);
+        basic_block.push(ArmIns::StoreOffset {
+            src: transfer_reg,
+            dst: CoreRegister::SP,
+            offsets: vec![dst_stack_offset]
+        });
+        basic_block.free_register(transfer_reg);
     }
 }
 
@@ -160,7 +180,7 @@ impl GlobalContext {
         let mut preamble = vec![];
         let mut subbed = 0;
         // The FP should start out where the SP is.
-        preamble.push(ArmIns::Move { src: ArmRegister::SP, dst: ArmRegister::FP });
+        preamble.push(ArmIns::Move { src: CoreRegister::SP, dst: CoreRegister::FP });
         // Expand heap.
         while subbed < self.heap_size {
             let mut to_sub = self.heap_size - subbed;
@@ -170,14 +190,14 @@ impl GlobalContext {
                 to_sub = 256;
             }
             preamble.push(ArmIns::SubImm {
-                dst: ArmRegister::FP,
-                src: ArmRegister::FP,
+                dst: CoreRegister::FP,
+                src: CoreRegister::FP,
                 imm: to_sub
             });
             subbed += to_sub;
         }
         // Stacks must appear after the heap, so we adjust the SP now.
-        preamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
+        preamble.push(ArmIns::Move { src: CoreRegister::FP, dst: CoreRegister::SP });
         for instr in preamble {
             writeln!(assembly_file, "{}", instr).expect("write failure");
         }
@@ -195,14 +215,14 @@ impl GlobalContext {
                 to_add = 256;
             }
             postamble.push(ArmIns::AddImm {
-                dst: ArmRegister::FP,
-                src: ArmRegister::FP,
+                dst: CoreRegister::FP,
+                src: CoreRegister::FP,
                 imm: to_add
             });
             added += to_add;
         }
         // Reset SP as well
-        postamble.push(ArmIns::Move { src: ArmRegister::FP, dst: ArmRegister::SP });
+        postamble.push(ArmIns::Move { src: CoreRegister::FP, dst: CoreRegister::SP });
         for instr in postamble {
             writeln!(assembly_file, "{}", instr).expect("write failure");
         }
@@ -265,7 +285,7 @@ pub struct BasicBlock {
     stack_pointer: i32,
     stack_size: i32,
     instructions: Vec<ArmIns>,
-    available_registers: LinkedHashSet<ArmRegister>
+    available_registers: LinkedHashSet<CoreRegister>
 }
 
 impl BasicBlock {
@@ -284,8 +304,8 @@ impl BasicBlock {
                 to_sub = 256;
             }
             instructions.push(ArmIns::SubImm {
-                dst: ArmRegister::SP,
-                src: ArmRegister::SP,
+                dst: CoreRegister::SP,
+                src: CoreRegister::SP,
                 imm: to_sub
             });
             subbed += to_sub;
@@ -295,10 +315,10 @@ impl BasicBlock {
             stack_size,
             instructions,
             available_registers: [
-                ArmRegister::R0,
-                ArmRegister::R1,
-                ArmRegister::R2,
-                ArmRegister::R3
+                CoreRegister::R0,
+                CoreRegister::R1,
+                CoreRegister::R2,
+                CoreRegister::R3
             ].iter().cloned().collect()
         }
     }
@@ -314,8 +334,8 @@ impl BasicBlock {
                 to_add = 256;
             }
             self.instructions.push(ArmIns::AddImm {
-                dst: ArmRegister::SP,
-                src: ArmRegister::SP,
+                dst: CoreRegister::SP,
+                src: CoreRegister::SP,
                 imm: to_add
             });
             added += to_add;
@@ -332,7 +352,7 @@ impl BasicBlock {
         }
     }
 
-    fn _stack_allocate(&mut self, width: i32) -> i32 {
+    pub fn stack_allocate_width(&mut self, width: i32) -> i32 {
         if self.stack_pointer + width > self.stack_size {
             panic!("Stack allocation failed; adding width {} will overflow stack size of {}; stack pointer is {}", width, self.stack_size, self.stack_pointer);
         }
@@ -342,24 +362,24 @@ impl BasicBlock {
     }
 
     fn stack_allocate_int(&mut self) -> TypedValue {
-        let offset = self._stack_allocate(4);
+        let offset = self.stack_allocate_width(4);
         TypedValue::Integer(Pointer::Stack(offset))
     }
 
-    fn stack_allocate_double(&mut self) -> TypedValue {
-        let msw = Pointer::Stack(self._stack_allocate(4));
-        let lsw = Pointer::Stack(self._stack_allocate(4));
+    pub fn stack_allocate_double(&mut self) -> TypedValue {
+        let msw = Pointer::Stack(self.stack_allocate_width(4));
+        let lsw = Pointer::Stack(self.stack_allocate_width(4));
         TypedValue::Double{msw, lsw}
     }
 
-    pub fn claim_register(&mut self) -> ArmRegister {
+    pub fn claim_register(&mut self) -> CoreRegister {
         match self.available_registers.pop_front() {
             Some(r) => r,
             None => panic!("No register is available to claim.")
         }
     }
 
-    pub fn free_register(&mut self, reg: ArmRegister) {
+    pub fn free_register(&mut self, reg: CoreRegister) {
         if self.available_registers.contains(&reg) {
             panic!("Attempted to free register {} but it is not claimed.", reg)
         }
@@ -519,13 +539,13 @@ impl BasicBlock {
                             TypedValue::Double { msw, lsw } => {
                                 // We could call "modf" in math.h, but we don't actually need the fractional part.
                                 // TODO: we should be claiming these registers by name from the BasicBlock
-                                msw.read(ArmRegister::R1, self); // the MSW is expected in r1
-                                lsw.read(ArmRegister::R0, self); // the MSW is expected in r0
+                                msw.read(CoreRegister::R1, self); // the MSW is expected in r1
+                                lsw.read(CoreRegister::R0, self); // the MSW is expected in r0
                                 self.push(ArmIns::BranchAndLink { addr: "jcompiler_ceiling" });
                                 let new_value = self.stack_allocate_int();
                                 match &new_value {
                                     TypedValue::Integer(pointer) => {
-                                        pointer.write(ArmRegister::R0, self);
+                                        pointer.write(CoreRegister::R0, self);
                                     },
                                     _ => panic!("Unreachable")
                                 }

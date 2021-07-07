@@ -5,7 +5,7 @@ use std::io::Write;
 
 use self::instructions::{ArmIns};
 use self::compiler::{GlobalContext, BasicBlock, TypedValue, compile_expr};
-use backend::arm::registers::ArmRegister;
+use backend::arm::registers::{CoreRegister, ExtensionRegister};
 
 mod instructions;
 mod macros;
@@ -50,7 +50,7 @@ impl ::Backend for ARMBackend {
 
                             // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
                             basic_block.push(ArmIns::Load {
-                                dst: ArmRegister::R0,
+                                dst: CoreRegister::R0,
                                 src: "=line_end_nl_fmt".to_string(),
                             });
                             basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
@@ -73,65 +73,14 @@ impl ::Backend for ARMBackend {
         let preamble = vec![
             ".arch armv7-a",
             ".data",
-            "pos_int_fmt: .asciz \"%d\"",
-            "neg_int_fmt: .asciz \"_%d\"",
-            "pos_double_fmt: .asciz \"%g\"",
-            "neg_double_fmt: .asciz \"_%g\"",
             "line_end_nl_fmt:  .asciz \"\\n\"",
             "space_fmt:  .asciz \" \"",
             ".text",
             ".global main",
             ".extern printf",
+            ".extern jprint_int",
+            ".extern jprint_double",
             ".syntax unified",
-            // printing related functions
-            // TODO: combine these into their common parts
-            // === INTEGER ==============================================
-            "jprint_int:",
-            "push {lr}",
-            "cmp r1, #0",
-            "blt jprint_int_neg",
-            "ldr r0, =pos_int_fmt",
-            "jprint_int_main:",
-            "bl printf",
-            "pop {lr}",
-            "bx lr",
-            "jprint_int_neg:",
-            "ldr r0, =neg_int_fmt",
-            "rsblt r1, r1, #0", // takes abs value of r1
-            "bl jprint_int_main",
-            // === DOUBLE ==============================================
-            "jprint_double:",
-            "push {lr}",
-            // If the double precision value has no fractional bits set,
-            // print it as an integer in an effort to match J's behavior.
-            "cmp r3, #0", // are there are any significand bits set in the LSW?
-            "bne jprint_sign_check",
-            "mov r8, #255", // partial mask: 0xFF
-            "orr r8, r8, #65280", // partial mask: 0xFF00
-            "orr r8, r8, #983040", // partial mask: 0xF0000
-            "tst r2, r8", // apply the full mask (0xFFFFF) to the fractional bits in the MSW
-            "bne jprint_sign_check", // if masked bits are clear, Z flag will be 1; we branch if Z flag is 0
-            "mov r0, r3",
-            "mov r1, r2",
-            "bl __aeabi_d2iz", // convert the integral part (exponent) to an integer
-            "mov r1, r0",  // the integer result is in r0
-            "bl jprint_int", // print as an integer
-            "pop {lr}",
-            "bx lr",
-            // we jump here if the value does in fact have a fractional part
-            "jprint_sign_check:",
-            "and r0, r2, #0x80000000",
-            "cmp r0, #0x80000000",  // true if MSB of MSW is negative
-            "beq jprint_double_neg",
-            "ldr r0, =pos_double_fmt",
-            "jprint_double_main:",
-            "bl printf",
-            "pop {lr}",
-            "bx lr",
-            "jprint_double_neg:",
-            "ldr r0, =neg_double_fmt",
-            "bic r2, r2, 2147483648", // clear the sign bit in MSW
-            "bl jprint_double_main",
             // === CEILING =============================================
             // expects msw in r1, lsw in r0; the return value (single integer) is in r0
             "jcompiler_ceiling:",
@@ -156,7 +105,6 @@ impl ::Backend for ARMBackend {
             "jcompiler_ceiling_done:",
             "pop {lr}",
             "bx lr",
-            // main
             "main:",
             "push {ip, lr}",
         ];
@@ -189,19 +137,22 @@ fn jprint_value(values: &Vec<TypedValue>, basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
         match &value {
             TypedValue::Integer(pointer) => {
-                pointer.read(ArmRegister::R1, basic_block);
+                pointer.read(CoreRegister::R1, basic_block);
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             TypedValue::Double { msw, lsw } => {
-                msw.read(ArmRegister::R2, basic_block); // the MSW is expected in r2
-                lsw.read(ArmRegister::R3, basic_block); // the LSW is expected in r3
+                let sp_offset = basic_block.stack_allocate_width(8);
+                msw.copy_to_stack_offset(sp_offset + 4, basic_block);
+                lsw.copy_to_stack_offset(sp_offset, basic_block);
+                basic_block.push(ArmIns::LoadExtensionRegisterWidth64 {
+                    dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
             }
         }
         // Multiple printed terms are separated by space, except for the last item
         if idx != values.len() - 1 {
             basic_block.push(ArmIns::Load {
-                dst: ArmRegister::R0,
+                dst: CoreRegister::R0,
                 src: "=space_fmt".to_string(),
             });
             basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
