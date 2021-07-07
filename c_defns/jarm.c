@@ -12,10 +12,9 @@ void jprint_int(int val) {
 }
 
 void jprint_double(double val) {
-  double int_part;
-  if (modf(val, &int_part) != 0) {
+  if (floor(val) != val) {
     if (val < 0) {
-      printf("_%g", abs(val));
+      printf("_%g", -1*val);
     } else {
       printf("%g", val);
     }

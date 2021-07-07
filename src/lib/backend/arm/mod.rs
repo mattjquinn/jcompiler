@@ -137,7 +137,7 @@ fn jprint_value(values: &Vec<TypedValue>, basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
         match &value {
             TypedValue::Integer(pointer) => {
-                pointer.read(CoreRegister::R1, basic_block);
+                pointer.read(CoreRegister::R0, basic_block);
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             TypedValue::Double { msw, lsw } => {

@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Arguments: ./run.sh <path_to_assembly_file> <name_of_output_executable>
+
 # WARNING: be extremely careful when upgrading to newer Linaro versions. As a smoke check,
 # write a simple main.c and use the gcc command below to compile it alongside the library include.
 # Past upgrade attempts have resulted in "multiple definitions for ..." errors which couldn't be resolved.
@@ -11,10 +13,12 @@ export ARM_LINARO_CROSS_COMPILER_PATH="/opt/gcc-linaro-7.4.1-2019.02-x86_64_arm-
 #
 # where <in.c> was a simple C program that included "stdio.h" and called to i.e. jprint_int.
 
+# Note: each output executable gets its own jarm.o because the test suite runs concurrently.
+
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-gcc \
         -v \
         -static \
-        -o jarm.o \
+        -o $2_jarm.o \
         -c c_defns/jarm.c
 
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-as \
@@ -49,8 +53,9 @@ $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-ld \
         -L$ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/lib \
         -L$ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/usr/lib \
         $1.o \
-        jarm.o \
+        $2_jarm.o \
         --start-group -lgcc -lgcc_eh -lc --end-group \
         $ARM_LINARO_CROSS_COMPILER_PATH/lib/gcc/arm-linux-gnueabihf/7.4.1/crtend.o \
-        $ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/usr/lib/crtn.o
+        $ARM_LINARO_CROSS_COMPILER_PATH/arm-linux-gnueabihf/libc/usr/lib/crtn.o \
+        -lm
 

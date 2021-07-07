@@ -43,28 +43,27 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-#[test]
-fn next() {
-    // common::test("ctest_monadic_ceiling.ijs", &compile);
-    common::test("ctest_number_expr.ijs", &compile);
-}
+// #[test]
+// fn next() {
+//     common::test("ctest_list_expr.ijs", &compile);
+// }
 
-// generate_tests!([
-//     // Known test failures:
-//     "ctest_ch1_learningjbook.ijs",
-//     "ctest_ch2_learningjbook.ijs",
-//     "ctest_divisions.ijs",
-//     "ctest_dyadic_append.ijs",
-//     "ctest_dyadic_copy.ijs",
-//     "ctest_dyadic_shape.ijs",
-//     "ctest_global_refs_mixedverbs.ijs",
-//     "ctest_monadic_largerof.ijs",
-//     "ctest_monadic_largerorequal.ijs",
-//     "ctest_monadic_reciprocal.ijs",
-//     "ctest_monadic_shapeof.ijs",
-//     "ctest_negative_numbers.ijs",
-//     "ctest_monadic_tally.ijs",
-//     "ctest_power.ijs",
-//     "ctest_strings.ijs",
-//     "j1.ijs"
-// ]);
+generate_tests!([
+    // Known test failures:
+    "ctest_ch1_learningjbook.ijs",
+    "ctest_ch2_learningjbook.ijs",
+    "ctest_divisions.ijs",
+    "ctest_dyadic_append.ijs",
+    "ctest_dyadic_copy.ijs",
+    "ctest_dyadic_shape.ijs",
+    "ctest_global_refs_mixedverbs.ijs",
+    "ctest_monadic_largerof.ijs",
+    "ctest_monadic_largerorequal.ijs",
+    "ctest_monadic_reciprocal.ijs",
+    "ctest_monadic_shapeof.ijs",
+    "ctest_negative_numbers.ijs",
+    "ctest_monadic_tally.ijs",
+    "ctest_power.ijs",
+    "ctest_strings.ijs",
+    "j1.ijs"
+]);
