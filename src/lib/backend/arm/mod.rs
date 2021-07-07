@@ -77,34 +77,7 @@ impl ::Backend for ARMBackend {
             "space_fmt:  .asciz \" \"",
             ".text",
             ".global main",
-            ".extern printf",
-            ".extern jprint_int",
-            ".extern jprint_double",
             ".syntax unified",
-            // === CEILING =============================================
-            // expects msw in r1, lsw in r0; the return value (single integer) is in r0
-            "jcompiler_ceiling:",
-            "push {lr}",
-            "mov r9, #0", // fractional flag; is 1 if fraction exists
-            "cmp r0, #0", // are there are any significant bits set in the LSW?
-            "bne jcompiler_ceiling_has_fraction",
-            "mov r8, #255", // partial mask: 0xFF
-            "orr r8, r8, #65280", // partial mask: 0xFF00
-            "orr r8, r8, #983040", // partial mask: 0xF0000
-            "tst r1, r8", // apply the full mask (0xFFFFF) to the fractional bits in the MSW
-            "beq jcompiler_ceiling_cast", // if masked bits are clear, Z flag will be 1; we branch if Z flag is 1
-            "jcompiler_ceiling_has_fraction:",
-            "mov r9, #1", //  the input does have a fractional part
-            "jcompiler_ceiling_cast:",
-            "bl __aeabi_d2iz", // convert the integral part (exponent) to an integer; return value is in r0
-            "cmp r9, #0",
-            "beq jcompiler_ceiling_done", // if no fractional part, we are done
-            "cmp r0, #0",
-            "ble jcompiler_ceiling_done", // if result is <= 0, nothing to add
-            "add r0, r0, #1", // add 1 if input was positive with a fractional part
-            "jcompiler_ceiling_done:",
-            "pop {lr}",
-            "bx lr",
             "main:",
             "push {ip, lr}",
         ];
@@ -141,6 +114,7 @@ fn jprint_value(values: &Vec<TypedValue>, basic_block: &mut BasicBlock) {
                 basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
             },
             TypedValue::Double { msw, lsw } => {
+                // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
                 let sp_offset = basic_block.stack_allocate_width(8);
                 msw.copy_to_stack_offset(sp_offset + 4, basic_block);
                 lsw.copy_to_stack_offset(sp_offset, basic_block);

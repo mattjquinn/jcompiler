@@ -13,7 +13,7 @@ use std::io::Write;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
-use backend::arm::registers::CoreRegister;
+use backend::arm::registers::{CoreRegister, ExtensionRegister};
 use parser::{DyadicVerb, MonadicVerb};
 
 #[derive(Debug)]
@@ -290,7 +290,7 @@ pub struct BasicBlock {
 
 impl BasicBlock {
     pub fn new() -> BasicBlock {
-        let stack_size = 128;  // TODO: temporary default
+        let stack_size = 512;  // TODO: temporary default
         println!("Allocating new basic block with stack size {}", stack_size);
         let mut instructions = vec![];
         let mut subbed = 0;
@@ -537,11 +537,13 @@ impl BasicBlock {
                         match &value {
                             TypedValue::Integer(_) => vec![value], // nothing to do
                             TypedValue::Double { msw, lsw } => {
-                                // We could call "modf" in math.h, but we don't actually need the fractional part.
-                                // TODO: we should be claiming these registers by name from the BasicBlock
-                                msw.read(CoreRegister::R1, self); // the MSW is expected in r1
-                                lsw.read(CoreRegister::R0, self); // the MSW is expected in r0
-                                self.push(ArmIns::BranchAndLink { addr: "jcompiler_ceiling" });
+                                // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
+                                let sp_offset = self.stack_allocate_width(8);
+                                msw.copy_to_stack_offset(sp_offset + 4, self);
+                                lsw.copy_to_stack_offset(sp_offset, self);
+                                self.push(ArmIns::LoadExtensionRegisterWidth64 {
+                                    dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
+                                self.push(ArmIns::BranchAndLink { addr: "jceiling" });
                                 let new_value = self.stack_allocate_int();
                                 match &new_value {
                                     TypedValue::Integer(pointer) => {
@@ -549,8 +551,7 @@ impl BasicBlock {
                                     },
                                     _ => panic!("Unreachable")
                                 }
-                                // TODO: we should decrement the old value's refcount so
-                                // we can reuse its space later on.
+                                // TODO: we should decrement the old value's refcount so we can reuse its space later on.
                                 vec![new_value]
                             }
                         }

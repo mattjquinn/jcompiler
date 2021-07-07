@@ -22,3 +22,11 @@ void jprint_double(double val) {
     jprint_int((int) val);
   }
 }
+
+int jceiling(double val) {
+  int out = (int) val;
+  if (floor(val) != val && out >= 0) {
+    out += 1;
+  }
+  return out;
+}
