@@ -45,7 +45,7 @@ fn compile(test_jfile: &str) -> (String, String) {
 
 // #[test]
 // fn next() {
-//     common::test("ctest_monadic_ceiling.ijs", &compile);
+//     common::test("ctest_monadic_reciprocal.ijs", &compile);
 // }
 
 generate_tests!([
@@ -53,12 +53,12 @@ generate_tests!([
     "ctest_ch1_learningjbook.ijs",
     "ctest_ch2_learningjbook.ijs",
     "ctest_divisions.ijs",
+    "ctest_dyadic_largerof.ijs",
+    "ctest_dyadic_largerorequal.ijs",
     "ctest_dyadic_append.ijs",
     "ctest_dyadic_copy.ijs",
     "ctest_dyadic_shape.ijs",
     "ctest_global_refs_mixedverbs.ijs",
-    "ctest_monadic_largerof.ijs",
-    "ctest_monadic_largerorequal.ijs",
     "ctest_monadic_reciprocal.ijs",
     "ctest_monadic_shapeof.ijs",
     "ctest_negative_numbers.ijs",
