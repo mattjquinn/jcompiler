@@ -71,15 +71,15 @@ impl ::Backend for ARMBackend {
         // TODO: Move boilerplate writing of preamble/postamble elsewhere.
         println!("Writing ARM...");
         let preamble = vec![
-            ".arch armv7-a",
-            ".data",
-            "line_end_nl_fmt:  .asciz \"\\n\"",
-            "space_fmt:  .asciz \" \"",
-            ".text",
-            ".global main",
-            ".syntax unified",
+            "\t.arch armv7-a",
+            "\t.data",
+            "\tline_end_nl_fmt:  .asciz \"\\n\"",
+            "\tspace_fmt:  .asciz \" \"",
+            "\t.text",
+            "\t.global main",
+            "\t.syntax unified",
             "main:",
-            "push {ip, lr}",
+            "\tpush\t{ip, lr}",
         ];
         for instr in preamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
@@ -90,7 +90,7 @@ impl ::Backend for ARMBackend {
         }
         globalctx.write_postamble_to_file(&mut assembly_file);
         let mut postamble = Vec::new();
-        postamble.push("pop {ip, pc}".to_string());
+        postamble.push("\tpop\t{ip, pc}".to_string());
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
