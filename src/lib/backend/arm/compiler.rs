@@ -6,162 +6,19 @@ use itertools::EitherOrBoth::{Both, Left, Right};
 use std::collections::{HashMap};
 use linked_hash_set::LinkedHashSet;
 
-use std::fmt::{Formatter, Error};
-use ieee754::Ieee754;
 use std::fs::File;
 use std::io::Write;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
-use backend::arm::registers::{CoreRegister, ExtensionRegister};
+use super::values::{TypedValue, IntegerValue, DoubleValue, TypeFlag};
+use super::memory::{Pointer};
+use backend::arm::registers::{CoreRegister};
 use parser::{DyadicVerb, MonadicVerb};
+use std::ops::Deref;
 
-#[derive(Debug)]
-pub enum Pointer {
-    Stack(i32),  // an offset from sp into the line-extent stack
-    Heap(i32),  // an offset from fp into the process-extent heap
-}
-
-impl Pointer {
-
-    fn get_offset(&self) -> (CoreRegister, i32) {
-        match self {
-            Pointer::Stack(offset) => (CoreRegister::SP, *offset),
-            Pointer::Heap(offset) => (CoreRegister::FP, *offset)
-        }
-    }
-
-    pub fn read(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
-        let (src, offset) = self.get_offset();
-        basic_block.push(ArmIns::LoadOffset {
-            dst,
-            src,
-            offsets: vec![offset]
-        });
-    }
-
-    pub fn write(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
-        let (dst, offset) = self.get_offset();
-        basic_block.push(ArmIns::StoreOffset {
-            dst,
-            src,
-            offsets: vec![offset]
-        });
-    }
-
-    pub fn read_address(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
-        let (src, offset) = self.get_offset();
-        basic_block.push(ArmIns::AddImm {
-            dst,
-            src,
-            imm: offset
-        });
-    }
-
-    pub fn copy_to_stack_offset(&self, dst_stack_offset: i32, basic_block: &mut BasicBlock) {
-        let transfer_reg = basic_block.claim_register();
-        self.read(transfer_reg, basic_block);
-        basic_block.push(ArmIns::StoreOffset {
-            src: transfer_reg,
-            dst: CoreRegister::SP,
-            offsets: vec![dst_stack_offset]
-        });
-        basic_block.free_register(transfer_reg);
-    }
-}
-
-impl std::fmt::Display for Pointer {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        match self {
-            Pointer::Stack(i) =>
-                f.write_fmt(format_args!("Stack<offset={}>", i)),
-            Pointer::Heap(s) =>
-                f.write_fmt(format_args!("Heap<offset={}>", s))
-        }
-    }
-}
-
-impl std::clone::Clone for Pointer {
-    fn clone(&self) -> Self {
-        match self {
-            Pointer::Stack(i) => Pointer::Stack(*i),
-            Pointer::Heap(s) => Pointer::Heap(*s)
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum TypedValue {
-    Integer(Pointer),
-    Double{ msw: Pointer, lsw: Pointer },
-    // Array(u16)  // length of array; no element type (can be mixed)
-}
-
-impl std::fmt::Display for TypedValue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        match self {
-            TypedValue::Integer(pointer) =>
-                f.write_fmt(format_args!("TypedValue::Integer<pointer={}>", pointer)),
-            TypedValue::Double{ msw, lsw } =>
-                f.write_fmt(format_args!("TypedValue::Double<msw={},lsw={}>", msw, lsw))
-        }
-    }
-}
-
-impl TypedValue {
-    pub fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> TypedValue {
-        match self {
-            TypedValue::Integer(src) => {
-                match src {
-                    Pointer::Heap(_) => self.clone(),  // already on the heap, nothing to do
-                    Pointer::Stack(_) => {
-                        let out = globalctx.heap_allocate_int();
-                        match &out {
-                            TypedValue::Integer(dst) => {
-                                let transfer_reg = basic_block.claim_register();
-                                src.read(transfer_reg, basic_block);
-                                dst.write(transfer_reg, basic_block);
-                                basic_block.free_register(transfer_reg);
-                            },
-                            _ => panic!("Unreachable")
-                        }
-                        out
-                    }
-                }
-            },
-            TypedValue::Double { msw, lsw } => {
-                match (msw, lsw) {
-                    (Pointer::Heap(_), Pointer::Heap(_)) => self.clone(), // TODO: increment refcount
-                    (Pointer::Heap(_), Pointer::Stack(_)) => {
-                        panic!("TODO: persist only stack Double MSW to Heap")
-                    },
-                    (Pointer::Stack(_), Pointer::Heap(_)) => {
-                        panic!("TODO: persist only stack Double LSW to Heap")
-                    }
-                    (Pointer::Stack(_), Pointer::Stack(_)) => {
-                        let out = globalctx.heap_allocate_double();
-                        match &out {
-                            TypedValue::Double { msw: msw_heap, lsw: lsw_heap} => {
-                                let transfer_reg = basic_block.claim_register();
-                                msw.read(transfer_reg, basic_block);
-                                msw_heap.write(transfer_reg, basic_block);
-                                lsw.read(transfer_reg, basic_block);
-                                lsw_heap.write(transfer_reg, basic_block);
-                                basic_block.free_register(transfer_reg);
-                                out
-                            },
-                            _ => panic!("Unreachable")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct GlobalContext {
-    ident_map: HashMap<String, Vec<TypedValue>>,
+    ident_map: HashMap<String, Vec<Box<dyn TypedValue>>>,
     heap_pointer: i32,
     heap_size: i32
 }
@@ -237,34 +94,24 @@ impl GlobalContext {
         out
     }
 
-    pub fn heap_allocate_int(&mut self) -> TypedValue {
+    pub fn heap_allocate_int(&mut self) -> IntegerValue {
         let offset = self._heap_allocate(4);
-        TypedValue::Integer(Pointer::Heap(offset))
+        IntegerValue::new(Pointer::Heap(offset))
     }
 
-    pub fn heap_allocate_double(&mut self) -> TypedValue {
+    pub fn heap_allocate_double(&mut self) -> DoubleValue {
         let msw = Pointer::Heap(self._heap_allocate(4));
         let lsw = Pointer::Heap(self._heap_allocate(4));
-        TypedValue::Double{msw, lsw}
+        DoubleValue::new(msw, lsw)
     }
 
-    pub fn set_ident_values(&mut self, ident: &String, values: &Vec<TypedValue>) {
+    pub fn set_ident_values(&mut self, ident: &String, values: &[Box<dyn TypedValue>]) {
         for value in values {
             // Caller is responsible for migrating values to Heap first if necessary; enforce that here.
-            match value {
-                TypedValue::Integer(pointer) => {
-                    match pointer {
-                        Pointer::Stack(_) => panic!("Attempted to make a Stack pointer global."),
-                        Pointer::Heap(_) => {} // OK
-                    }
-                },
-                TypedValue::Double {msw, lsw} => {
-                    match (msw, lsw) {
-                        (Pointer::Stack(_), Pointer::Stack(_)) => panic!("Attempted to make a Stack MSW and LSW global."),
-                        (Pointer::Stack(_), Pointer::Heap(_)) => panic!("Attempted to make a Stack MSW global."),
-                        (Pointer::Heap(_), Pointer::Stack(_)) => panic!("Attempted to make a Stack LSW global."),
-                        (Pointer::Heap(_), Pointer::Heap(_)) => {} // OK
-                    }
+            match value.is_entirely_on_heap() {
+                true => {}, // OK
+                false => {
+                    panic!("TypedValue {:?} is not entirely on the heap; caller was responsible for ensuring this.", value.deref());
                 }
             }
         }
@@ -272,10 +119,10 @@ impl GlobalContext {
         // TODO: There could be previous values in the heap that we lose by overwriting
         // here. We should implement refcounting so that we can deallocate those that will
         // no longer be referred to after this insert.
-        self.ident_map.insert(ident.clone(), values.clone());
+        self.ident_map.insert(ident.clone(), values.to_vec());
     }
 
-    pub fn get_ident_values(&mut self, ident: &String) -> Vec<TypedValue> {
+    pub fn get_ident_values(&mut self, ident: &String) -> Vec<Box<dyn TypedValue>> {
         self.ident_map.get(ident).unwrap().clone()
     }
 }
@@ -361,15 +208,15 @@ impl BasicBlock {
         out
     }
 
-    fn stack_allocate_int(&mut self) -> TypedValue {
+    pub fn stack_allocate_int(&mut self) -> IntegerValue {
         let offset = self.stack_allocate_width(4);
-        TypedValue::Integer(Pointer::Stack(offset))
+        IntegerValue::new(Pointer::Stack(offset))
     }
 
-    pub fn stack_allocate_double(&mut self) -> TypedValue {
+    pub fn stack_allocate_double(&mut self) -> DoubleValue {
         let msw = Pointer::Stack(self.stack_allocate_width(4));
         let lsw = Pointer::Stack(self.stack_allocate_width(4));
-        TypedValue::Double{msw, lsw}
+        DoubleValue::new(msw, lsw)
     }
 
     pub fn claim_register(&mut self) -> CoreRegister {
@@ -388,248 +235,70 @@ impl BasicBlock {
 
     pub fn ir(&mut self,
               instruction: IRNode,
-              globalctx: &mut GlobalContext) -> Vec<TypedValue> {
+              globalctx: &mut GlobalContext) -> Vec<Box<dyn TypedValue>> {
         match instruction {
             IRNode::PushIntegerOntoStack(imm) => {
                 let val = self.stack_allocate_int();
-                match &val {
-                    TypedValue::Integer(dst) => {
-                        let transfer_reg = self.claim_register();
-                        self.push(ArmIns::MoveImm { imm, dst: transfer_reg });
-                        dst.write(transfer_reg, self);
-                        self.free_register(transfer_reg);
-                    },
-                    _ => panic!("Unreachable")
-                }
-                vec![val]
+                val.set_value(imm, self);
+                vec![Box::new(val)]
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
-                let bits = num.bits();
-                let hex_rep = format!("{:x}", bits);
-                let binary_rep = format!("{:064b}", bits);
-                println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
-
-                let out = self.stack_allocate_double();
-                match &out {
-                    TypedValue::Double { msw, lsw } => {
-                        // Note: due to limited width of ARM's MOV immediate field,
-                        // we split the initialization of both MSW and LWS over multiple
-                        // per-byte instructions; probably could be optimized.
-                        { // LSW
-                            let lsw_reg = self.claim_register();
-                            {
-                                let half1 = (bits & 0xFFFF) as u16;
-                                self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half1, dst: lsw_reg });
-                            }
-                            {
-                                let temp_reg = self.claim_register();
-                                let half2 = ((bits >> 16) & 0xFFFF) as u16;
-                                self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half2, dst: temp_reg });
-                                self.push(ArmIns::LeftShift {
-                                    src: temp_reg, dst: temp_reg, n_bits: 16 });
-                                self.push(ArmIns::Add {
-                                    dst: lsw_reg, src: lsw_reg, add: temp_reg });
-                                self.free_register(temp_reg);
-                            }
-                            lsw.write(lsw_reg, self);
-                            self.free_register(lsw_reg);
-                        }
-                        { // MSW
-                            let msw_reg = self.claim_register();
-                            {
-                                let half1 = ((bits >> 32) & 0xFFFF) as u16;
-                                self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half1, dst: msw_reg });
-                            }
-                            {
-                                let temp_reg = self.claim_register();
-                                let half2 = ((bits >> 48) & 0xFFFF) as u16;
-                                self.push(ArmIns::MoveImmUnsigned {
-                                    imm: half2, dst: temp_reg });
-                                self.push(ArmIns::LeftShift {
-                                    src: temp_reg, dst: temp_reg, n_bits: 16 });
-                                self.push(ArmIns::Add {
-                                    dst: msw_reg, src: msw_reg, add: temp_reg });
-                                self.free_register(temp_reg);
-                            }
-                            msw.write(msw_reg, self);
-                            self.free_register(msw_reg);
-                        }
-                        vec![out]
-                    },
-                    _ => panic!("Unreachable")
-                }
-            }
+                let val = self.stack_allocate_double();
+                val.set_value(num, self);
+                vec![Box::new(val)]
+            },
             IRNode::ApplyMonadicVerbToTypedValue(verb, value) => {
                 match verb {
                     MonadicVerb::Increment => {
-                        match &value {
-                            TypedValue::Integer(pointer) => {
-                                let increment_reg = self.claim_register();
-                                pointer.read(increment_reg, self);
-                                self.push(ArmIns::AddImm {
-                                    dst: increment_reg,
-                                    src: increment_reg,
-                                    imm: 1
-                                });
-                                pointer.write(increment_reg, self);
-                                self.free_register(increment_reg);
-                                vec![value]   // we've updated the existing value in-place
-                            },
-                            TypedValue::Double{msw: _, lsw: _} =>
-                                panic!("TODO: Support monadic increment of typed value: {:?}", value)
-                        }
+                        value.increment(self);
+                        vec![value]   // we've updated the existing value in-place
                     },
                     MonadicVerb::Square => {
-                        match &value {
-                            TypedValue::Integer(pointer) => {
-                                let multiply_reg = self.claim_register();
-                                pointer.read(multiply_reg, self);
-                                self.instructions.push(ArmIns::Multiply {
-                                    dst: multiply_reg,
-                                    src: multiply_reg,
-                                    mul: multiply_reg,
-                                });
-                                pointer.write(multiply_reg, self);
-                                self.free_register(multiply_reg);
-                                vec![value]   // we've updated the existing value in-place
-                            },
-                            TypedValue::Double{msw: _, lsw: _} =>
-                                panic!("TODO: Support monadic square of typed value: {:?}", value)
-                        }
+                        value.square(self);
+                        vec![value]   // we've updated the existing value in-place
                     },
                     MonadicVerb::Negate => {
-                        match &value {
-                            TypedValue::Integer(pointer) => {
-                                let temp_reg = self.claim_register();
-                                let negation_reg = self.claim_register();
-                                pointer.read(temp_reg, self);
-                                self.instructions.push(ArmIns::MoveImm {
-                                    dst: negation_reg, imm: 0 });
-                                // subtract the immediate from 0
-                                self.instructions.push(ArmIns::Sub {
-                                    dst: temp_reg,
-                                    src: negation_reg,
-                                    sub: temp_reg
-                                });
-                                pointer.write(temp_reg, self);
-                                self.free_register(temp_reg);
-                                self.free_register(negation_reg);
-                                vec![value]   // we've updated the existing value in-place on the stack
-                            },
-                            TypedValue::Double{msw, lsw: _} => {
-                                let msw_reg = self.claim_register();
-                                msw.read(msw_reg, self);
-                                self.instructions.push(ArmIns::ExclusiveOr {
-                                    dst: msw_reg,
-                                    src: msw_reg,
-                                    operand: 0x80000000
-                                }); // flip the MSB of the MSW (2's complement sign bit)
-                                msw.write(msw_reg, self);
-                                self.free_register(msw_reg);
-                                vec![value]   // we've updated the existing value in-place on the stack
-                            }
-                        }
+                        value.negate(self);
+                        vec![value]   // we've updated the existing value in-place
                     },
                     MonadicVerb::Ceiling => {
-                        match &value {
-                            TypedValue::Integer(_) => vec![value], // nothing to do
-                            TypedValue::Double { msw, lsw } => {
-                                // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
-                                let sp_offset = self.stack_allocate_width(8);
-                                msw.copy_to_stack_offset(sp_offset + 4, self);
-                                lsw.copy_to_stack_offset(sp_offset, self);
-                                self.push(ArmIns::LoadExtensionRegisterWidth64 {
-                                    dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
-                                self.push(ArmIns::BranchAndLink { addr: "jceiling" });
-                                let new_value = self.stack_allocate_int();
-                                match &new_value {
-                                    TypedValue::Integer(pointer) => {
-                                        pointer.write(CoreRegister::R0, self);
-                                    },
-                                    _ => panic!("Unreachable")
-                                }
-                                // TODO: we should decrement the old value's refcount so we can reuse its space later on.
-                                vec![new_value]
-                            }
-                        }
-                    }
+                        vec![value.ceiling(self)]  // ceil(double) allocates a new int return value
+                    },
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
                 }
             },
             IRNode::ApplyDyadicVerbToTypedValues {verb, lhs, rhs} => {
-
-                match (&lhs, &rhs) {
-                    (TypedValue::Integer(lhsptr), TypedValue::Integer(rhsptr)) => {
-                        let lhs_reg = self.claim_register();
-                        let rhs_reg = self.claim_register();
-                        lhsptr.read(lhs_reg, self);
-                        rhsptr.read(rhs_reg, self);
-                        match verb {
-                            DyadicVerb::Plus =>
-                                self.instructions.push(
-                                    ArmIns::Add { dst: rhs_reg, src: lhs_reg, add: rhs_reg }),
-                            DyadicVerb::Times =>
-                                self.instructions.push(
-                                    ArmIns::Multiply { dst: rhs_reg, src: lhs_reg, mul: rhs_reg }),
-                            DyadicVerb::Minus =>
-                                self.instructions.push(
-                                    ArmIns::Sub { dst: rhs_reg, src: lhs_reg, sub: rhs_reg }),
-                            DyadicVerb::LessThan => {
-                                self.instructions.push(
-                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                                self.instructions.push(
-                                    ArmIns::MoveLT { dst: rhs_reg, src: 1 });
-                                self.instructions.push(
-                                    ArmIns::MoveGE { dst: rhs_reg, src: 0 });
-                            },
-                            DyadicVerb::Equal => {
-                                self.instructions.push(
-                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                                self.instructions.push(
-                                    ArmIns::MoveEQ { dst: rhs_reg, src: 1 });
-                                self.instructions.push(
-                                    ArmIns::MoveNE { dst: rhs_reg, src: 0 });
-                            }
-                            DyadicVerb::LargerThan => {
-                                self.instructions.push(
-                                    ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                                self.instructions.push(
-                                    ArmIns::MoveGT { dst: rhs_reg, src: 1 });
-                                self.instructions.push(
-                                    ArmIns::MoveLE { dst: rhs_reg, src: 0 });
-                            }
-                            _ => panic!("Not ready to compile dyadic verb: {:?}", verb)
-                        }
-                        let out_value = self.stack_allocate_int();
-                        match &out_value {
-                            TypedValue::Integer(pointer) => pointer.write(rhs_reg, self),
-                            _ => panic!("Unreachable")
-                        }
-                        self.free_register(lhs_reg);
-                        self.free_register(rhs_reg);
-                        vec![out_value]
-                    },
-                    (_, _) => panic!("TODO: Support dyadic verb on types lhs={:?}, rhs={:?}", lhs, rhs)
+                match verb {
+                    DyadicVerb::Plus => vec![lhs.sum(rhs, self)],
+                    DyadicVerb::Times => vec![lhs.product(rhs, self)],
+                    DyadicVerb::Minus => vec![lhs.difference(rhs, self)],
+                    DyadicVerb::LessThan => vec![lhs.compare_lt(rhs, self)],
+                    DyadicVerb::Equal => vec![lhs.compare_eq(rhs, self)],
+                    DyadicVerb::LargerThan => vec![lhs.compare_gt(rhs, self)],
+                    _ => unimplemented!("TODO: Support dyadic verb {:?} on values lhs={:?}, rhs={:?}", verb, lhs, rhs)
                 }
             },
             IRNode::ReduceTypedValues(verb, values) => {
                 // Initialize the accumulator to the last value
                 let accum_reg = self.claim_register();
                 let accum_value = values.last().unwrap();
-                match &accum_value {
-                    TypedValue::Integer(pointer) => pointer.read(accum_reg, self),
-                    _ => panic!("TODO: Support initial accumulation value: {:?}", accum_value)
+                match &accum_value.type_flag() {
+                    TypeFlag::Integer => {
+                        let accum_int : &IntegerValue = accum_value.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                        accum_int.get_value(accum_reg, self)
+                    },
+                    _ => unimplemented!("TODO: Support initial accumulation value: {:?}", accum_value)
                 }
 
                 // Accumulate from right to left.
                 let operand_reg = self.claim_register();
                 for value in values[0..values.len()-1].iter().rev() {
-                    match &value {
-                        TypedValue::Integer(pointer) => pointer.read(operand_reg, self),
-                        _ => panic!("TODO: Support accumulation operand: {:?}", value)
+                    match &value.type_flag() {
+                        TypeFlag::Integer => {
+                            let value_int : &IntegerValue = value.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                            value_int.get_value(operand_reg, self);
+                        },
+                        _ => unimplemented!("TODO: Support accumulation operand: {:?}", value)
                     }
                     match verb {
                         DyadicVerb::Plus => self.push(ArmIns::Add { dst: accum_reg, src: operand_reg, add: accum_reg }),
@@ -641,13 +310,10 @@ impl BasicBlock {
                 self.free_register(operand_reg);
 
                 let out_value = self.stack_allocate_int();
-                match &out_value {
-                    TypedValue::Integer(pointer) => pointer.write(accum_reg, self),
-                    _ => panic!("Unreachable")
-                };
+                out_value.set_value_from_register(accum_reg, self);
                 self.free_register(accum_reg);
                 // TODO: we should decrement refcounts of all input values before returning
-                vec![out_value]
+                vec![Box::new(out_value)]
             },
             IRNode::AssignTypedValuesToGlobal {ident: _, values} => {
                 let mut out = vec![];
@@ -663,7 +329,7 @@ impl BasicBlock {
 pub fn compile_expr(
     globalctx: &mut GlobalContext,
     bb: &mut BasicBlock,
-    expr: &AstNode) -> Vec<TypedValue>
+    expr: &AstNode) -> Vec<Box<dyn TypedValue>>
 {
     match expr {
         parser::AstNode::Integer(int) => {

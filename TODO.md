@@ -1,5 +1,9 @@
 # TODOs
 
+- TODO: implement monadic reciprocal, where we can call the newly centralized load(D0) function shared by print()
+- TODO: make BasicBlock respect ARM calling conventions; if we use anything above r3 push it to stack
+- TODO: Store doubles as 8 contiguous bytes on stack, use ldmia to load them contiguously
+
 - Solve all ctest_monadic_ tests that aren't passing
 - Use movw and movt to replace shifting when loading double precision constants:
   https://stackoverflow.com/questions/10261300/invalid-constant-after-fixup

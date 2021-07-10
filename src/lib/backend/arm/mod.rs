@@ -4,14 +4,17 @@ use std::fs::File;
 use std::io::Write;
 
 use self::instructions::{ArmIns};
-use self::compiler::{GlobalContext, BasicBlock, TypedValue, compile_expr};
-use backend::arm::registers::{CoreRegister, ExtensionRegister};
+use self::compiler::{GlobalContext, BasicBlock, compile_expr};
+use self::values::{TypedValue};
+use backend::arm::registers::{CoreRegister};
 
 mod instructions;
 mod macros;
 mod compiler;
 mod registers;
 mod ir;
+mod values;
+mod memory;
 
 pub struct ARMBackend {}
 
@@ -106,23 +109,9 @@ impl ::Backend for ARMBackend {
     }
 }
 
-fn jprint_value(values: &Vec<TypedValue>, basic_block: &mut BasicBlock) {
+fn jprint_value(values: &Vec<Box<dyn TypedValue>>, basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
-        match &value {
-            TypedValue::Integer(pointer) => {
-                pointer.read(CoreRegister::R0, basic_block);
-                basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
-            },
-            TypedValue::Double { msw, lsw } => {
-                // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
-                let sp_offset = basic_block.stack_allocate_width(8);
-                msw.copy_to_stack_offset(sp_offset + 4, basic_block);
-                lsw.copy_to_stack_offset(sp_offset, basic_block);
-                basic_block.push(ArmIns::LoadExtensionRegisterWidth64 {
-                    dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
-                basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
-            }
-        }
+        value.print(basic_block);
         // Multiple printed terms are separated by space, except for the last item
         if idx != values.len() - 1 {
             basic_block.push(ArmIns::Load {
