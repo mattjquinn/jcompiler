@@ -8,6 +8,7 @@ use linked_hash_set::LinkedHashSet;
 
 use std::fs::File;
 use std::io::Write;
+use ieee754::Ieee754;
 
 use super::instructions::{ArmIns};
 use super::ir::{IRNode};
@@ -16,11 +17,15 @@ use super::memory::{Pointer};
 use backend::arm::registers::{CoreRegister};
 use parser::{DyadicVerb, MonadicVerb};
 use std::ops::Deref;
+use backend::arm::values::TypeFlag::Double;
 
 pub struct GlobalContext {
     ident_map: HashMap<String, Vec<Box<dyn TypedValue>>>,
     heap_pointer: i32,
-    heap_size: i32
+    heap_size: i32,
+    double_constant_pool_label: &'static str,
+    double_constant_pool_offsets: HashMap<String, i32>, // map of stringified values to offsets
+    double_constant_pool_words: Vec<u32>,
 }
 
 impl GlobalContext {
@@ -29,7 +34,10 @@ impl GlobalContext {
         GlobalContext {
             ident_map: HashMap::new(),
             heap_size: 128,
-            heap_pointer: 0
+            heap_pointer: 0,
+            double_constant_pool_label: ".Ldbl_pool",
+            double_constant_pool_offsets: HashMap::new(),
+            double_constant_pool_words: vec![],
         }
     }
 
@@ -85,6 +93,13 @@ impl GlobalContext {
         }
     }
 
+    pub fn write_double_constant_pool_to_file(&self, assembly_file: &mut File) {
+        writeln!(assembly_file, "{}:", self.double_constant_pool_label);
+        for value in self.double_constant_pool_words.iter() {
+            writeln!(assembly_file, "\t.word\t{}", value).expect("write failure");
+        }
+    }
+
     fn _heap_allocate(&mut self, width: i32) -> i32 {
         if self.heap_pointer + width > self.heap_size {
             panic!("Heap allocation failed; adding width {} will overflow heap size of {}; heap pointer is {}", width, self.heap_size, self.heap_pointer);
@@ -100,9 +115,8 @@ impl GlobalContext {
     }
 
     pub fn heap_allocate_double(&mut self) -> DoubleValue {
-        let msw = Pointer::Heap(self._heap_allocate(4));
-        let lsw = Pointer::Heap(self._heap_allocate(4));
-        DoubleValue::new(msw, lsw)
+        let offset = self._heap_allocate(8);
+        DoubleValue::new(Pointer::Heap(offset))
     }
 
     pub fn set_ident_values(&mut self, ident: &String, values: &[Box<dyn TypedValue>]) {
@@ -124,6 +138,28 @@ impl GlobalContext {
 
     pub fn get_ident_values(&mut self, ident: &String) -> Vec<Box<dyn TypedValue>> {
         self.ident_map.get(ident).unwrap().clone()
+    }
+
+    pub fn get_double_constant_pool_offset(&mut self, value: f64) -> (&'static str, i32) {
+        let offset = match self.double_constant_pool_offsets.get(&value.to_string()) {
+            Some(offset) => *offset,
+            None => {
+                let bits = value.bits();
+                let hex_rep = format!("{:x}", bits);
+                let binary_rep = format!("{:064b}", bits);
+                println!("IEEE754 double hex representation of {} is: hex={}, binary={}", value, hex_rep, binary_rep);
+                let lsw : u32 = (bits & 0xFFFFFFFF) as u32;
+                println!("Decimal LSW of {}: {}", value, lsw);
+                let msw: u32 = ((bits >> 32) & 0xFFFFFFFF) as u32;
+                println!("Decimal MSW of {}: {}", value, msw);
+                let offset = (self.double_constant_pool_words.len() * 4) as i32;
+                self.double_constant_pool_words.push(lsw);
+                self.double_constant_pool_words.push(msw);
+                self.double_constant_pool_offsets.insert(value.to_string(), offset);
+                offset
+            }
+        };
+        (self.double_constant_pool_label, offset)
     }
 }
 
@@ -214,9 +250,8 @@ impl BasicBlock {
     }
 
     pub fn stack_allocate_double(&mut self) -> DoubleValue {
-        let msw = Pointer::Stack(self.stack_allocate_width(4));
-        let lsw = Pointer::Stack(self.stack_allocate_width(4));
-        DoubleValue::new(msw, lsw)
+        let offset = self.stack_allocate_width(8);
+        DoubleValue::new(Pointer::Stack(offset))
     }
 
     pub fn claim_register(&mut self) -> CoreRegister {
@@ -244,7 +279,7 @@ impl BasicBlock {
             },
             IRNode::PushDoublePrecisionFloatOntoStack(num) => {
                 let val = self.stack_allocate_double();
-                val.set_value(num, self);
+                val.set_value(num, self, globalctx);
                 vec![Box::new(val)]
             },
             IRNode::ApplyMonadicVerbToTypedValue(verb, value) => {
@@ -263,6 +298,9 @@ impl BasicBlock {
                     },
                     MonadicVerb::Ceiling => {
                         vec![value.ceiling(self)]  // ceil(double) allocates a new int return value
+                    },
+                    MonadicVerb::Reciprocal => {
+                        vec![value.reciprocal(self, globalctx)]  // ceil(double) allocates a new int return value
                     },
                     _ => unimplemented!("TODO: Support monadic verb: {:?}", verb)
                 }

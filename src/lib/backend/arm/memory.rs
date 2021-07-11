@@ -1,4 +1,4 @@
-use backend::arm::registers::{CoreRegister};
+use backend::arm::registers::{CoreRegister, ExtensionRegisterDoublePrecision};
 use super::instructions::{ArmIns};
 use super::compiler::{BasicBlock};
 use std::fmt::{Formatter, Error};
@@ -18,7 +18,7 @@ impl Pointer {
         }
     }
 
-    pub fn read(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
+    pub fn load_width4(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
         let (src, offset) = self.get_offset();
         basic_block.push(ArmIns::LoadOffset {
             dst,
@@ -27,7 +27,7 @@ impl Pointer {
         });
     }
 
-    pub fn write(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
+    pub fn store_width4(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
         let (dst, offset) = self.get_offset();
         basic_block.push(ArmIns::StoreOffset {
             dst,
@@ -36,24 +36,25 @@ impl Pointer {
         });
     }
 
-    pub fn read_address(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
+    pub fn load_width8(&self, dst: ExtensionRegisterDoublePrecision, basic_block: &mut BasicBlock) {
+        let (src, offset) = self.get_offset();
+        basic_block.push(ArmIns::LoadDoublePrecisionRegister {
+            dst, src, offsets: vec![offset] });
+    }
+
+    pub fn store_width8(&self, src: ExtensionRegisterDoublePrecision, basic_block: &mut BasicBlock) {
+        let (dst, offset) = self.get_offset();
+        basic_block.push(ArmIns::StoreDoublePrecisionRegister {
+            src, dst, offsets: vec![offset] });
+    }
+
+    pub fn load_address(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
         let (src, offset) = self.get_offset();
         basic_block.push(ArmIns::AddImm {
             dst,
             src,
             imm: offset
         });
-    }
-
-    pub fn copy_to_stack_offset(&self, dst_stack_offset: i32, basic_block: &mut BasicBlock) {
-        let transfer_reg = basic_block.claim_register();
-        self.read(transfer_reg, basic_block);
-        basic_block.push(ArmIns::StoreOffset {
-            src: transfer_reg,
-            dst: CoreRegister::SP,
-            offsets: vec![dst_stack_offset]
-        });
-        basic_block.free_register(transfer_reg);
     }
 }
 

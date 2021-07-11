@@ -2,11 +2,10 @@ use super::memory::Pointer;
 use super::compiler::{BasicBlock, GlobalContext};
 use super::instructions::{ArmIns};
 use std::any::Any;
-use ieee754::Ieee754;
 
 use std::fmt::{Formatter, Error};
 use core::fmt::Debug;
-use backend::arm::registers::{CoreRegister, ExtensionRegister};
+use backend::arm::registers::{CoreRegister, ExtensionRegisterDoublePrecision, ExtensionRegisterSinglePrecision};
 
 #[derive(Debug, Copy, Clone)]
 pub enum TypeFlag {
@@ -26,6 +25,7 @@ pub trait TypedValue: TypedValueClone + Debug {
     fn square(&self, basic_block: &mut BasicBlock);
     fn negate(&self, basic_block: &mut BasicBlock);
     fn ceiling(&self, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // may allocate
+    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue>; // may allocate
     fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
     fn product(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
     fn difference(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
@@ -74,16 +74,16 @@ impl IntegerValue {
     pub fn set_value(&self, value: i32, basic_block: &mut BasicBlock) {
         let transfer_reg = basic_block.claim_register();
         basic_block.push(ArmIns::MoveImm { imm: value, dst: transfer_reg });
-        self.pointer.write(transfer_reg, basic_block);
+        self.pointer.store_width4(transfer_reg, basic_block);
         basic_block.free_register(transfer_reg);
     }
 
     pub fn set_value_from_register(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
-        self.pointer.write(src, basic_block);
+        self.pointer.store_width4(src, basic_block);
     }
 
     pub fn get_value(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
-        self.pointer.read(dst, basic_block);
+        self.pointer.load_width4(dst, basic_block);
     }
 }
 
@@ -114,7 +114,7 @@ impl TypedValue for IntegerValue {
             Pointer::Stack(_) => {
                 let out = globalctx.heap_allocate_int();
                 let transfer_reg = basic_block.claim_register();
-                self.pointer.read(transfer_reg, basic_block);
+                self.pointer.load_width4(transfer_reg, basic_block);
                 out.set_value_from_register(transfer_reg, basic_block);
                 basic_block.free_register(transfer_reg);
                 Box::new(out)
@@ -123,38 +123,38 @@ impl TypedValue for IntegerValue {
     }
 
     fn print(&self, basic_block: &mut BasicBlock) {
-        self.pointer.read(CoreRegister::R0, basic_block);
+        self.pointer.load_width4(CoreRegister::R0, basic_block);
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
     }
 
     fn increment(&self, basic_block: &mut BasicBlock) {
         let increment_reg = basic_block.claim_register();
-        self.pointer.read(increment_reg, basic_block);
+        self.pointer.load_width4(increment_reg, basic_block);
         basic_block.push(ArmIns::AddImm {
             dst: increment_reg,
             src: increment_reg,
             imm: 1
         });
-        self.pointer.write(increment_reg, basic_block);
+        self.pointer.store_width4(increment_reg, basic_block);
         basic_block.free_register(increment_reg);
     }
 
     fn square(&self, basic_block: &mut BasicBlock) {
         let multiply_reg = basic_block.claim_register();
-        self.pointer.read(multiply_reg, basic_block);
+        self.pointer.load_width4(multiply_reg, basic_block);
         basic_block.push(ArmIns::Multiply {
             dst: multiply_reg,
             src: multiply_reg,
             mul: multiply_reg,
         });
-        self.pointer.write(multiply_reg, basic_block);
+        self.pointer.store_width4(multiply_reg, basic_block);
         basic_block.free_register(multiply_reg);
     }
 
     fn negate(&self, basic_block: &mut BasicBlock) {
         let temp_reg = basic_block.claim_register();
         let negation_reg = basic_block.claim_register();
-        self.pointer.read(temp_reg, basic_block);
+        self.pointer.load_width4(temp_reg, basic_block);
         basic_block.push(ArmIns::MoveImm {
             dst: negation_reg, imm: 0 });
         // subtract the immediate from 0
@@ -163,13 +163,33 @@ impl TypedValue for IntegerValue {
             src: negation_reg,
             sub: temp_reg
         });
-        self.pointer.write(temp_reg, basic_block);
+        self.pointer.store_width4(temp_reg, basic_block);
         basic_block.free_register(temp_reg);
         basic_block.free_register(negation_reg);
     }
 
     fn ceiling(&self, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
         Box::new(self.clone())  // nothing to do; ceil(int) is always the given int
+    }
+
+    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+        // TODO: all of the registers used here need to be claimed from the BasicBlock
+        let numerator = basic_block.stack_allocate_double();  // TODO: reclaim this as well
+        let numerator_reg = ExtensionRegisterDoublePrecision::D0; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+        numerator.set_value(1.0, basic_block, globalctx);
+        numerator.get_value(numerator_reg, basic_block);
+        let denom_reg_int = basic_block.claim_register();
+        self.get_value(denom_reg_int, basic_block);
+        let denom_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+        basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: denom_reg_int, dst: denom_reg_single_precision });
+        let denom_reg_double_precision = ExtensionRegisterDoublePrecision::D1; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+        basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: denom_reg_single_precision, dst:  denom_reg_double_precision });
+        let result_reg = ExtensionRegisterDoublePrecision::D2; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+        basic_block.push(ArmIns::DivideDoublePrecision { dst: result_reg, numerator: numerator_reg, denominator: denom_reg_double_precision });
+        let result = basic_block.stack_allocate_double();
+        result.set_value_from_register(result_reg, basic_block);
+        basic_block.free_register(denom_reg_int);
+        Box::new(result)
     }
 
     fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
@@ -179,11 +199,11 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Add { dst: rhs_reg, src: lhs_reg, add: rhs_reg });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -198,11 +218,11 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Multiply { dst: rhs_reg, src: lhs_reg, mul: rhs_reg });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -217,11 +237,11 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Sub { dst: rhs_reg, src: lhs_reg, sub: rhs_reg });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -236,13 +256,13 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
                 basic_block.push(ArmIns::MoveLT { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveGE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -257,13 +277,13 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
                 basic_block.push(ArmIns::MoveGT { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveLE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -278,13 +298,13 @@ impl TypedValue for IntegerValue {
                 let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
-                self.pointer.read(lhs_reg, basic_block);
-                addend_int.pointer.read(rhs_reg, basic_block);
+                self.pointer.load_width4(lhs_reg, basic_block);
+                addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
                 basic_block.push(ArmIns::MoveEQ { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveNE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
-                out_value.pointer.write(rhs_reg, basic_block);
+                out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
                 Box::new(out_value)
@@ -296,69 +316,34 @@ impl TypedValue for IntegerValue {
 #[derive(Debug, Clone)]
 pub struct DoubleValue {
     ty: TypeFlag,
-    msw: Pointer,
-    lsw: Pointer
+    pointer: Pointer,
 }
 
 impl DoubleValue {
-    pub fn new(msw: Pointer, lsw: Pointer) -> DoubleValue {
+    pub fn new(pointer: Pointer) -> DoubleValue {
         DoubleValue {
             ty: TypeFlag::Double,
-            msw,
-            lsw
+            pointer
         }
     }
 
-    pub fn set_value(&self, num: f64, basic_block: &mut BasicBlock) {
-        let bits = num.bits();
-        let hex_rep = format!("{:x}", bits);
-        let binary_rep = format!("{:064b}", bits);
-        println!("IEEE754 double hex representation of {} is: hex={}, binary={}", num, hex_rep, binary_rep);
-        // Note: due to limited width of ARM's MOV immediate field,
-        // we split the initialization of both MSW and LWS over multiple
-        // per-byte instructions; probably could be optimized.
-        { // LSW
-            let lsw_reg = basic_block.claim_register();
-            {
-                let half1 = (bits & 0xFFFF) as u16;
-                basic_block.push(ArmIns::MoveImmUnsigned {
-                    imm: half1, dst: lsw_reg });
-            }
-            {
-                let temp_reg = basic_block.claim_register();
-                let half2 = ((bits >> 16) & 0xFFFF) as u16;
-                basic_block.push(ArmIns::MoveImmUnsigned {
-                    imm: half2, dst: temp_reg });
-                basic_block.push(ArmIns::LeftShift {
-                    src: temp_reg, dst: temp_reg, n_bits: 16 });
-                basic_block.push(ArmIns::Add {
-                    dst: lsw_reg, src: lsw_reg, add: temp_reg });
-                basic_block.free_register(temp_reg);
-            }
-            self.lsw.write(lsw_reg, basic_block);
-            basic_block.free_register(lsw_reg);
-        }
-        { // MSW
-            let msw_reg = basic_block.claim_register();
-            {
-                let half1 = ((bits >> 32) & 0xFFFF) as u16;
-                basic_block.push(ArmIns::MoveImmUnsigned {
-                    imm: half1, dst: msw_reg });
-            }
-            {
-                let temp_reg = basic_block.claim_register();
-                let half2 = ((bits >> 48) & 0xFFFF) as u16;
-                basic_block.push(ArmIns::MoveImmUnsigned {
-                    imm: half2, dst: temp_reg });
-                basic_block.push(ArmIns::LeftShift {
-                    src: temp_reg, dst: temp_reg, n_bits: 16 });
-                basic_block.push(ArmIns::Add {
-                    dst: msw_reg, src: msw_reg, add: temp_reg });
-                basic_block.free_register(temp_reg);
-            }
-            self.msw.write(msw_reg, basic_block);
-            basic_block.free_register(msw_reg);
-        }
+    pub fn set_value(&self, num: f64, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) {
+        let (label, offset) = globalctx.get_double_constant_pool_offset(num);
+        let transfer_reg = ExtensionRegisterDoublePrecision::D14;
+        basic_block.push(ArmIns::LoadDoublePrecisionRegisterFromLabel {
+            src: label.to_string(),
+            dst: transfer_reg,
+            offset
+        });
+        self.pointer.store_width8(transfer_reg, basic_block);
+    }
+
+    pub fn get_value(&self, dst: ExtensionRegisterDoublePrecision, basic_block: &mut BasicBlock) {
+        self.pointer.load_width8(dst, basic_block);
+    }
+
+    pub fn set_value_from_register(&self, src: ExtensionRegisterDoublePrecision, basic_block: &mut BasicBlock) {
+        self.pointer.store_width8(src, basic_block);
     }
 }
 
@@ -369,8 +354,8 @@ impl TypedValue for DoubleValue {
     }
 
     fn is_entirely_on_heap(&self) -> bool {
-        match (&self.msw, &self.lsw) {
-            (Pointer::Heap(_), Pointer::Heap(_)) => true,
+        match &self.pointer {
+            Pointer::Heap(_) => true,
             _ => false
         }
     }
@@ -384,34 +369,20 @@ impl TypedValue for DoubleValue {
     }
 
     fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
-        match (&self.msw, &self.lsw) {
-            (Pointer::Heap(_), Pointer::Heap(_)) => Box::new(self.clone()), // TODO: increment refcount
-            (Pointer::Heap(_), Pointer::Stack(_)) => {
-                unimplemented!("TODO: persist only stack Double MSW to Heap")
-            },
-            (Pointer::Stack(_), Pointer::Heap(_)) => {
-                unimplemented!("TODO: persist only stack Double LSW to Heap")
-            }
-            (Pointer::Stack(_), Pointer::Stack(_)) => {
+        match &self.pointer {
+            Pointer::Heap(_) => Box::new(self.clone()), // TODO: increment refcount
+            Pointer::Stack(_) => {
                 let out = globalctx.heap_allocate_double();
-                let transfer_reg = basic_block.claim_register();
-                self.msw.read(transfer_reg, basic_block);
-                out.msw.write(transfer_reg, basic_block);
-                self.lsw.read(transfer_reg, basic_block);
-                out.lsw.write(transfer_reg, basic_block);
-                basic_block.free_register(transfer_reg);
+                let transfer_reg = ExtensionRegisterDoublePrecision::D12;
+                self.pointer.load_width8(transfer_reg, basic_block);
+                out.pointer.store_width8(transfer_reg, basic_block);
                 Box::new(out)
             }
         }
     }
 
     fn print(&self, basic_block: &mut BasicBlock) {
-        // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
-        let sp_offset = basic_block.stack_allocate_width(8);
-        self.msw.copy_to_stack_offset(sp_offset + 4, basic_block);
-        self.lsw.copy_to_stack_offset(sp_offset, basic_block);
-        basic_block.push(ArmIns::LoadExtensionRegisterWidth64 {
-            dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
+        self.get_value(ExtensionRegisterDoublePrecision::D0, basic_block);
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
     }
 
@@ -424,29 +395,23 @@ impl TypedValue for DoubleValue {
     }
 
     fn negate(&self, basic_block: &mut BasicBlock) {
-        let msw_reg = basic_block.claim_register();
-        self.msw.read(msw_reg, basic_block);
-        basic_block.push(ArmIns::ExclusiveOr {
-            dst: msw_reg,
-            src: msw_reg,
-            operand: 0x80000000
-        }); // flip the MSB of the MSW (2's complement sign bit)
-        self.msw.write(msw_reg, basic_block);
-        basic_block.free_register(msw_reg);
+        let transfer_reg = ExtensionRegisterDoublePrecision::D2; // TODO: claim this from the BasicBlock
+        self.get_value(transfer_reg, basic_block);
+        basic_block.push(ArmIns::NegateDoublePrecision { dst: transfer_reg, operand: transfer_reg });
+        self.set_value_from_register(transfer_reg, basic_block);
     }
 
     fn ceiling(&self, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
-        // TODO: reclaim this stack entry after the call to print, we only use it to load register d0
-        let sp_offset = basic_block.stack_allocate_width(8);
-        self.msw.copy_to_stack_offset(sp_offset + 4, basic_block);
-        self.lsw.copy_to_stack_offset(sp_offset, basic_block);
-        basic_block.push(ArmIns::LoadExtensionRegisterWidth64 {
-            dst: ExtensionRegister::D0, src: CoreRegister::SP, offsets: vec![sp_offset] });
+        self.get_value(ExtensionRegisterDoublePrecision::D0, basic_block);
         basic_block.push(ArmIns::BranchAndLink { addr: "jceiling" });
         let new_value = basic_block.stack_allocate_int();
         new_value.set_value_from_register(CoreRegister::R0, basic_block);
         // TODO: we should decrement the old value's refcount so we can reuse its space later on.
         Box::new(new_value)
+    }
+
+    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+        todo!()
     }
 
     fn sum(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
@@ -482,6 +447,6 @@ impl std::fmt::Display for IntegerValue {
 
 impl std::fmt::Display for DoubleValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.write_fmt(format_args!("DoubleValue<msw={}, lsw={}>", self.msw, self.lsw))
+        f.write_fmt(format_args!("DoubleValue<pointer={}>", self.pointer))
     }
 }

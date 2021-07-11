@@ -1,5 +1,5 @@
 use itertools::free::join;
-use backend::arm::registers::{CoreRegister, ExtensionRegister};
+use backend::arm::registers::{CoreRegister, ExtensionRegisterDoublePrecision, ExtensionRegisterSinglePrecision};
 
 #[derive(Debug)]
 pub enum ArmIns {
@@ -25,7 +25,17 @@ pub enum ArmIns {
     LeftShift { dst: CoreRegister, src: CoreRegister, n_bits: i8 },
     BranchAndLink { addr: &'static str },
     ExclusiveOr { dst: CoreRegister, src: CoreRegister, operand: u32 },
-    LoadExtensionRegisterWidth64 { dst: ExtensionRegister, src: CoreRegister, offsets: Vec<i32> }
+
+    /*******************************************************************/
+    /* VFP (Vector Floating Point) instructions (for FPU coprocessor)  */
+    /*******************************************************************/
+    LoadDoublePrecisionRegister { dst: ExtensionRegisterDoublePrecision, src: CoreRegister, offsets: Vec<i32> },
+    LoadDoublePrecisionRegisterFromLabel { dst: ExtensionRegisterDoublePrecision, src: String, offset: i32 },
+    StoreDoublePrecisionRegister { src: ExtensionRegisterDoublePrecision, dst: CoreRegister, offsets: Vec<i32> },
+    MoveCoreRegisterToSinglePrecisionExtensionRegister { dst: ExtensionRegisterSinglePrecision, src: CoreRegister },
+    ConvertSinglePrecisionToDoublePrecision { src: ExtensionRegisterSinglePrecision, dst: ExtensionRegisterDoublePrecision },
+    DivideDoublePrecision { dst: ExtensionRegisterDoublePrecision, numerator: ExtensionRegisterDoublePrecision, denominator: ExtensionRegisterDoublePrecision },
+    NegateDoublePrecision { dst: ExtensionRegisterDoublePrecision, operand: ExtensionRegisterDoublePrecision },
 }
 
 impl std::fmt::Display for ArmIns {
@@ -106,9 +116,31 @@ impl std::fmt::Display for ArmIns {
             ArmIns::ExclusiveOr { dst, src, operand } => {
                 f.write_str(format!("\teor\t{}, {}, #0x{}", dst, src, format!("{:08x}", operand)).as_str())
             }
-            ArmIns::LoadExtensionRegisterWidth64 { dst, src, offsets } => {
+            /*******************************************************************/
+            /* VFP (Vector Floating Point) instructions (for FPU coprocessor)  */
+            /*******************************************************************/
+            ArmIns::LoadDoublePrecisionRegister { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("\tvldr.64\t{}, [{}, {}]", dst, src, offset_str).as_str())
+            }
+            ArmIns::LoadDoublePrecisionRegisterFromLabel { dst, src, offset } => {
+                f.write_str(format!("\tvldr.64\t{}, {}+{}", dst, src, offset).as_str())
+            }
+            ArmIns::StoreDoublePrecisionRegister { dst, src, offsets } => {
+                let offset_str = join(offsets, ", ");
+                f.write_str(format!("\tvstr.64\t{}, [{}, {}]", src, dst, offset_str).as_str())
+            }
+            ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { dst, src } => {
+                f.write_str(format!("\tvmov\t{}, {}", dst, src).as_str())
+            }
+            ArmIns::ConvertSinglePrecisionToDoublePrecision { dst, src } => {
+                f.write_str(format!("\tvcvt.f64.f32\t{}, {}", dst, src).as_str())
+            }
+            ArmIns::DivideDoublePrecision { dst, numerator, denominator } => {
+                f.write_str(format!("\tvdiv.f64\t{}, {}, {}", dst, numerator, denominator).as_str())
+            }
+            ArmIns::NegateDoublePrecision { dst, operand } => {
+                f.write_str(format!("\tvneg.f64\t{}, {}", dst, operand).as_str())
             }
         }
     }

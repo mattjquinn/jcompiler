@@ -94,10 +94,11 @@ impl ::Backend for ARMBackend {
         globalctx.write_postamble_to_file(&mut assembly_file);
         let mut postamble = Vec::new();
         postamble.push("\tpop\t{ip, pc}".to_string());
+        // postamble.push("\tbx\tlr".to_string());
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
-
+        globalctx.write_double_constant_pool_to_file(&mut assembly_file);
         let args = vec![
             "assemble-and-link-armv7.sh",
             &assembly_filename[..],
