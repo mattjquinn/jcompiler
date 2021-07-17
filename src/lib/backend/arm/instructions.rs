@@ -152,7 +152,7 @@ impl std::fmt::Display for ArmIns {
                 f.write_str(format!("\tvmov\t{}, {}", dst, src).as_str())
             }
             ArmIns::ConvertSinglePrecisionToDoublePrecision { dst, src } => {
-                f.write_str(format!("\tvcvt.f64.f32\t{}, {}", dst, src).as_str())
+                f.write_str(format!("\tvcvt.f64.s32\t{}, {}", dst, src).as_str())
             }
             ArmIns::DivideDoublePrecision { dst, numerator, denominator } => {
                 f.write_str(format!("\tvdiv.f64\t{}, {}, {}", dst, numerator, denominator).as_str())

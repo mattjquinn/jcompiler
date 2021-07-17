@@ -59,7 +59,6 @@ generate_tests!([
     "ctest_dyadic_copy.ijs",
     "ctest_dyadic_shape.ijs",
     "ctest_global_refs_mixedverbs.ijs",
-    "ctest_monadic_reciprocal.ijs",
     "ctest_monadic_shapeof.ijs",
     "ctest_negative_numbers.ijs",
     "ctest_monadic_tally.ijs",
