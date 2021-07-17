@@ -15,20 +15,24 @@ export ARM_LINARO_CROSS_COMPILER_PATH="/opt/gcc-linaro-7.4.1-2019.02-x86_64_arm-
 
 # Note: each output executable gets its own jarm.o because the test suite runs concurrently.
 
+echo "Building $2_jarm.o..."
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-gcc \
         -v \
         -static \
         -o $2_jarm.o \
         -c c_defns/jarm.c
 
+echo "Building $1.o..."
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-as \
         -march=armv7-a \
         -mfloat-abi=hard \
         -mfpu=vfpv3-d16 \
+        -mthumb \
         -meabi=5 \
         -o $1.o \
         $1
 
+echo "Linking $1.o with $2_jarm.o..."
 $ARM_LINARO_CROSS_COMPILER_PATH/bin/arm-linux-gnueabihf-ld \
         -plugin $ARM_LINARO_CROSS_COMPILER_PATH/libexec/gcc/arm-linux-gnueabihf/7.4.1/liblto_plugin.so \
         -plugin-opt=$ARM_LINARO_CROSS_COMPILER_PATH/libexec/gcc/arm-linux-gnueabihf/7.4.1/lto-wrapper \

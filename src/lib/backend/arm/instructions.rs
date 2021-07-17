@@ -6,12 +6,12 @@ pub enum ArmIns {
     Move { dst: CoreRegister, src: CoreRegister },
     MoveImm { dst: CoreRegister, imm: i32 }, // TODO: should imm be narrowed in accordance with ARM's actual allowed width?
     MoveImmUnsigned { dst: CoreRegister, imm: u16 }, // TODO: is this width for imm true to actual ARM width?
-    StoreOffset { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
-    Store { dst: CoreRegister, src: CoreRegister },
+    Store { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
+    StoreTwoConsecutiveRegisters { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
     AddImm { dst: CoreRegister, src: CoreRegister, imm: i32 },
     SubImm { dst: CoreRegister, src: CoreRegister, imm: i32 },
-    Load { dst: CoreRegister, src: String },
-    LoadOffset { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
+    Load { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
+    LoadTwoConsecutiveRegisters { dst: CoreRegister, src: CoreRegister, offsets: Vec<i32> },
     Multiply { dst: CoreRegister, src: CoreRegister, mul: CoreRegister },
     Sub { dst: CoreRegister, src: CoreRegister, sub: CoreRegister },
     Add { dst: CoreRegister, src: CoreRegister, add: CoreRegister },
@@ -25,6 +25,8 @@ pub enum ArmIns {
     LeftShift { dst: CoreRegister, src: CoreRegister, n_bits: i8 },
     BranchAndLink { addr: &'static str },
     ExclusiveOr { dst: CoreRegister, src: CoreRegister, operand: u32 },
+    GenerateRegisterRelativeAddress { dst: CoreRegister, label: &'static str, offset: i32 },
+    IfThen { xyz: &'static str, cond: &'static str },
 
     /*******************************************************************/
     /* VFP (Vector Floating Point) instructions (for FPU coprocessor)  */
@@ -50,9 +52,17 @@ impl std::fmt::Display for ArmIns {
             ArmIns::MoveImmUnsigned { dst, imm } => {
                 f.write_str(format!("\tmov\t{}, #0x{}", dst, format!("{:04x}", imm)).as_str())
             },
-            ArmIns::StoreOffset { dst, src, offsets } => {
+            ArmIns::Store { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("\tstr\t{}, [{}, {}]", src, dst, offset_str).as_str())
+            }
+            ArmIns::StoreTwoConsecutiveRegisters { dst, src, offsets } => {
+                if offsets.is_empty() {
+                    f.write_str(format!("\tstrd\t{}, [{}]", src, dst).as_str())
+                } else {
+                    let offset_str = join(offsets, ", ");
+                    f.write_str(format!("\tstrd\t{}, [{}, {}]", src, dst, offset_str).as_str())
+                }
             }
             ArmIns::AddImm { dst, src, imm } => {
                 if dst == src {
@@ -62,18 +72,23 @@ impl std::fmt::Display for ArmIns {
                     f.write_str(format!("\tadd\t{}, {}, {}", dst, src, imm).as_str())
                 }
             }
-            ArmIns::LoadOffset { dst, src, offsets } => {
+            ArmIns::Load { dst, src, offsets } => {
                 let offset_str = join(offsets, ", ");
                 f.write_str(format!("\tldr\t{}, [{}, {}]", dst, src, offset_str).as_str())
+            }
+            ArmIns::LoadTwoConsecutiveRegisters { dst, src, offsets } => {
+                if offsets.is_empty() {
+                    f.write_str(format!("\tldrd\t{}, [{}]", dst, src).as_str())
+                } else {
+                    let offset_str = join(offsets, ", ");
+                    f.write_str(format!("\tldrd\t{}, [{}, {}]", dst, src, offset_str).as_str())
+                }
             }
             ArmIns::Multiply { dst, src, mul } => {
                 f.write_str(format!("\tmul\t{}, {}, {}", dst, src, mul).as_str())
             }
             ArmIns::Sub { dst, src, sub } => {
                 f.write_str(format!("\tsub\t{}, {}, {}", dst, src, sub).as_str())
-            }
-            ArmIns::Load { dst, src } => {
-                f.write_str(format!("\tldr\t{}, {}", dst, src).as_str())
             }
             ArmIns::Add { dst, src, add } => {
                 f.write_str(format!("\tadd\t{}, {}, {}", dst, src, add).as_str())
@@ -99,9 +114,6 @@ impl std::fmt::Display for ArmIns {
             ArmIns::MoveLE { dst, src } => {
                 f.write_str(format!("\tmovle\t{}, #{}", dst, src).as_str())
             }
-            ArmIns::Store { dst, src } => {
-                f.write_str(format!("\tstr\t{}, [{}]", src, dst).as_str())
-            }
             ArmIns::LeftShift { dst, src, n_bits} => {
                 f.write_str(format!("\tlsl\t{}, {}, #{}", dst, src, n_bits).as_str())
             }
@@ -115,6 +127,12 @@ impl std::fmt::Display for ArmIns {
             },
             ArmIns::ExclusiveOr { dst, src, operand } => {
                 f.write_str(format!("\teor\t{}, {}, #0x{}", dst, src, format!("{:08x}", operand)).as_str())
+            }
+            ArmIns::GenerateRegisterRelativeAddress { dst, label, offset } => {
+                f.write_str(format!("\tadr\t{}, {}+{}", dst, label, offset).as_str())
+            }
+            ArmIns::IfThen { xyz, cond } => {
+                f.write_str(format!("\tit{}\t{}", xyz, cond).as_str())
             }
             /*******************************************************************/
             /* VFP (Vector Floating Point) instructions (for FPU coprocessor)  */

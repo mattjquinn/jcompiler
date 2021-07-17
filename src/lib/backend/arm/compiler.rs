@@ -17,7 +17,6 @@ use super::memory::{Pointer};
 use backend::arm::registers::{CoreRegister};
 use parser::{DyadicVerb, MonadicVerb};
 use std::ops::Deref;
-use backend::arm::values::TypeFlag::Double;
 
 pub struct GlobalContext {
     ident_map: HashMap<String, Vec<Box<dyn TypedValue>>>,
@@ -94,7 +93,7 @@ impl GlobalContext {
     }
 
     pub fn write_double_constant_pool_to_file(&self, assembly_file: &mut File) {
-        writeln!(assembly_file, "{}:", self.double_constant_pool_label);
+        writeln!(assembly_file, "{}:", self.double_constant_pool_label).expect("write failure");
         for value in self.double_constant_pool_words.iter() {
             writeln!(assembly_file, "\t.word\t{}", value).expect("write failure");
         }
@@ -201,7 +200,10 @@ impl BasicBlock {
                 CoreRegister::R0,
                 CoreRegister::R1,
                 CoreRegister::R2,
-                CoreRegister::R3
+                CoreRegister::R3,
+                CoreRegister::R4,
+                CoreRegister::R5,
+                CoreRegister::R6,
             ].iter().cloned().collect()
         }
     }

@@ -20,7 +20,7 @@ impl Pointer {
 
     pub fn load_width4(&self, dst: CoreRegister, basic_block: &mut BasicBlock) {
         let (src, offset) = self.get_offset();
-        basic_block.push(ArmIns::LoadOffset {
+        basic_block.push(ArmIns::Load {
             dst,
             src,
             offsets: vec![offset]
@@ -29,7 +29,7 @@ impl Pointer {
 
     pub fn store_width4(&self, src: CoreRegister, basic_block: &mut BasicBlock) {
         let (dst, offset) = self.get_offset();
-        basic_block.push(ArmIns::StoreOffset {
+        basic_block.push(ArmIns::Store {
             dst,
             src,
             offsets: vec![offset]

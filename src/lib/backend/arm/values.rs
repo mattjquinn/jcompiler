@@ -20,7 +20,7 @@ pub trait TypedValue: TypedValueClone + Debug {
     fn as_any(&self) -> &dyn Any;
     fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue>; // may allocate
 
-    fn print(&self, basic_block: &mut BasicBlock);
+    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock);
     fn increment(&self, basic_block: &mut BasicBlock); // increments in-place without allocation
     fn square(&self, basic_block: &mut BasicBlock);
     fn negate(&self, basic_block: &mut BasicBlock);
@@ -122,8 +122,10 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn print(&self, basic_block: &mut BasicBlock) {
+    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock) {
         self.pointer.load_width4(CoreRegister::R0, basic_block);
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: match emit_space { true => 1, false => 0 }});
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R2, imm: match emit_newline { true => 1, false => 0 }});
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
     }
 
@@ -259,6 +261,7 @@ impl TypedValue for IntegerValue {
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "lt" });
                 basic_block.push(ArmIns::MoveLT { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveGE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
@@ -280,6 +283,7 @@ impl TypedValue for IntegerValue {
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "gt" });
                 basic_block.push(ArmIns::MoveGT { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveLE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
@@ -301,6 +305,7 @@ impl TypedValue for IntegerValue {
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
                 basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
+                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "eq" });
                 basic_block.push(ArmIns::MoveEQ { dst: rhs_reg, src: 1 });
                 basic_block.push(ArmIns::MoveNE { dst: rhs_reg, src: 0 });
                 let out_value = basic_block.stack_allocate_int();
@@ -330,11 +335,32 @@ impl DoubleValue {
     pub fn set_value(&self, num: f64, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) {
         let (label, offset) = globalctx.get_double_constant_pool_offset(num);
         let transfer_reg = ExtensionRegisterDoublePrecision::D14;
-        basic_block.push(ArmIns::LoadDoublePrecisionRegisterFromLabel {
-            src: label.to_string(),
-            dst: transfer_reg,
+        let relative_addr_reg = CoreRegister::R3; // TODO: need to claim this
+        let first_of_dual_reg = CoreRegister::R4; // TODO: need to claim this
+        basic_block.push(ArmIns::GenerateRegisterRelativeAddress {
+            dst: relative_addr_reg,
+            label,
             offset
         });
+        basic_block.push(ArmIns::LoadTwoConsecutiveRegisters {
+            src: relative_addr_reg,
+            dst: first_of_dual_reg,
+            offsets: vec![]
+        });
+        // TODO: recover this temporary allocation
+        let transfer_stack_offset = basic_block.stack_allocate_width(8);
+        basic_block.push(ArmIns::StoreTwoConsecutiveRegisters {
+            src: first_of_dual_reg,
+            dst: CoreRegister::SP,
+            offsets: vec![transfer_stack_offset]
+        });
+        basic_block.push(ArmIns::LoadDoublePrecisionRegister {
+            src: CoreRegister::SP,
+            dst: transfer_reg,
+            offsets: vec![transfer_stack_offset],
+        });
+        // TODO: we can probably simplify, we probably don't need to store in a double register first,
+        // we can make an overload of store_width8 that accepts two side-by-side registers instead
         self.pointer.store_width8(transfer_reg, basic_block);
     }
 
@@ -381,8 +407,10 @@ impl TypedValue for DoubleValue {
         }
     }
 
-    fn print(&self, basic_block: &mut BasicBlock) {
+    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock) {
         self.get_value(ExtensionRegisterDoublePrecision::D0, basic_block);
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R0, imm: match emit_space { true => 1, false => 0 }});
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: match emit_newline { true => 1, false => 0 }});
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
     }
 
@@ -410,7 +438,7 @@ impl TypedValue for DoubleValue {
         Box::new(new_value)
     }
 
-    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+    fn reciprocal(&self, _basic_block: &mut BasicBlock, _globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
         todo!()
     }
 

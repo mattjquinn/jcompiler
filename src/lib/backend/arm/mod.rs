@@ -3,10 +3,8 @@ use parser;
 use std::fs::File;
 use std::io::Write;
 
-use self::instructions::{ArmIns};
 use self::compiler::{GlobalContext, BasicBlock, compile_expr};
 use self::values::{TypedValue};
-use backend::arm::registers::{CoreRegister};
 
 mod instructions;
 mod macros;
@@ -48,16 +46,7 @@ impl ::Backend for ARMBackend {
                     match &**expr {
                         // top-level global assignments aren't printed
                         parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
-                        _ => {
-                            jprint_value(&values, &mut basic_block);
-
-                            // All printed expressions are terminated with a newline followed by three spaces (per ijconsole)
-                            basic_block.push(ArmIns::Load {
-                                dst: CoreRegister::R0,
-                                src: "=line_end_nl_fmt".to_string(),
-                            });
-                            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
-                        }
+                        _ => jprint_value(&values, &mut basic_block)
                     }
                     basic_block.cleanup();
                     basic_blocks.push(basic_block);
@@ -75,12 +64,14 @@ impl ::Backend for ARMBackend {
         println!("Writing ARM...");
         let preamble = vec![
             "\t.arch armv7-a",
-            "\t.data",
-            "\tline_end_nl_fmt:  .asciz \"\\n\"",
-            "\tspace_fmt:  .asciz \" \"",
             "\t.text",
+            "\t.align 1",
             "\t.global main",
             "\t.syntax unified",
+            "\t.thumb",
+            "\t.thumb_func",
+            "\t.fpu vfpv3-d16",
+            "\t.type\tmain, %function",
             "main:",
             "\tpush\t{ip, lr}",
         ];
@@ -92,9 +83,11 @@ impl ::Backend for ARMBackend {
             basic_block.write_instructions_to_file(&mut assembly_file);
         }
         globalctx.write_postamble_to_file(&mut assembly_file);
-        let mut postamble = Vec::new();
-        postamble.push("\tpop\t{ip, pc}".to_string());
-        // postamble.push("\tbx\tlr".to_string());
+        let postamble = vec![
+            "\tpop\t{ip, pc}",
+            ".L3:",
+            "\t.align\t3",
+        ];
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }
@@ -112,15 +105,8 @@ impl ::Backend for ARMBackend {
 
 fn jprint_value(values: &Vec<Box<dyn TypedValue>>, basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
-        value.print(basic_block);
         // Multiple printed terms are separated by space, except for the last item
-        if idx != values.len() - 1 {
-            basic_block.push(ArmIns::Load {
-                dst: CoreRegister::R0,
-                src: "=space_fmt".to_string(),
-            });
-            basic_block.push(ArmIns::BranchAndLink { addr: "printf" });
-        }
+        value.print(idx != values.len() - 1, idx == values.len() - 1, basic_block);
     }
 }
 
