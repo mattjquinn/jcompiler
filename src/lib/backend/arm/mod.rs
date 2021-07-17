@@ -106,7 +106,11 @@ impl ::Backend for ARMBackend {
 fn jprint_value(values: &Vec<Box<dyn TypedValue>>, basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
         // Multiple printed terms are separated by space, except for the last item
-        value.print(idx != values.len() - 1, idx == values.len() - 1, basic_block);
+        let flags = match idx != values.len() - 1 {
+            true => 1,
+            false => 2,
+        };
+        value.print(flags, basic_block);
     }
 }
 

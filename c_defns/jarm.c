@@ -3,35 +3,35 @@
 #include <stdlib.h>
 #include "jarm.h"
 
-void jprint_int(int val, char emit_space, char emit_newline) {
+void jprint_int(int val, char flags) {
   if (val < 0) {
     printf("_%d", abs(val));
   } else {
     printf("%d", val);
   }
-  if (emit_space) {
+  if (flags == 0x1) {
     printf(" ");
   }
-  if (emit_newline) {
+  if (flags == 0x2) {
     printf("\n");
   }
 }
 
-void jprint_double(double val, char emit_space, char emit_newline) {
+void jprint_double(double val, char flags) {
   if (floor(val) != val) {
     if (val < 0) {
       printf("_%g", -1*val);
     } else {
       printf("%g", val);
     }
-    if (emit_space) {
+    if (flags == 0x1) {
       printf(" ");
     }
-    if (emit_newline) {
+    if (flags == 0x2) {
       printf("\n");
     }
   } else {
-    jprint_int((int) val, emit_space, emit_newline);
+    jprint_int((int) val, flags);
   }
 }
 

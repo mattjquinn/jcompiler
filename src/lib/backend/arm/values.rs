@@ -20,7 +20,7 @@ pub trait TypedValue: TypedValueClone + Debug {
     fn as_any(&self) -> &dyn Any;
     fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue>; // may allocate
 
-    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock);
+    fn print(&self, flags: u8, basic_block: &mut BasicBlock);
     fn increment(&self, basic_block: &mut BasicBlock); // increments in-place without allocation
     fn square(&self, basic_block: &mut BasicBlock);
     fn negate(&self, basic_block: &mut BasicBlock);
@@ -122,10 +122,9 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock) {
+    fn print(&self, flags: u8, basic_block: &mut BasicBlock) {
         self.pointer.load_width4(CoreRegister::R0, basic_block);
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: match emit_space { true => 1, false => 0 }});
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R2, imm: match emit_newline { true => 1, false => 0 }});
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: flags as u16 });
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
     }
 
@@ -407,10 +406,9 @@ impl TypedValue for DoubleValue {
         }
     }
 
-    fn print(&self, emit_space: bool, emit_newline: bool, basic_block: &mut BasicBlock) {
+    fn print(&self, flags: u8, basic_block: &mut BasicBlock) {
         self.get_value(ExtensionRegisterDoublePrecision::D0, basic_block);
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R0, imm: match emit_space { true => 1, false => 0 }});
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: match emit_newline { true => 1, false => 0 }});
+        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R0, imm: flags as u16 });
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
     }
 
