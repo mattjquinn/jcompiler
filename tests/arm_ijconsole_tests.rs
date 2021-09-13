@@ -43,10 +43,11 @@ fn compile(test_jfile: &str) -> (String, String) {
     (unopt_stdout, unopt_stderr)
 }
 
-// #[test]
-// fn next() {
-//     common::test("ctest_monadic_reciprocal.ijs", &compile);
-// }
+#[test]
+fn next() {
+    // common::test("netperf_ch1.ijs", &compile);
+    // common::test("ctest_monadic_reciprocal.ijs", &compile);
+}
 
 generate_tests!([
     // Known test failures:

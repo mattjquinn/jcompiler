@@ -315,6 +315,7 @@ impl BasicBlock {
                     DyadicVerb::LessThan => vec![lhs.compare_lt(rhs, self)],
                     DyadicVerb::Equal => vec![lhs.compare_eq(rhs, self)],
                     DyadicVerb::LargerThan => vec![lhs.compare_gt(rhs, self)],
+                    DyadicVerb::Divide => vec![lhs.quotient(rhs, self)],
                     _ => unimplemented!("TODO: Support dyadic verb {:?} on values lhs={:?}, rhs={:?}", verb, lhs, rhs)
                 }
             },

@@ -19,6 +19,8 @@ pub enum MonadicVerb {
     Tally = 5,
     Ceiling = 6,
     ShapeOf = 7,
+    Conjugate = 8,
+    Signum = 9,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -66,6 +68,17 @@ pub enum AstNode {
     Str(AsciiString),
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub enum VerbAction {
+    MonadicVerbExpr(MonadicVerb, Vec<MonadicAdverb>),
+    MonadicHook(DyadicVerb, MonadicVerb),
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum MonadicAdverb {
+    Insert = 1,
+}
+
 impl fmt::Display for AstNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let _ = write!(f, "{:?}", self);
@@ -102,10 +115,9 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
         Rule::expr => build_ast_from_expr(pair.into_inner().next().unwrap()),
         Rule::monadicExpr => {
             let mut pair = pair.into_inner();
-            let action = pair.next().unwrap();
-            let expr = pair.next().unwrap();
-            let expr = build_ast_from_expr(expr);
-            parse_monadic_action(action, expr)
+            let action = parse_verb_action(pair.next().unwrap());
+            let expr = build_ast_from_expr(pair.next().unwrap());
+            build_ast_node_from_monadic_verb_action(action, expr)
         }
         Rule::dyadicExpr => {
             let mut pair = pair.into_inner();
@@ -149,8 +161,12 @@ fn build_ast_from_expr(pair: pest::iterators::Pair<Rule>) -> AstNode {
 
 fn parse_dyadic_action(pair: pest::iterators::Pair<Rule>, lhs: AstNode, rhs: AstNode) -> AstNode {
     let mut pair = pair.into_inner();
-    let verb = pair.next().unwrap();
-    let adverbs = pair.collect_vec();
+
+    // We currently only have one alternative for dyadicAction
+    // (verbExpr) so we just destructure it here without the aid of a separate method.
+    let mut verb_expr = pair.next().unwrap().into_inner();
+    let verb = verb_expr.next().unwrap();
+    let adverbs = verb_expr.collect_vec();
 
     // Adverbs not currently supported on dyadic verbs.
     assert_eq!(adverbs.len(), 0);
@@ -233,86 +249,89 @@ fn parse_dyadic_action(pair: pest::iterators::Pair<Rule>, lhs: AstNode, rhs: Ast
     }
 }
 
-fn parse_monadic_action(pair: pest::iterators::Pair<Rule>, expr: AstNode) -> AstNode {
-    let mut pair = pair.into_inner();
-    let verb = pair.next().unwrap();
-    let adverbs = pair.collect_vec();
+fn parse_verb_action(pair: pest::iterators::Pair<Rule>) -> VerbAction {
+    let action = pair.into_inner().next().unwrap();
+    match action.as_rule() {
+        Rule::verbExpr => parse_verb_expr(action),
+        Rule::monadicHook => parse_monadic_hook(action),
+        unknown => panic!("Unexpected verb action: {:?}", unknown)
+    }
+}
 
-    match verb.as_str() {
-        ">:" => {
-            assert_eq!(adverbs.len(), 0);
-            AstNode::MonadicOp {
-                verb: MonadicVerb::Increment,
-                expr: Box::new(expr),
+fn parse_verb_expr(pair: pest::iterators::Pair<Rule>) -> VerbAction {
+    let mut pair = pair.into_inner();
+    let verb = parse_monadic_verb(pair.next().unwrap());
+    let adverbs = pair.map(parse_monadic_adverb).collect_vec();
+    VerbAction::MonadicVerbExpr(verb, adverbs)
+}
+
+fn parse_monadic_adverb(pair: pest::iterators::Pair<Rule>) -> MonadicAdverb {
+    let adverb = pair.as_str();
+    match adverb {
+        "/" => MonadicAdverb::Insert,
+        _ => panic!("MQ: TODO: {:?}", adverb)
+    }
+}
+
+fn parse_dyadic_verb(pair: pest::iterators::Pair<Rule>) -> DyadicVerb {
+    let verb = pair.as_str();
+    match verb {
+        "%" => DyadicVerb::Divide,
+        _ => panic!("Unsupported dyadic verb: {:?}", verb)
+    }
+}
+
+fn parse_monadic_verb(pair: pest::iterators::Pair<Rule>) -> MonadicVerb {
+    let verb = pair.as_str();
+    match verb {
+        "%" => MonadicVerb::Reciprocal,
+        ">:" => MonadicVerb::Increment,
+        "*:" => MonadicVerb::Square,
+        "-" => MonadicVerb::Negate,
+        "#" => MonadicVerb::Tally,
+        ">."=> MonadicVerb::Ceiling,
+        "+"=> MonadicVerb::Conjugate,
+        "*"=> MonadicVerb::Signum,
+        "$"=> MonadicVerb::ShapeOf,
+        _ => panic!("Unsupported monadic verb: {:?}", verb)
+    }
+}
+
+fn parse_monadic_hook(pair: pest::iterators::Pair<Rule>) -> VerbAction {
+    let mut pair = pair.into_inner();
+    let f_verb = parse_dyadic_verb(pair.next().unwrap());
+    let g_verb = parse_monadic_verb(pair.next().unwrap());
+    VerbAction::MonadicHook(f_verb, g_verb)
+}
+
+fn build_ast_node_from_monadic_verb_action(action : VerbAction, expr: AstNode) -> AstNode {
+    match action {
+        VerbAction::MonadicVerbExpr(verb, adverbs) => {
+            let expr = Box::new(expr);
+            match adverbs[..] {
+                [] => AstNode::MonadicOp { verb, expr },
+                [MonadicAdverb::Insert] => {
+                    match verb {
+                        MonadicVerb::Negate => AstNode::Reduce { verb: DyadicVerb::Minus, expr },
+                        MonadicVerb::Ceiling => AstNode::Reduce { verb: DyadicVerb::LargerOf, expr },
+                        MonadicVerb::Conjugate => AstNode::Reduce { verb: DyadicVerb::Plus, expr },
+                        MonadicVerb::Signum => AstNode::Reduce { verb: DyadicVerb::Times, expr },
+                        _ => panic!("Unsupported monadic verb {:?} with adverbs {:?}", verb, adverbs)
+                    }
+                },
+                _ => panic!("Unsupported adverbs: {:?}", adverbs)
             }
-        }
-        "*:" => {
-            assert_eq!(adverbs.len(), 0);
-            AstNode::MonadicOp {
-                verb: MonadicVerb::Square,
-                expr: Box::new(expr),
-            }
-        }
-        "-" => match adverbs.len() {
-            0 => AstNode::MonadicOp {
-                verb: MonadicVerb::Negate,
-                expr: Box::new(expr),
-            },
-            1 => AstNode::Reduce {
-                verb: DyadicVerb::Minus,
-                expr: Box::new(expr),
-            },
-            _ => panic!("Unsupported number of adverbs for '-': {}", adverbs.len()),
         },
-        "%" => {
-            assert_eq!(adverbs.len(), 0);
-            AstNode::MonadicOp {
-                verb: MonadicVerb::Reciprocal,
-                expr: Box::new(expr),
+        VerbAction::MonadicHook(f_verb, g_verb) => {
+            AstNode::DyadicOp {
+                verb: f_verb,
+                lhs: Box::new(expr.clone()),
+                rhs: Box::new(AstNode::MonadicOp {
+                    verb: g_verb,
+                    expr: Box::new(expr.clone())
+                })
             }
         }
-        "#" => {
-            assert_eq!(adverbs.len(), 0);
-            AstNode::MonadicOp {
-                verb: MonadicVerb::Tally,
-                expr: Box::new(expr),
-            }
-        }
-        ">." => match adverbs.len() {
-            0 => AstNode::MonadicOp {
-                verb: MonadicVerb::Ceiling,
-                expr: Box::new(expr),
-            },
-            1 => AstNode::Reduce {
-                verb: DyadicVerb::LargerOf,
-                expr: Box::new(expr),
-            },
-            _ => panic!("Unsupported number of adverbs for '>.': {}", adverbs.len()),
-        },
-        "+" => {
-            assert_eq!(adverbs.len(), 1);
-            assert_eq!(adverbs[0].as_str(), "/");
-            AstNode::Reduce {
-                verb: DyadicVerb::Plus,
-                expr: Box::new(expr),
-            }
-        }
-        "*" => {
-            assert_eq!(adverbs.len(), 1);
-            assert_eq!(adverbs[0].as_str(), "/");
-            AstNode::Reduce {
-                verb: DyadicVerb::Times,
-                expr: Box::new(expr),
-            }
-        }
-        "$" => {
-            assert_eq!(adverbs.len(), 0);
-            AstNode::MonadicOp {
-                verb: MonadicVerb::ShapeOf,
-                expr: Box::new(expr),
-            }
-        }
-        _ => panic!("Unsupported monadic action verb: {}", verb.as_str()),
     }
 }
 

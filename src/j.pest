@@ -6,14 +6,20 @@ program = _{ SOI ~ "\n"* ~ (stmt ~ "\n"+) * ~ stmt? ~ EOI }
 stmt = _{ expr }
 
 expr = { assgmtExpr | monadicExpr | dyadicExpr | string | terms }
-monadicExpr = { action ~ expr }
-dyadicExpr = { (monadicExpr | terms) ~ action ~ expr }
+monadicExpr = { monadicAction ~ expr }
+dyadicExpr = { (monadicExpr | terms) ~ dyadicAction ~ expr }
 
 assgmtExpr = { ident ~ "=:" ~ expr }
 terms = { term+ }
 term = _{ decimal | integer | ident | "(" ~ expr ~ ")" }
 
-action = { verb ~ adverb* }
+dyadicAction = { verbExpr }
+monadicAction = { verbExpr | monadicHook }
+verbExpr = { verb ~ adverb* }
+// TODO: a monadic hook can be written without parens if it appears e.g. on the RHS of an assignment
+// TODO: a monadic hook is formed from a dyadicVerb followed by a monadicVerb
+monadicHook = { "(" ~ verb ~ verb ~ ")" }
+
 verb = { ">:" | "*:" | "-" | "%" | "#" | ">." | "," |
           "+" | "*" | "<"  | "=" | "^" | "|" | ">" | "$" }
 adverb = { "/" }

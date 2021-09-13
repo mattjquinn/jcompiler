@@ -29,6 +29,7 @@ pub trait TypedValue: TypedValueClone + Debug {
     fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
     fn product(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
     fn difference(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
+    fn quotient(&self, divisor: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
 
     fn compare_lt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
     fn compare_gt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
@@ -226,6 +227,38 @@ impl TypedValue for IntegerValue {
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
                 basic_block.free_register(rhs_reg);
+                Box::new(out_value)
+            }
+        }
+    }
+
+    fn quotient(&self, divisor: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+        match divisor.type_flag() {
+            TypeFlag::Double => unimplemented!("TODO: Support dividing by double."),
+            TypeFlag::Integer => {
+                let transfer_reg_int = basic_block.claim_register();
+
+                // Load numerator
+                self.pointer.load_width4(transfer_reg_int, basic_block);
+                let numerator_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: transfer_reg_int, dst: numerator_reg_single_precision });
+                let numerator_reg_double_precision = ExtensionRegisterDoublePrecision::D1; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: numerator_reg_single_precision, dst:  numerator_reg_double_precision });
+
+                // Load denominator
+                let divisor_int : &IntegerValue = divisor.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                divisor_int.pointer.load_width4(transfer_reg_int, basic_block);
+                let divisor_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: transfer_reg_int, dst: divisor_reg_single_precision });
+                let divisor_reg_double_precision = ExtensionRegisterDoublePrecision::D2; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
+                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: divisor_reg_single_precision, dst:  divisor_reg_double_precision });
+
+                basic_block.free_register(transfer_reg_int);
+
+                let result_reg = ExtensionRegisterDoublePrecision::D3;
+                basic_block.push(ArmIns::DivideDoublePrecision { dst: result_reg, numerator: numerator_reg_double_precision, denominator: divisor_reg_double_precision });
+                let out_value = basic_block.stack_allocate_double();
+                out_value.pointer.store_width8(result_reg, basic_block);
                 Box::new(out_value)
             }
         }
@@ -449,6 +482,10 @@ impl TypedValue for DoubleValue {
     }
 
     fn difference(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+        todo!()
+    }
+
+    fn quotient(&self, _divisor: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
         todo!()
     }
 
