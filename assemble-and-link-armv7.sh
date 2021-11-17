@@ -5,7 +5,7 @@
 # WARNING: be extremely careful when upgrading to newer Linaro versions. As a smoke check,
 # write a simple main.c and use the gcc command below to compile it alongside the library include.
 # Past upgrade attempts have resulted in "multiple definitions for ..." errors which couldn't be resolved.
-export ARM_LINARO_CROSS_COMPILER_PATH="/opt/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
+export ARM_LINARO_CROSS_COMPILER_PATH="/opt/linaro/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf"
 
 # These commands below were taken from the output of running:
 #
