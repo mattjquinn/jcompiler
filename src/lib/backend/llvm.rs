@@ -172,7 +172,7 @@ fn link_object_file(
         ]
     };
 
-    shell::run_shell_command("clang-7", &clang_args[..])
+    shell::run_shell_command("clang-10", &clang_args[..])
 }
 
 pub fn compile_to_module(

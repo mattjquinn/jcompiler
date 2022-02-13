@@ -15,8 +15,9 @@ are very much nascent.
 
 #### Using the LLVM Backend
 
-You will need LLVM 7 and Rust installed.
+You will need LLVM 10 and Rust installed.
 
+    $ sudo apt install llvm-10 clang-10
     $ cargo build --release
 
 You can then compile and run programs as follows:
