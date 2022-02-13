@@ -18,6 +18,7 @@ harness = false
 
 [dev-dependencies]
 criterion = "0.2"
+rusty-fork = "0.3.0"
 
 [dependencies.jcompiler-derive]
 path = "lib/jcompiler-derive"

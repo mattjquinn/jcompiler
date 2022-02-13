@@ -71,16 +71,26 @@ pub fn generate_tests(input: TokenStream) -> TokenStream {
     }
 
     let mut streams : Vec<TokenStream> = vec![];
+    streams.push(
+        (quote! {
+            use rusty_fork::rusty_fork_test;
+        }).into()
+    );
     entries.iter().for_each(|test_filename| {
         let test_name = &test_filename[..&test_filename.len()-4];
 
         let filename = Literal::string(test_filename);
         let methodname = Ident::new(test_name, Span::call_site());
+        // Uses rusty_fork_test to give each test its own subprocess, otherwise each test
+        // will get its own thread by default, but this will lead to SIGSEGVs when
+        // non-threadsafe LLVM routines are called.
         streams.push(
             (quote! {
-                #[test]
-                fn #methodname() {
-                    common::test(#filename, &compile);
+                rusty_fork_test! {
+                    #[test]
+                    fn #methodname() {
+                        common::test(#filename, &compile);
+                    }
                 }
             }).into()
         );

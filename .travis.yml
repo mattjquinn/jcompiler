@@ -65,8 +65,8 @@ matrix:
 
 script: |
   cargo build --verbose --release &&
-  cargo test --verbose -- --test-threads 1 &&
-  cargo doc   --verbose
+  cargo test --verbose &&
+  cargo doc --verbose
 
 notifications:
   email: false
