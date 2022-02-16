@@ -30,10 +30,13 @@ fn compile(test_jfile: &str) -> (String, String) {
     )
     .expect("unoptimized compilation failed");
 
-    // NOTE: If you're on an amd_x64 system, running ARM binaries will only
-    // be possible if you have "qemu-arm-static" installed (which registers
-    // an interpreter that allows transparent ./ execution of ARM binaries).
-    let unopt_output = Command::new(unopt_compile_to_path)
+    // NOTE: Transparent execution of binaries on the Qemu ARM emulator
+    // (i.e., using "./<name-of-binary>" is only possible if binfmt_misc
+    // is configured, which will be done automatically on a raw machine
+    // but not necessarily within a Docker container; to be safe we
+    // always invoke the emulator directly.
+    let unopt_output = Command::new("qemu-arm-static")
+        .arg(unopt_compile_to_path)
         .output()
         .expect("failed to execute unoptimized binary");
     let unopt_stdout = str::from_utf8(&unopt_output.stdout).unwrap().to_owned();

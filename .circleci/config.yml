@@ -1,0 +1,17 @@
+version: '2.1'
+orbs:
+  rust: circleci/rust@1.6.0
+jobs:
+  jcompiler-test:
+    docker:
+      - image: cimg/rust:1.58
+    steps:
+      - checkout
+      - run: |
+          ./scripts/install-dependencies.sh
+      - rust/test
+workflows:
+  jcompiler-all:
+    jobs:
+      - jcompiler-test
+

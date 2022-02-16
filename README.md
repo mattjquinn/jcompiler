@@ -1,8 +1,7 @@
 # jcompiler
 
+[![CircleCI](https://circleci.com/gh/mattjquinn/jcompiler.svg?style=shield)](https://circleci.com/gh/mattjquinn/jcompiler)
 [![Crates.io](https://img.shields.io/crates/v/jcompiler.svg?color=green)](https://crates.io/crates/jcompiler)
-[![Build Status](https://travis-ci.com/mattjquinn/jcompiler.svg?branch=master)](https://travis-ci.com/mattjquinn/jcompiler)
-[![Coverage Status](https://coveralls.io/repos/github/mattjquinn/jcompiler/badge.svg?branch=master)](https://coveralls.io/github/mattjquinn/jcompiler)
 
 A compiler for the J programming language.
 

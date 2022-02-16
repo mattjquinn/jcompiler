@@ -1,5 +1,11 @@
 # TODOs
 
+## CI/CD
+* TODO: reinstate publishing of code coverage; use codecov.io instead of coveralls; publish pill status on README.md
+* Run `cargo doc`, publish results somewhere.
+* Run `cargo bench` to compare optimized vs unoptimized, publish results somewhere.
+
+## Other
 - TODO: implement monadic reciprocal, where we can call the newly centralized load(D0) function shared by print()
 - TODO: make BasicBlock respect ARM calling conventions; if we use anything above r3 push it to stack
 - TODO: Store doubles as 8 contiguous bytes on stack, use ldmia to load them contiguously
