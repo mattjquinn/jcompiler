@@ -1,7 +1,7 @@
+extern crate jcompiler_derive;
 /// Integration tests for the LLVM backend.
 extern crate jcompilerlib;
 extern crate tempfile;
-extern crate jcompiler_derive;
 
 use jcompilerlib::backend::llvm::LLVMBackend;
 use std::process::Command;

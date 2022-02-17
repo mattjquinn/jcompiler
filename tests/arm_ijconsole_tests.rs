@@ -1,10 +1,10 @@
+extern crate jcompiler_derive;
 /// Integration tests for the ARM backend.
 extern crate jcompilerlib;
 extern crate tempfile;
-extern crate jcompiler_derive;
 
 use jcompilerlib::backend::arm::ARMBackend;
-use std::process::{Command};
+use std::process::Command;
 use std::str;
 use tempfile::NamedTempFile;
 

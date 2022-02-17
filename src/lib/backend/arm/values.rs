@@ -1,16 +1,18 @@
-use super::memory::Pointer;
 use super::compiler::{BasicBlock, GlobalContext};
-use super::instructions::{ArmIns};
+use super::instructions::ArmIns;
+use super::memory::Pointer;
 use std::any::Any;
 
-use std::fmt::{Formatter, Error};
+use backend::arm::registers::{
+    CoreRegister, ExtensionRegisterDoublePrecision, ExtensionRegisterSinglePrecision,
+};
 use core::fmt::Debug;
-use backend::arm::registers::{CoreRegister, ExtensionRegisterDoublePrecision, ExtensionRegisterSinglePrecision};
+use std::fmt::{Error, Formatter};
 
 #[derive(Debug, Copy, Clone)]
 pub enum TypeFlag {
     Integer,
-    Double
+    Double,
 }
 
 pub trait TypedValue: TypedValueClone + Debug {
@@ -18,22 +20,55 @@ pub trait TypedValue: TypedValueClone + Debug {
     fn is_entirely_on_heap(&self) -> bool; // true if all pointers are on heap, false otherwise
     fn to_string(&self) -> &str; // to_string representation for i.e. debugging
     fn as_any(&self) -> &dyn Any;
-    fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue>; // may allocate
+    fn persist_to_heap(
+        &self,
+        basic_block: &mut BasicBlock,
+        globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue>; // may allocate
 
     fn print(&self, flags: u8, basic_block: &mut BasicBlock);
     fn increment(&self, basic_block: &mut BasicBlock); // increments in-place without allocation
     fn square(&self, basic_block: &mut BasicBlock);
     fn negate(&self, basic_block: &mut BasicBlock);
     fn ceiling(&self, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // may allocate
-    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue>; // may allocate
-    fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
-    fn product(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
-    fn difference(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
-    fn quotient(&self, divisor: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
+    fn reciprocal(
+        &self,
+        basic_block: &mut BasicBlock,
+        globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue>; // may allocate
+    fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock)
+        -> Box<dyn TypedValue>; // allocates
+    fn product(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
+    fn difference(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
+    fn quotient(
+        &self,
+        divisor: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
 
-    fn compare_lt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
-    fn compare_gt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
-    fn compare_eq(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue>; // allocates
+    fn compare_lt(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
+    fn compare_gt(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
+    fn compare_eq(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue>; // allocates
 }
 
 pub trait TypedValueClone {
@@ -61,20 +96,23 @@ impl Clone for Box<dyn TypedValue> {
 #[derive(Debug, Clone)]
 pub struct IntegerValue {
     ty: TypeFlag,
-    pointer: Pointer
+    pointer: Pointer,
 }
 
 impl IntegerValue {
     pub fn new(pointer: Pointer) -> IntegerValue {
         IntegerValue {
             ty: TypeFlag::Integer,
-            pointer
+            pointer,
         }
     }
 
     pub fn set_value(&self, value: i32, basic_block: &mut BasicBlock) {
         let transfer_reg = basic_block.claim_register();
-        basic_block.push(ArmIns::MoveImm { imm: value, dst: transfer_reg });
+        basic_block.push(ArmIns::MoveImm {
+            imm: value,
+            dst: transfer_reg,
+        });
         self.pointer.store_width4(transfer_reg, basic_block);
         basic_block.free_register(transfer_reg);
     }
@@ -89,7 +127,6 @@ impl IntegerValue {
 }
 
 impl TypedValue for IntegerValue {
-
     fn type_flag(&self) -> TypeFlag {
         self.ty
     }
@@ -97,7 +134,7 @@ impl TypedValue for IntegerValue {
     fn is_entirely_on_heap(&self) -> bool {
         match self.pointer {
             Pointer::Heap(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -109,9 +146,13 @@ impl TypedValue for IntegerValue {
         self
     }
 
-    fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+    fn persist_to_heap(
+        &self,
+        basic_block: &mut BasicBlock,
+        globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue> {
         match self.pointer {
-            Pointer::Heap(_) => Box::new(self.clone()),  // already on the heap, nothing to do
+            Pointer::Heap(_) => Box::new(self.clone()), // already on the heap, nothing to do
             Pointer::Stack(_) => {
                 let out = globalctx.heap_allocate_int();
                 let transfer_reg = basic_block.claim_register();
@@ -125,7 +166,10 @@ impl TypedValue for IntegerValue {
 
     fn print(&self, flags: u8, basic_block: &mut BasicBlock) {
         self.pointer.load_width4(CoreRegister::R0, basic_block);
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R1, imm: flags as u16 });
+        basic_block.push(ArmIns::MoveImmUnsigned {
+            dst: CoreRegister::R1,
+            imm: flags as u16,
+        });
         basic_block.push(ArmIns::BranchAndLink { addr: "jprint_int" });
     }
 
@@ -135,7 +179,7 @@ impl TypedValue for IntegerValue {
         basic_block.push(ArmIns::AddImm {
             dst: increment_reg,
             src: increment_reg,
-            imm: 1
+            imm: 1,
         });
         self.pointer.store_width4(increment_reg, basic_block);
         basic_block.free_register(increment_reg);
@@ -158,12 +202,14 @@ impl TypedValue for IntegerValue {
         let negation_reg = basic_block.claim_register();
         self.pointer.load_width4(temp_reg, basic_block);
         basic_block.push(ArmIns::MoveImm {
-            dst: negation_reg, imm: 0 });
+            dst: negation_reg,
+            imm: 0,
+        });
         // subtract the immediate from 0
         basic_block.push(ArmIns::Sub {
             dst: temp_reg,
             src: negation_reg,
-            sub: temp_reg
+            sub: temp_reg,
         });
         self.pointer.store_width4(temp_reg, basic_block);
         basic_block.free_register(temp_reg);
@@ -171,39 +217,64 @@ impl TypedValue for IntegerValue {
     }
 
     fn ceiling(&self, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
-        Box::new(self.clone())  // nothing to do; ceil(int) is always the given int
+        Box::new(self.clone()) // nothing to do; ceil(int) is always the given int
     }
 
-    fn reciprocal(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+    fn reciprocal(
+        &self,
+        basic_block: &mut BasicBlock,
+        globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue> {
         // TODO: all of the registers used here need to be claimed from the BasicBlock
-        let numerator = basic_block.stack_allocate_double();  // TODO: reclaim this as well
+        let numerator = basic_block.stack_allocate_double(); // TODO: reclaim this as well
         let numerator_reg = ExtensionRegisterDoublePrecision::D0; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
         numerator.set_value(1.0, basic_block, globalctx);
         numerator.get_value(numerator_reg, basic_block);
         let denom_reg_int = basic_block.claim_register();
         self.get_value(denom_reg_int, basic_block);
         let denom_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-        basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: denom_reg_int, dst: denom_reg_single_precision });
+        basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister {
+            src: denom_reg_int,
+            dst: denom_reg_single_precision,
+        });
         let denom_reg_double_precision = ExtensionRegisterDoublePrecision::D1; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-        basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: denom_reg_single_precision, dst:  denom_reg_double_precision });
+        basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision {
+            src: denom_reg_single_precision,
+            dst: denom_reg_double_precision,
+        });
         let result_reg = ExtensionRegisterDoublePrecision::D2; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-        basic_block.push(ArmIns::DivideDoublePrecision { dst: result_reg, numerator: numerator_reg, denominator: denom_reg_double_precision });
+        basic_block.push(ArmIns::DivideDoublePrecision {
+            dst: result_reg,
+            numerator: numerator_reg,
+            denominator: denom_reg_double_precision,
+        });
         let result = basic_block.stack_allocate_double();
         result.set_value_from_register(result_reg, basic_block);
         basic_block.free_register(denom_reg_int);
         Box::new(result)
     }
 
-    fn sum(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn sum(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Add { dst: rhs_reg, src: lhs_reg, add: rhs_reg });
+                basic_block.push(ArmIns::Add {
+                    dst: rhs_reg,
+                    src: lhs_reg,
+                    add: rhs_reg,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -213,16 +284,27 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn product(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn product(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Multiply { dst: rhs_reg, src: lhs_reg, mul: rhs_reg });
+                basic_block.push(ArmIns::Multiply {
+                    dst: rhs_reg,
+                    src: lhs_reg,
+                    mul: rhs_reg,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -232,7 +314,11 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn quotient(&self, divisor: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn quotient(
+        &self,
+        divisor: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match divisor.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support dividing by double."),
             TypeFlag::Integer => {
@@ -241,22 +327,43 @@ impl TypedValue for IntegerValue {
                 // Load numerator
                 self.pointer.load_width4(transfer_reg_int, basic_block);
                 let numerator_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: transfer_reg_int, dst: numerator_reg_single_precision });
+                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister {
+                    src: transfer_reg_int,
+                    dst: numerator_reg_single_precision,
+                });
                 let numerator_reg_double_precision = ExtensionRegisterDoublePrecision::D1; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: numerator_reg_single_precision, dst:  numerator_reg_double_precision });
+                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision {
+                    src: numerator_reg_single_precision,
+                    dst: numerator_reg_double_precision,
+                });
 
                 // Load denominator
-                let divisor_int : &IntegerValue = divisor.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
-                divisor_int.pointer.load_width4(transfer_reg_int, basic_block);
+                let divisor_int: &IntegerValue = divisor
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
+                divisor_int
+                    .pointer
+                    .load_width4(transfer_reg_int, basic_block);
                 let divisor_reg_single_precision = ExtensionRegisterSinglePrecision::S15; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister { src: transfer_reg_int, dst: divisor_reg_single_precision });
+                basic_block.push(ArmIns::MoveCoreRegisterToSinglePrecisionExtensionRegister {
+                    src: transfer_reg_int,
+                    dst: divisor_reg_single_precision,
+                });
                 let divisor_reg_double_precision = ExtensionRegisterDoublePrecision::D2; // doesn't need to be this exact register, but must ensure no overlap with other extension registers
-                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision { src: divisor_reg_single_precision, dst:  divisor_reg_double_precision });
+                basic_block.push(ArmIns::ConvertSinglePrecisionToDoublePrecision {
+                    src: divisor_reg_single_precision,
+                    dst: divisor_reg_double_precision,
+                });
 
                 basic_block.free_register(transfer_reg_int);
 
                 let result_reg = ExtensionRegisterDoublePrecision::D3;
-                basic_block.push(ArmIns::DivideDoublePrecision { dst: result_reg, numerator: numerator_reg_double_precision, denominator: divisor_reg_double_precision });
+                basic_block.push(ArmIns::DivideDoublePrecision {
+                    dst: result_reg,
+                    numerator: numerator_reg_double_precision,
+                    denominator: divisor_reg_double_precision,
+                });
                 let out_value = basic_block.stack_allocate_double();
                 out_value.pointer.store_width8(result_reg, basic_block);
                 Box::new(out_value)
@@ -264,16 +371,27 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn difference(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn difference(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Sub { dst: rhs_reg, src: lhs_reg, sub: rhs_reg });
+                basic_block.push(ArmIns::Sub {
+                    dst: rhs_reg,
+                    src: lhs_reg,
+                    sub: rhs_reg,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -283,19 +401,38 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn compare_lt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_lt(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "lt" });
-                basic_block.push(ArmIns::MoveLT { dst: rhs_reg, src: 1 });
-                basic_block.push(ArmIns::MoveGE { dst: rhs_reg, src: 0 });
+                basic_block.push(ArmIns::Compare {
+                    lhs: lhs_reg,
+                    rhs: rhs_reg,
+                });
+                basic_block.push(ArmIns::IfThen {
+                    xyz: "e",
+                    cond: "lt",
+                });
+                basic_block.push(ArmIns::MoveLT {
+                    dst: rhs_reg,
+                    src: 1,
+                });
+                basic_block.push(ArmIns::MoveGE {
+                    dst: rhs_reg,
+                    src: 0,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -305,19 +442,38 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn compare_gt(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_gt(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "gt" });
-                basic_block.push(ArmIns::MoveGT { dst: rhs_reg, src: 1 });
-                basic_block.push(ArmIns::MoveLE { dst: rhs_reg, src: 0 });
+                basic_block.push(ArmIns::Compare {
+                    lhs: lhs_reg,
+                    rhs: rhs_reg,
+                });
+                basic_block.push(ArmIns::IfThen {
+                    xyz: "e",
+                    cond: "gt",
+                });
+                basic_block.push(ArmIns::MoveGT {
+                    dst: rhs_reg,
+                    src: 1,
+                });
+                basic_block.push(ArmIns::MoveLE {
+                    dst: rhs_reg,
+                    src: 0,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -327,19 +483,38 @@ impl TypedValue for IntegerValue {
         }
     }
 
-    fn compare_eq(&self, addend: Box<dyn TypedValue>, basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_eq(
+        &self,
+        addend: Box<dyn TypedValue>,
+        basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         match addend.type_flag() {
             TypeFlag::Double => unimplemented!("TODO: Support adding double to int."),
             TypeFlag::Integer => {
-                let addend_int : &IntegerValue = addend.as_any().downcast_ref::<IntegerValue>().expect("an IntegerValue");
+                let addend_int: &IntegerValue = addend
+                    .as_any()
+                    .downcast_ref::<IntegerValue>()
+                    .expect("an IntegerValue");
                 let lhs_reg = basic_block.claim_register();
                 let rhs_reg = basic_block.claim_register();
                 self.pointer.load_width4(lhs_reg, basic_block);
                 addend_int.pointer.load_width4(rhs_reg, basic_block);
-                basic_block.push(ArmIns::Compare { lhs: lhs_reg, rhs: rhs_reg });
-                basic_block.push(ArmIns::IfThen { xyz: "e", cond: "eq" });
-                basic_block.push(ArmIns::MoveEQ { dst: rhs_reg, src: 1 });
-                basic_block.push(ArmIns::MoveNE { dst: rhs_reg, src: 0 });
+                basic_block.push(ArmIns::Compare {
+                    lhs: lhs_reg,
+                    rhs: rhs_reg,
+                });
+                basic_block.push(ArmIns::IfThen {
+                    xyz: "e",
+                    cond: "eq",
+                });
+                basic_block.push(ArmIns::MoveEQ {
+                    dst: rhs_reg,
+                    src: 1,
+                });
+                basic_block.push(ArmIns::MoveNE {
+                    dst: rhs_reg,
+                    src: 0,
+                });
                 let out_value = basic_block.stack_allocate_int();
                 out_value.pointer.store_width4(rhs_reg, basic_block);
                 basic_block.free_register(lhs_reg);
@@ -360,7 +535,7 @@ impl DoubleValue {
     pub fn new(pointer: Pointer) -> DoubleValue {
         DoubleValue {
             ty: TypeFlag::Double,
-            pointer
+            pointer,
         }
     }
 
@@ -372,19 +547,19 @@ impl DoubleValue {
         basic_block.push(ArmIns::GenerateRegisterRelativeAddress {
             dst: relative_addr_reg,
             label,
-            offset
+            offset,
         });
         basic_block.push(ArmIns::LoadTwoConsecutiveRegisters {
             src: relative_addr_reg,
             dst: first_of_dual_reg,
-            offsets: vec![]
+            offsets: vec![],
         });
         // TODO: recover this temporary allocation
         let transfer_stack_offset = basic_block.stack_allocate_width(8);
         basic_block.push(ArmIns::StoreTwoConsecutiveRegisters {
             src: first_of_dual_reg,
             dst: CoreRegister::SP,
-            offsets: vec![transfer_stack_offset]
+            offsets: vec![transfer_stack_offset],
         });
         basic_block.push(ArmIns::LoadDoublePrecisionRegister {
             src: CoreRegister::SP,
@@ -400,13 +575,16 @@ impl DoubleValue {
         self.pointer.load_width8(dst, basic_block);
     }
 
-    pub fn set_value_from_register(&self, src: ExtensionRegisterDoublePrecision, basic_block: &mut BasicBlock) {
+    pub fn set_value_from_register(
+        &self,
+        src: ExtensionRegisterDoublePrecision,
+        basic_block: &mut BasicBlock,
+    ) {
         self.pointer.store_width8(src, basic_block);
     }
 }
 
 impl TypedValue for DoubleValue {
-
     fn type_flag(&self) -> TypeFlag {
         self.ty
     }
@@ -414,7 +592,7 @@ impl TypedValue for DoubleValue {
     fn is_entirely_on_heap(&self) -> bool {
         match &self.pointer {
             Pointer::Heap(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -426,7 +604,11 @@ impl TypedValue for DoubleValue {
         self
     }
 
-    fn persist_to_heap(&self, basic_block: &mut BasicBlock, globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+    fn persist_to_heap(
+        &self,
+        basic_block: &mut BasicBlock,
+        globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue> {
         match &self.pointer {
             Pointer::Heap(_) => Box::new(self.clone()), // TODO: increment refcount
             Pointer::Stack(_) => {
@@ -441,8 +623,13 @@ impl TypedValue for DoubleValue {
 
     fn print(&self, flags: u8, basic_block: &mut BasicBlock) {
         self.get_value(ExtensionRegisterDoublePrecision::D0, basic_block);
-        basic_block.push(ArmIns::MoveImmUnsigned { dst: CoreRegister::R0, imm: flags as u16 });
-        basic_block.push(ArmIns::BranchAndLink { addr: "jprint_double" });
+        basic_block.push(ArmIns::MoveImmUnsigned {
+            dst: CoreRegister::R0,
+            imm: flags as u16,
+        });
+        basic_block.push(ArmIns::BranchAndLink {
+            addr: "jprint_double",
+        });
     }
 
     fn increment(&self, _basic_block: &mut BasicBlock) {
@@ -456,7 +643,10 @@ impl TypedValue for DoubleValue {
     fn negate(&self, basic_block: &mut BasicBlock) {
         let transfer_reg = ExtensionRegisterDoublePrecision::D2; // TODO: claim this from the BasicBlock
         self.get_value(transfer_reg, basic_block);
-        basic_block.push(ArmIns::NegateDoublePrecision { dst: transfer_reg, operand: transfer_reg });
+        basic_block.push(ArmIns::NegateDoublePrecision {
+            dst: transfer_reg,
+            operand: transfer_reg,
+        });
         self.set_value_from_register(transfer_reg, basic_block);
     }
 
@@ -469,35 +659,67 @@ impl TypedValue for DoubleValue {
         Box::new(new_value)
     }
 
-    fn reciprocal(&self, _basic_block: &mut BasicBlock, _globalctx: &mut GlobalContext) -> Box<dyn TypedValue> {
+    fn reciprocal(
+        &self,
+        _basic_block: &mut BasicBlock,
+        _globalctx: &mut GlobalContext,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn sum(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn sum(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         unimplemented!("TODO: implement DoubleValue::sum")
     }
 
-    fn product(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn product(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn difference(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn difference(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn quotient(&self, _divisor: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn quotient(
+        &self,
+        _divisor: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn compare_lt(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_lt(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn compare_gt(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_gt(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 
-    fn compare_eq(&self, _addend: Box<dyn TypedValue>, _basic_block: &mut BasicBlock) -> Box<dyn TypedValue> {
+    fn compare_eq(
+        &self,
+        _addend: Box<dyn TypedValue>,
+        _basic_block: &mut BasicBlock,
+    ) -> Box<dyn TypedValue> {
         todo!()
     }
 }

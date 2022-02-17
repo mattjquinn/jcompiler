@@ -9,6 +9,7 @@ jobs:
       - checkout
       - run: |
           ./scripts/install-dependencies.sh
+      - rust/format
       - rust/test
 workflows:
   jcompiler-all:

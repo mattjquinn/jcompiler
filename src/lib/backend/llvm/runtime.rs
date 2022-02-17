@@ -2,7 +2,9 @@ use llvm_sys::core::*;
 use llvm_sys::prelude::*;
 
 use super::compiler::{Builder, Module};
-use super::support::{int32_type, int32, int8, int64, int32_ptr_ptr_type, f64_ptr_ptr_type, int8_ptr_ptr_type};
+use super::support::{
+    f64_ptr_ptr_type, int32, int32_ptr_ptr_type, int32_type, int64, int8, int8_ptr_ptr_type,
+};
 
 #[derive(Clone)]
 pub enum JValType {
@@ -163,4 +165,3 @@ pub fn alloc_jval(
         JValPtr { ptr: jval_ptr }
     }
 }
-

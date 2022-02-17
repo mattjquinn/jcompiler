@@ -3,16 +3,16 @@ use parser;
 use std::fs::File;
 use std::io::Write;
 
-use self::compiler::{GlobalContext, BasicBlock, compile_expr};
-use self::values::{TypedValue};
+use self::compiler::{compile_expr, BasicBlock, GlobalContext};
+use self::values::TypedValue;
 
-mod instructions;
-mod macros;
 mod compiler;
-mod registers;
+mod instructions;
 mod ir;
-mod values;
+mod macros;
 mod memory;
+mod registers;
+mod values;
 
 pub struct ARMBackend {}
 
@@ -46,7 +46,7 @@ impl ::Backend for ARMBackend {
                     match &**expr {
                         // top-level global assignments aren't printed
                         parser::AstNode::GlobalVarAssgmt { ident: _, expr: _ } => (),
-                        _ => jprint_value(&values, &mut basic_block)
+                        _ => jprint_value(&values, &mut basic_block),
                     }
                     basic_block.cleanup();
                     basic_blocks.push(basic_block);
@@ -83,11 +83,7 @@ impl ::Backend for ARMBackend {
             basic_block.write_instructions_to_file(&mut assembly_file);
         }
         globalctx.write_postamble_to_file(&mut assembly_file);
-        let postamble = vec![
-            "\tpop\t{ip, pc}",
-            ".L3:",
-            "\t.align\t3",
-        ];
+        let postamble = vec!["\tpop\t{ip, pc}", ".L3:", "\t.align\t3"];
         for instr in postamble {
             writeln!(&assembly_file, "{}", instr).expect("write failure");
         }

@@ -107,7 +107,7 @@ pub fn register_cli_options(options: &mut Options) {
     );
 }
 
-pub fn init_from_cli_options(matches: &Matches) -> Result<Box<dyn(::Backend)>, String> {
+pub fn init_from_cli_options(matches: &Matches) -> Result<Box<dyn (::Backend)>, String> {
     let target_triple = matches.opt_str("llvm-target");
     let optimization_level: u8 = match matches.opt_str("llvm-opt") {
         Some(lvlstr) => match lvlstr.parse::<u8>() {

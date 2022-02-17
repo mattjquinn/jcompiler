@@ -1,4 +1,4 @@
-use std::fmt::{Formatter, Error};
+use std::fmt::{Error, Formatter};
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub enum CoreRegister {
@@ -18,7 +18,7 @@ pub enum CoreRegister {
     SP,
     LR,
     PC,
-    CPSR
+    CPSR,
 }
 
 impl std::fmt::Display for CoreRegister {
@@ -81,7 +81,7 @@ pub enum ExtensionRegisterSinglePrecision {
     S28,
     S29,
     S30,
-    S31
+    S31,
 }
 
 impl std::fmt::Display for ExtensionRegisterSinglePrecision {
@@ -118,7 +118,7 @@ impl std::fmt::Display for ExtensionRegisterSinglePrecision {
             ExtensionRegisterSinglePrecision::S28 => f.write_str("s28"),
             ExtensionRegisterSinglePrecision::S29 => f.write_str("s29"),
             ExtensionRegisterSinglePrecision::S30 => f.write_str("s30"),
-            ExtensionRegisterSinglePrecision::S31 => f.write_str("s31")
+            ExtensionRegisterSinglePrecision::S31 => f.write_str("s31"),
         }
     }
 }
@@ -159,7 +159,7 @@ pub enum ExtensionRegisterDoublePrecision {
     D28,
     D29,
     D30,
-    D31
+    D31,
 }
 
 impl std::fmt::Display for ExtensionRegisterDoublePrecision {
@@ -196,7 +196,7 @@ impl std::fmt::Display for ExtensionRegisterDoublePrecision {
             ExtensionRegisterDoublePrecision::D28 => f.write_str("d28"),
             ExtensionRegisterDoublePrecision::D29 => f.write_str("d29"),
             ExtensionRegisterDoublePrecision::D30 => f.write_str("d30"),
-            ExtensionRegisterDoublePrecision::D31 => f.write_str("d31")
+            ExtensionRegisterDoublePrecision::D31 => f.write_str("d31"),
         }
     }
 }

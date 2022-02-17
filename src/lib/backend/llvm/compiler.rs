@@ -6,14 +6,17 @@ use llvm_sys::{LLVMBuilder, LLVMModule};
 use std::collections::HashMap;
 
 use std::ffi::{CStr, CString};
-use std::os::raw::{c_uint};
+use std::os::raw::c_uint;
 use std::str;
 
 use parser;
 
-use super::runtime::{JValType, JValTypeParam, JValLocation, JValPtr, alloc_jval};
-use super::support::{LLVM_FALSE, int1, int32_type, int32, int8_type, f64_type, f64, int8, int64, int1_type, void_ptr_type};
 use super::get_default_target_triple;
+use super::runtime::{alloc_jval, JValLocation, JValPtr, JValType, JValTypeParam};
+use super::support::{
+    f64, f64_type, int1, int1_type, int32, int32_type, int64, int8, int8_type, void_ptr_type,
+    LLVM_FALSE,
+};
 
 /// A struct that keeps ownership of all the strings we've passed to
 /// the LLVM API until we destroy the `LLVMModule`.

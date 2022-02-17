@@ -3,7 +3,9 @@
 extern crate ansi_term;
 extern crate ascii;
 extern crate getopts;
+extern crate ieee754;
 extern crate itertools;
+extern crate linked_hash_set;
 extern crate llvm_sys;
 extern crate matches;
 extern crate pest;
@@ -11,8 +13,6 @@ extern crate quickcheck;
 extern crate rand;
 extern crate regex;
 extern crate tempfile;
-extern crate ieee754;
-extern crate linked_hash_set;
 
 #[macro_use]
 extern crate pest_derive;

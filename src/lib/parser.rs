@@ -254,7 +254,7 @@ fn parse_verb_action(pair: pest::iterators::Pair<Rule>) -> VerbAction {
     match action.as_rule() {
         Rule::verbExpr => parse_verb_expr(action),
         Rule::monadicHook => parse_monadic_hook(action),
-        unknown => panic!("Unexpected verb action: {:?}", unknown)
+        unknown => panic!("Unexpected verb action: {:?}", unknown),
     }
 }
 
@@ -269,7 +269,7 @@ fn parse_monadic_adverb(pair: pest::iterators::Pair<Rule>) -> MonadicAdverb {
     let adverb = pair.as_str();
     match adverb {
         "/" => MonadicAdverb::Insert,
-        _ => panic!("MQ: TODO: {:?}", adverb)
+        _ => panic!("MQ: TODO: {:?}", adverb),
     }
 }
 
@@ -277,7 +277,7 @@ fn parse_dyadic_verb(pair: pest::iterators::Pair<Rule>) -> DyadicVerb {
     let verb = pair.as_str();
     match verb {
         "%" => DyadicVerb::Divide,
-        _ => panic!("Unsupported dyadic verb: {:?}", verb)
+        _ => panic!("Unsupported dyadic verb: {:?}", verb),
     }
 }
 
@@ -289,11 +289,11 @@ fn parse_monadic_verb(pair: pest::iterators::Pair<Rule>) -> MonadicVerb {
         "*:" => MonadicVerb::Square,
         "-" => MonadicVerb::Negate,
         "#" => MonadicVerb::Tally,
-        ">."=> MonadicVerb::Ceiling,
-        "+"=> MonadicVerb::Conjugate,
-        "*"=> MonadicVerb::Signum,
-        "$"=> MonadicVerb::ShapeOf,
-        _ => panic!("Unsupported monadic verb: {:?}", verb)
+        ">." => MonadicVerb::Ceiling,
+        "+" => MonadicVerb::Conjugate,
+        "*" => MonadicVerb::Signum,
+        "$" => MonadicVerb::ShapeOf,
+        _ => panic!("Unsupported monadic verb: {:?}", verb),
     }
 }
 
@@ -304,34 +304,45 @@ fn parse_monadic_hook(pair: pest::iterators::Pair<Rule>) -> VerbAction {
     VerbAction::MonadicHook(f_verb, g_verb)
 }
 
-fn build_ast_node_from_monadic_verb_action(action : VerbAction, expr: AstNode) -> AstNode {
+fn build_ast_node_from_monadic_verb_action(action: VerbAction, expr: AstNode) -> AstNode {
     match action {
         VerbAction::MonadicVerbExpr(verb, adverbs) => {
             let expr = Box::new(expr);
             match adverbs[..] {
                 [] => AstNode::MonadicOp { verb, expr },
-                [MonadicAdverb::Insert] => {
-                    match verb {
-                        MonadicVerb::Negate => AstNode::Reduce { verb: DyadicVerb::Minus, expr },
-                        MonadicVerb::Ceiling => AstNode::Reduce { verb: DyadicVerb::LargerOf, expr },
-                        MonadicVerb::Conjugate => AstNode::Reduce { verb: DyadicVerb::Plus, expr },
-                        MonadicVerb::Signum => AstNode::Reduce { verb: DyadicVerb::Times, expr },
-                        _ => panic!("Unsupported monadic verb {:?} with adverbs {:?}", verb, adverbs)
-                    }
+                [MonadicAdverb::Insert] => match verb {
+                    MonadicVerb::Negate => AstNode::Reduce {
+                        verb: DyadicVerb::Minus,
+                        expr,
+                    },
+                    MonadicVerb::Ceiling => AstNode::Reduce {
+                        verb: DyadicVerb::LargerOf,
+                        expr,
+                    },
+                    MonadicVerb::Conjugate => AstNode::Reduce {
+                        verb: DyadicVerb::Plus,
+                        expr,
+                    },
+                    MonadicVerb::Signum => AstNode::Reduce {
+                        verb: DyadicVerb::Times,
+                        expr,
+                    },
+                    _ => panic!(
+                        "Unsupported monadic verb {:?} with adverbs {:?}",
+                        verb, adverbs
+                    ),
                 },
-                _ => panic!("Unsupported adverbs: {:?}", adverbs)
-            }
-        },
-        VerbAction::MonadicHook(f_verb, g_verb) => {
-            AstNode::DyadicOp {
-                verb: f_verb,
-                lhs: Box::new(expr.clone()),
-                rhs: Box::new(AstNode::MonadicOp {
-                    verb: g_verb,
-                    expr: Box::new(expr.clone())
-                })
+                _ => panic!("Unsupported adverbs: {:?}", adverbs),
             }
         }
+        VerbAction::MonadicHook(f_verb, g_verb) => AstNode::DyadicOp {
+            verb: f_verb,
+            lhs: Box::new(expr.clone()),
+            rhs: Box::new(AstNode::MonadicOp {
+                verb: g_verb,
+                expr: Box::new(expr.clone()),
+            }),
+        },
     }
 }
 

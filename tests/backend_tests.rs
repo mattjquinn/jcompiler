@@ -1,6 +1,6 @@
+extern crate getopts;
 /// Integration tests for just the parser.
 extern crate jcompilerlib;
-extern crate getopts;
 
 use getopts::Options;
 

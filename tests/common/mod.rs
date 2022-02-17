@@ -1,6 +1,6 @@
-use std::process::{Command, Stdio};
 use std::fs::File;
 use std::io::Read;
+use std::process::{Command, Stdio};
 
 pub fn run_ijconsole(test_jfile: &str) -> (String, String) {
     let test_file_path = format!("jlang_programs/{}", test_jfile);
