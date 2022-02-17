@@ -5,41 +5,46 @@
 
 A compiler for [the J array programming language](https://www.jsoftware.com).
 
-### Getting Started
+## Getting Started
 
-TODO: Link to dependency scripts
-TODO: LLVM is a compile-time dependency, even for ARM
-At minimum, you will need a stable version of Rust installed. TODO: continue...
+To build jCompiler, you will need:
+* a stable version of Rust
+* LLVM 10 and Clang 10 (see [scripts/install-llvm-backend-dependencies.sh](scripts/install-llvm-backend-dependencies.sh))
 
-#### Using the LLVM Backend
+To develop jCompiler, you will want to run the tests, which introduce additional dependencies on:
+* `ijconsole`, the J language interpreter (see [scripts/install-common-dependencies.sh](scripts/install-common-dependencies.sh))
+* Linaro, to cross-assemble and link binaries on an x86_64 development machine, and `qemu` to run them (see [scripts/install-arm-backend-dependencies.sh](scripts/install-arm-backend-dependencies.sh))
 
-You will need LLVM 10 and Rust installed.
+The [CircleCI job definitions in this repo](.circleci/config.yml) invoke the scripts mentioned above
+when preparing test environments, so they are the authoritative resources as to what exactly is required.
 
-    $ sudo apt install llvm-10 clang-10
-    $ cargo build --release
-
-You can then compile and run programs as follows:
+## Using the LLVM Backend
 
 ```
+$ cargo build --release
 $ target/release/jcompiler --backend=llvm <jfile>.ijs
 $ ./<jfile>
 ```
 
-#### Using the ARM Backend
-
-In addition to Rust, you will also need an ARM cross-compiler
-toolchain such as those [available from Linaro](https://releases.linaro.org/components/toolchain/binaries/latest-7/arm-linux-gnueabihf/).
-Unpack the toolchain to `/opt`, and check the path at the top of `assemble-and-link-armv7.sh`,
-modifying it to use your path if necessary.
-
-You can then compile and run programs as follows:
+By default, LLVM use the target architecture of the host machine.
+You can explicitly choose a target architecture using LLVM target triples:
 
 ```
+$ target/release/jcompiler <jfile>.ijs --target=x86_64-pc-linux-gnu
+```
+
+## Using the ARM Backend
+
+```
+$ cargo build --release
 $ target/release/jcompiler --backend=arm <jfile>.ijs
 $ ./<jfile>
 ```
 
-### Examples
+Note: the output emitted by this backend most closely matches
+the godbolt.org configuration "ARM gcc 7.2.1 (none)" with options "-O0 -mfloat-abi=hard".
+
+## Examples
 
 You can find many examples of J programs in the `jlang_programs` directory.
 As one example, compiling this J program:
@@ -67,52 +72,8 @@ Some array operations...
 0 1 0 1 0 1 0 1
 ```
 
-By default, jcompiler compiles programs to executables that run on the
-current machine. You can explicitly specify architecture using LLVM
-target triples:
+## Documentation
 
-```
-$ target/release/jcompiler <jfile>.ijs --target=x86_64-pc-linux-gnu
-```
-
-### Documentation
-
-The latest API reference for the master branch is [available here](https://mattjquinn.github.io/jcompiler/master/jcompiler/index.html).
-
-### Tests
-
-There are two categories of tests: one for the parser, the other for the compiler. Both sets can be run with:
-
-```
-$ cargo test
-```
-
-### Benchmarks
-
-At present, only the compilation process itself is benchmarked. Future benchmarks
-for compiled binaries themselves are planned. You can run the compiler benchmarks by invoking:
-
-```sh
-$ cargo bench
-```
-
-If you have `gnuplot` installed, graphs will be generated as part of the report.
-Here's a look at how the compiler runs with optimizations turned off:
-
-![unoptimized](images/unoptimized_03302019.svg)
-
-compared with all optimizations turned on:
-
-![optimized](images/optimized_03302019.svg)
-
-as of March 30th, 2019.
-
-### Related / Of Interest
-* KeRF: https://github.com/kevinlawler/kerf
-* APL amuse-bouches: https://vector.org.uk/sixteen-apl-amuse-bouches/
-* The document "Mapping High Level Constructs to LLVM IR" in this repository.
-* Next logical iteration of array languages: https://news.ycombinator.com/item?id=22579781
-
-### Godbolt.org
-
-Use "ARM gcc 7.2.1 (none)" with options "-O0 -mfloat-abi=hard".
+The API reference for the master branch is
+[available here](https://mattjquinn.github.io/jcompiler/master/jcompiler/index.html),
+but is out-of-date and incomplete at the moment.
