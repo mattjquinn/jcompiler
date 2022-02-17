@@ -1,9 +1,10 @@
 # TODOs
 
 ## CI/CD
-* TODO: reinstate publishing of code coverage; use codecov.io instead of coveralls; publish pill status on README.md
-* Run `cargo doc`, publish results somewhere.
-* Run `cargo bench` to compare optimized vs unoptimized, publish results somewhere.
+* reinstate publishing of code coverage; use codecov.io instead of coveralls; publish pill status on README.md
+* run `cargo doc`, publish results somewhere.
+* run `cargo bench` to compare optimized vs unoptimized, publish results somewhere.
+* split the LLVM target further into x86_64 and arm
 
 ## Other
 - TODO: implement monadic reciprocal, where we can call the newly centralized load(D0) function shared by print()

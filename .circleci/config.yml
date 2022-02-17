@@ -2,18 +2,44 @@ version: '2.1'
 orbs:
   rust: circleci/rust@1.6.0
 jobs:
-  jcompiler-test:
+  jcompiler-test-arm:
     docker:
       - image: cimg/rust:1.58
     steps:
       - checkout
       - run: |
-          ./scripts/install-dependencies.sh
+          # Even though the ARM backend doesn't invoke LLVM at runtime,
+          # the llvm-sys package requires LLVM binaries at compile-time.
+          ./scripts/install-llvm-backend-dependencies.sh
+      - run: |
+          ./scripts/install-common-dependencies.sh
+          ./scripts/install-arm-backend-dependencies.sh
+          cargo test --test arm_ijconsole_tests
+  jcompiler-test-llvm:
+    docker:
+      - image: cimg/rust:1.58
+    steps:
+      - checkout
+      - run: |
+          ./scripts/install-common-dependencies.sh
+          ./scripts/install-llvm-backend-dependencies.sh
+          cargo test --test llvm_ijconsole_tests
+  jcompiler-test-other:
+    docker:
+      - image: cimg/rust:1.58
+    steps:
+      - checkout
+      - run: |
+          # The llvm-sys package requires LLVM binaries at compile-time.
+          ./scripts/install-llvm-backend-dependencies.sh
       - rust/format
       - rust/clippy
-      - rust/test
+      - run: |
+          cargo test --test backend_agnostic_tests
 workflows:
   jcompiler-all:
     jobs:
-      - jcompiler-test
+      - jcompiler-test-arm
+      - jcompiler-test-llvm
+      - jcompiler-test-other
 

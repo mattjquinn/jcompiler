@@ -3,13 +3,13 @@
 [![CircleCI](https://circleci.com/gh/mattjquinn/jcompiler.svg?style=shield)](https://circleci.com/gh/mattjquinn/jcompiler)
 [![Crates.io](https://img.shields.io/crates/v/jcompiler.svg?color=green)](https://crates.io/crates/jcompiler)
 
-A compiler for the J programming language.
+A compiler for [the J array programming language](https://www.jsoftware.com).
 
-### Compiling J
+### Getting Started
 
-jCompiler includes two backends: one harnesses LLVM,
-the other directly emits ARM instructions. Both of these
-are very much nascent.
+TODO: Link to dependency scripts
+TODO: LLVM is a compile-time dependency, even for ARM
+At minimum, you will need a stable version of Rust installed. TODO: continue...
 
 #### Using the LLVM Backend
 
