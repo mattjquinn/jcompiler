@@ -96,11 +96,8 @@ pub fn parse(source: &str) -> Result<Vec<AstNode>, Error<Rule>> {
         //        println!("Span:    {:?}", pair.as_span());
         //        println!("Text:    {}", pair.as_str());
 
-        match pair.as_rule() {
-            Rule::expr => {
-                ast.push(Print(Box::new(build_ast_from_expr(pair))));
-            }
-            _ => {}
+        if pair.as_rule() == Rule::expr {
+            ast.push(Print(Box::new(build_ast_from_expr(pair))));
         }
     }
 
@@ -340,7 +337,7 @@ fn build_ast_node_from_monadic_verb_action(action: VerbAction, expr: AstNode) ->
             lhs: Box::new(expr.clone()),
             rhs: Box::new(AstNode::MonadicOp {
                 verb: g_verb,
-                expr: Box::new(expr.clone()),
+                expr: Box::new(expr),
             }),
         },
     }
@@ -352,7 +349,7 @@ fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let istr = pair.as_str();
             let (sign, istr) = match &istr[..1] {
                 "_" => (-1, &istr[1..]),
-                _ => (1, &istr[..]),
+                _ => (1, istr),
             };
             let integer: i32 = istr.parse().unwrap();
             AstNode::Integer(sign * integer)
@@ -361,7 +358,7 @@ fn build_ast_from_term(pair: pest::iterators::Pair<Rule>) -> AstNode {
             let dstr = pair.as_str();
             let (sign, dstr) = match &dstr[..1] {
                 "_" => (-1.0, &dstr[1..]),
-                _ => (1.0, &dstr[..]),
+                _ => (1.0, dstr),
             };
             let mut flt: f64 = dstr.parse().unwrap();
             if flt != 0.0 {

@@ -18,7 +18,7 @@ pub enum CoreRegister {
     SP,
     LR,
     PC,
-    CPSR,
+    Cpsr,
 }
 
 impl std::fmt::Display for CoreRegister {
@@ -40,7 +40,7 @@ impl std::fmt::Display for CoreRegister {
             CoreRegister::SP => f.write_str("sp"),
             CoreRegister::LR => f.write_str("lr"),
             CoreRegister::PC => f.write_str("rc"),
-            CoreRegister::CPSR => f.write_str("cpsr"),
+            CoreRegister::Cpsr => f.write_str("cpsr"),
         }
     }
 }

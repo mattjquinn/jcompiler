@@ -132,10 +132,7 @@ impl TypedValue for IntegerValue {
     }
 
     fn is_entirely_on_heap(&self) -> bool {
-        match self.pointer {
-            Pointer::Heap(_) => true,
-            _ => false,
-        }
+        matches!(self.pointer, Pointer::Heap(_))
     }
 
     fn to_string(&self) -> &str {
@@ -590,10 +587,7 @@ impl TypedValue for DoubleValue {
     }
 
     fn is_entirely_on_heap(&self) -> bool {
-        match &self.pointer {
-            Pointer::Heap(_) => true,
-            _ => false,
-        }
+        matches!(&self.pointer, Pointer::Heap(_))
     }
 
     fn to_string(&self) -> &str {

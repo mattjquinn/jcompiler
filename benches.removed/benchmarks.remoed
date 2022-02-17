@@ -1,6 +1,8 @@
 extern crate criterion;
 extern crate tempfile;
 
+// TODO: eventually re-enable this; code is out-of-date.
+
 use criterion::{criterion_group, criterion_main, Benchmark, Criterion};
 use tempfile::NamedTempFile;
 

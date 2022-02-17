@@ -204,7 +204,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
                     module,
                     bb,
                     num,
-                    ty.clone(),
+                    ty,
                     JValTypeParam::Numeric,
                     JValLocation::Stack,
                     vec![],
@@ -264,8 +264,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
                     );
 
                     // Load each character into the string array.
-                    let mut idx = 0;
-                    for byte in str.as_bytes() {
+                    for (idx, byte) in str.as_bytes().iter().enumerate() {
                         // Allocate space for the character.
                         let char_alloc = LLVMBuildAlloca(
                             builder.builder,
@@ -286,7 +285,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
                         );
 
                         // Store the JVal char at the appropriate offset in the array.
-                        let mut char_offset = vec![int32(idx)];
+                        let mut char_offset = vec![int32(idx as u64)];
                         let char_gep = LLVMBuildInBoundsGEP(
                             builder.builder,
                             arr,
@@ -295,7 +294,6 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
                             module.new_string_ptr("char_gep"),
                         );
                         LLVMBuildStore(builder.builder, char_jval.ptr, char_gep);
-                        idx += 1;
                     }
                     // Point to the string via a JVal struct.
                     alloc_jval(
@@ -359,7 +357,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
         parser::AstNode::MonadicOp { ref verb, ref expr } => {
             let expr = compile_expr(expr, module, bb);
             unsafe {
-                let mut args = vec![int8(verb.clone() as u64), expr.ptr];
+                let mut args = vec![int8(*verb as u64), expr.ptr];
                 let monad_op_arr =
                     add_function_call(module, bb, "jmonad", &mut args[..], "monad_op_arr");
 
@@ -382,7 +380,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
             // TODO: If both type and len of lhs and rhs are statically known,
             // optimize by performing additions without function call overhead.
             unsafe {
-                let mut args = vec![int8(verb.clone() as u64), lhs.ptr, rhs.ptr];
+                let mut args = vec![int8(*verb as u64), lhs.ptr, rhs.ptr];
                 let dyad_op_arr =
                     add_function_call(module, bb, "jdyad", &mut args[..], "dyad_op_arr");
 
@@ -402,7 +400,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
             // TODO: If both type and len of lhs and rhs are statically known,
             // optimize by performing additions without function call overhead.
             unsafe {
-                let mut args = vec![int8(verb.clone() as u64), expr.ptr];
+                let mut args = vec![int8(*verb as u64), expr.ptr];
                 let reduced_arr =
                     add_function_call(module, bb, "jreduce", &mut args[..], "reduced_arr");
 
@@ -449,8 +447,7 @@ pub fn compile_expr(expr: &parser::AstNode, module: &mut Module, bb: LLVMBasicBl
                 add_function_call(module, bb, "jglobal_set_reference", &mut args[..], "");
             }
 
-            let global = JValPtr { ptr: global_clone };
-            global
+            JValPtr { ptr: global_clone }
         }
         parser::AstNode::Ident(ref ident) => {
             let global_id = module.get_or_assign_id_to_global_ident(ident);
@@ -488,8 +485,8 @@ fn add_c_declarations(module: &mut Module) {
         void = LLVMVoidType();
     }
 
-    let jval_ptr_type = module.jval_ptr_type.clone();
-    let jval_ptr_ptr_type = unsafe { LLVMPointerType(module.jval_ptr_type.clone(), 0) };
+    let jval_ptr_type = module.jval_ptr_type;
+    let jval_ptr_ptr_type = unsafe { LLVMPointerType(module.jval_ptr_type, 0) };
 
     add_function(module, "jprint", &mut [jval_ptr_type, int1_type()], void);
     add_function(
@@ -620,7 +617,7 @@ fn create_module(module_name: &str, target_triple: Option<String>) -> Module {
             strings,
             global_scope_idents: HashMap::new(),
             jval_struct_type,
-            jval_ptr_type: jval_ptr_type,
+            jval_ptr_type,
         }
     };
 

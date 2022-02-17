@@ -16,7 +16,7 @@ pub fn run_ijconsole(test_jfile: &str) -> (String, String) {
         .expect("failed to execute ijconsole");
     let j_stdout = std::str::from_utf8(&j_output.stdout).unwrap().to_owned();
     let j_stderr = std::str::from_utf8(&j_output.stderr).unwrap().to_owned();
-    return (j_stdout, j_stderr);
+    (j_stdout, j_stderr)
 }
 
 pub fn test(test_file: &str, compile_func: &dyn Fn(&str) -> (String, String)) {

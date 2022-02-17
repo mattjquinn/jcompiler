@@ -8,7 +8,7 @@ pub trait Backend {
     fn compile_ast(
         &self,
         path: &str,
-        ast: &Vec<AstNode>,
+        ast: &[AstNode],
         do_report_mem_usage: bool,
         do_verbose: bool,
         output_path: String,
@@ -29,8 +29,8 @@ pub fn register_cli_options(options: &mut Options) {
 
 pub fn init_from_cli_options(matches: &Matches) -> Result<Box<dyn Backend>, String> {
     match matches.opt_str("backend") {
-        Some(ref choice) if &choice[..] == "llvm" => llvm::init_from_cli_options(&matches),
-        Some(ref choice) if &choice[..] == "arm" => arm::init_from_cli_options(&matches),
+        Some(ref choice) if &choice[..] == "llvm" => llvm::init_from_cli_options(matches),
+        Some(ref choice) if &choice[..] == "arm" => arm::init_from_cli_options(matches),
         Some(choice) => Err(format!("Unrecognized choice of backend: {}", choice)),
         None => Err("No choice of backend was specified".to_string()),
     }

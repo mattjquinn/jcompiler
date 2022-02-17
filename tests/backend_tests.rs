@@ -10,5 +10,5 @@ use jcompilerlib::backend;
 fn test() {
     let mut opts = Options::new();
     backend::register_cli_options(&mut opts);
-    assert!(opts.usage("").len() > 0);
+    assert!(!opts.usage("").is_empty())
 }

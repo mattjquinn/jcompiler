@@ -29,13 +29,13 @@ impl ::Backend for LLVMBackend {
     fn compile_ast(
         &self,
         path: &str,
-        ast: &Vec<parser::AstNode>,
+        ast: &[parser::AstNode],
         do_report_mem_usage: bool,
         do_verbose: bool,
         output_path: String,
     ) -> Result<(), String> {
         let mut llvm_module =
-            compile_to_module(path, self.target_triple.clone(), do_report_mem_usage, &ast);
+            compile_to_module(path, self.target_triple.clone(), do_report_mem_usage, ast);
 
         optimise_ir(&mut llvm_module, self.optimization_level as i64);
         let llvm_ir_cstr = llvm_module.to_cstring();
@@ -56,13 +56,13 @@ impl ::Backend for LLVMBackend {
             println!("Writing object file to {}", obj_file_path);
         }
 
-        write_object_file(&mut llvm_module, &obj_file_path).unwrap();
+        write_object_file(&mut llvm_module, obj_file_path).unwrap();
 
         if do_verbose {
             println!("Writing executable to {}", output_path);
         }
 
-        let res = link_object_file(&obj_file_path, &output_path, self.target_triple.clone());
+        let res = link_object_file(obj_file_path, &output_path, self.target_triple.clone());
         match res {
             Ok(_) => (),
             Err(e) => panic!("Linking executable failed: {}", e),
@@ -154,9 +154,9 @@ fn link_object_file(
             "c_defns/jverbs.c",
             "c_defns/jmemory.c",
             "-target",
-            &target_triple,
+            target_triple,
             "-o",
-            &executable_path[..],
+            executable_path,
             "-lm",
         ]
     } else {
@@ -165,7 +165,7 @@ fn link_object_file(
             "c_defns/jverbs.c",
             "c_defns/jmemory.c",
             "-o",
-            &executable_path[..],
+            executable_path,
             "-lm",
         ]
     };

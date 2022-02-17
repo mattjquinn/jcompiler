@@ -20,7 +20,7 @@ impl ::Backend for ARMBackend {
     fn compile_ast(
         &self,
         _path: &str,
-        ast: &Vec<parser::AstNode>,
+        ast: &[parser::AstNode],
         _do_report_mem_usage: bool,
         _do_verbose: bool,
         output_path: String,
@@ -99,7 +99,7 @@ impl ::Backend for ARMBackend {
     }
 }
 
-fn jprint_value(values: &Vec<Box<dyn TypedValue>>, basic_block: &mut BasicBlock) {
+fn jprint_value(values: &[Box<dyn TypedValue>], basic_block: &mut BasicBlock) {
     for (idx, value) in values.iter().enumerate() {
         // Multiple printed terms are separated by space, except for the last item
         let flags = match idx != values.len() - 1 {

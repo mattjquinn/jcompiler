@@ -27,6 +27,12 @@ pub struct GlobalContext {
     double_constant_pool_words: Vec<u32>,
 }
 
+impl Default for GlobalContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GlobalContext {
     pub fn new() -> GlobalContext {
         GlobalContext {
@@ -126,7 +132,7 @@ impl GlobalContext {
         DoubleValue::new(Pointer::Heap(offset))
     }
 
-    pub fn set_ident_values(&mut self, ident: &String, values: &[Box<dyn TypedValue>]) {
+    pub fn set_ident_values(&mut self, ident: &str, values: &[Box<dyn TypedValue>]) {
         for value in values {
             // Caller is responsible for migrating values to Heap first if necessary; enforce that here.
             match value.is_entirely_on_heap() {
@@ -140,10 +146,10 @@ impl GlobalContext {
         // TODO: There could be previous values in the heap that we lose by overwriting
         // here. We should implement refcounting so that we can deallocate those that will
         // no longer be referred to after this insert.
-        self.ident_map.insert(ident.clone(), values.to_vec());
+        self.ident_map.insert(ident.to_string(), values.to_vec());
     }
 
-    pub fn get_ident_values(&mut self, ident: &String) -> Vec<Box<dyn TypedValue>> {
+    pub fn get_ident_values(&mut self, ident: &str) -> Vec<Box<dyn TypedValue>> {
         self.ident_map.get(ident).unwrap().clone()
     }
 
@@ -180,6 +186,12 @@ pub struct BasicBlock {
     stack_size: i32,
     instructions: Vec<ArmIns>,
     available_registers: LinkedHashSet<CoreRegister>,
+}
+
+impl Default for BasicBlock {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BasicBlock {

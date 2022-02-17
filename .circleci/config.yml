@@ -10,6 +10,7 @@ jobs:
       - run: |
           ./scripts/install-dependencies.sh
       - rust/format
+      - rust/clippy
       - rust/test
 workflows:
   jcompiler-all:

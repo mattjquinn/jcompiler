@@ -87,7 +87,7 @@ pub fn alloc_jval(
             loc_offset.len() as u32,
             module.new_string_ptr("jval_loc_gep"),
         );
-        LLVMBuildStore(builder.builder, int8(val_loc.clone() as u64), loc_gep);
+        LLVMBuildStore(builder.builder, int8(val_loc as u64), loc_gep);
 
         // Indicate the rank.
         let mut rank_offset = vec![int64(0), int32(3)];
